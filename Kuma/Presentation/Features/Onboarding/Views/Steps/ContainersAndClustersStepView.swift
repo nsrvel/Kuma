@@ -1,0 +1,74 @@
+//
+//  ServiceEnginesStepView.swift
+//  Kuma
+//
+//  Created for Kuma Native macOS App.
+//  Step 1: Discover and inspect core service CLI engines (kubectl, kubeconfig, docker, podman).
+//
+
+import SwiftUI
+
+public struct ContainersAndClustersStepView: View {
+    @Bindable var viewModel: OnboardingViewModel
+
+    public init(viewModel: OnboardingViewModel) {
+        self.viewModel = viewModel
+    }
+
+    public var body: some View {
+        VStack(spacing: KumaSpacing.lg) {
+            // Title & Subtitle
+            VStack(spacing: KumaSpacing.xs) {
+                Text("Containers & Clusters")
+                    .font(KumaFont.stepTitle)
+                    .foregroundStyle(.primary)
+
+                Text("CLI tools detected on your Mac. You only need the ones you plan to use.")
+                    .font(KumaFont.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, KumaSpacing.sm)
+
+            // Content List
+            VStack(spacing: KumaSpacing.sm) {
+                ForEach(viewModel.engineDependencies) { dep in
+                    DependencyStatusRowView(
+                        dependency: dep,
+                        isScanning: viewModel.isScanning,
+                        onBrowse: { path in
+                            viewModel.setCustomPath(for: dep, path: path)
+                        }
+                    )
+                }
+            }
+
+            // Borderless Ghost Re-scan Link (Subtle secondary action)
+            Button {
+                Task {
+                    await viewModel.runScan(isManualRescan: true)
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(viewModel.isScanning ? "Scanning…" : "Re-scan")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(.secondary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isScanning)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            await viewModel.scanDependenciesIfNeeded()
+        }
+    }
+}
+
+#Preview {
+    ContainersAndClustersStepView(viewModel: OnboardingViewModel())
+        .frame(width: 600, height: 400)
+}

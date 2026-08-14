@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		49517C19302F5C06004CD8C5 /* Kuma.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kuma.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		49517C2F302F5D00004CD8C5 /* KumaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KumaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +17,22 @@
 			path = Kuma;
 			sourceTree = "<group>";
 		};
+		49517C30302F5D00004CD8C5 /* KumaTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KumaTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		49517C16302F5C06004CD8C5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		49517C2C302F5D00004CD8C5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +46,7 @@
 			isa = PBXGroup;
 			children = (
 				49517C1B302F5C06004CD8C5 /* Kuma */,
+				49517C30302F5D00004CD8C5 /* KumaTests */,
 				49517C1A302F5C06004CD8C5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +55,7 @@
 			isa = PBXGroup;
 			children = (
 				49517C19302F5C06004CD8C5 /* Kuma.app */,
+				49517C2F302F5D00004CD8C5 /* KumaTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -70,6 +85,28 @@
 			productReference = 49517C19302F5C06004CD8C5 /* Kuma.app */;
 			productType = "com.apple.product-type.application";
 		};
+		49517C2E302F5D00004CD8C5 /* KumaTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 49517C33302F5D00004CD8C5 /* Build configuration list for PBXNativeTarget "KumaTests" */;
+			buildPhases = (
+				49517C2B302F5D00004CD8C5 /* Sources */,
+				49517C2C302F5D00004CD8C5 /* Frameworks */,
+				49517C2D302F5D00004CD8C5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				49517C30302F5D00004CD8C5 /* KumaTests */,
+			);
+			name = KumaTests;
+			packageProductDependencies = (
+			);
+			productName = KumaTests;
+			productReference = 49517C2F302F5D00004CD8C5 /* KumaTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -82,6 +119,10 @@
 				TargetAttributes = {
 					49517C18302F5C06004CD8C5 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					49517C2E302F5D00004CD8C5 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 49517C18302F5C06004CD8C5;
 					};
 				};
 			};
@@ -100,6 +141,7 @@
 			projectRoot = "";
 			targets = (
 				49517C18302F5C06004CD8C5 /* Kuma */,
+				49517C2E302F5D00004CD8C5 /* KumaTests */,
 			);
 		};
 /* End PBXProject section */
@@ -112,10 +154,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		49517C2D302F5D00004CD8C5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		49517C15302F5C06004CD8C5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		49517C2B302F5D00004CD8C5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -251,7 +307,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -281,7 +337,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -303,6 +359,52 @@
 			};
 			name = Release;
 		};
+		49517C31302F5D00004CD8C5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kuma.KumaTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kuma.app/Contents/MacOS/Kuma";
+			};
+			name = Debug;
+		};
+		49517C32302F5D00004CD8C5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kuma.KumaTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kuma.app/Contents/MacOS/Kuma";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -320,6 +422,15 @@
 			buildConfigurations = (
 				49517C25302F5C07004CD8C5 /* Debug */,
 				49517C26302F5C07004CD8C5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		49517C33302F5D00004CD8C5 /* Build configuration list for PBXNativeTarget "KumaTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				49517C31302F5D00004CD8C5 /* Debug */,
+				49517C32302F5D00004CD8C5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

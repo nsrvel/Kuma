@@ -41,14 +41,18 @@ public enum KumaRadius {
 // MARK: - Typography Scale (macOS SF Pro Native)
 
 public enum KumaFont {
-    /// 20pt Bold — Onboarding titles, Hero headers
-    public static let hero = Font.system(size: 20, weight: .bold, design: .default)
-    /// 16pt Bold — Section titles, Window header
-    public static let title = Font.system(size: 16, weight: .bold, design: .default)
-    /// 13pt Semibold — Card titles, primary actions
-    public static let heading = Font.system(size: 13, weight: .semibold, design: .default)
+    /// 38pt Bold Rounded — Welcome hero headlines
+    public static let hero = Font.system(size: 38, weight: .bold, design: .rounded)
+    /// 26pt Bold Rounded — Wizard step titles (balanced scale for content steps)
+    public static let stepTitle = Font.system(size: 26, weight: .bold, design: .rounded)
+    /// 18pt Bold — Section titles, Window header
+    public static let title = Font.system(size: 18, weight: .bold, design: .default)
+    /// 14pt Semibold — Card titles, primary actions
+    public static let heading = Font.system(size: 14, weight: .semibold, design: .default)
     /// 13pt Regular — Standard body text, descriptions
     public static let body = Font.system(size: 13, weight: .regular, design: .default)
+    /// 15pt Regular — Welcome & hero subheadings
+    public static let heroSubtitle = Font.system(size: 15, weight: .regular, design: .default)
     /// 11pt Medium — Subtitles, metadata, status labels
     public static let subheadline = Font.system(size: 11, weight: .medium, design: .default)
     /// 10pt Regular — Footnotes, timestamp, secondary hints
