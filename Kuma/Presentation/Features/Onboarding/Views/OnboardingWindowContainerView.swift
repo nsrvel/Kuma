@@ -9,7 +9,7 @@
 import SwiftUI
 
 public struct OnboardingWindowContainerView: View {
-    @AppStorage("kuma.has_completed_onboarding") private var hasCompletedOnboarding: Bool = false
+    @Environment(AppCoordinator.self) private var coordinator
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
@@ -17,7 +17,7 @@ public struct OnboardingWindowContainerView: View {
 
     public var body: some View {
         OnboardingWizardView {
-            hasCompletedOnboarding = true
+            coordinator.transitionTo(.mainWorkspace)
             openWindow(id: "main-workspace")
             dismissWindow(id: "onboarding")
         }

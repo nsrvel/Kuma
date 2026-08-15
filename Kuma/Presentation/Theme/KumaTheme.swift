@@ -81,3 +81,39 @@ public enum KumaColors {
     public static let providerTunnel = Color.orange
     public static let providerProcess = Color.red
 }
+
+public enum KumaTheme {
+    public enum Window {
+        // Onboarding Floating Window
+        public static let onboardingWidth: CGFloat = 680
+        public static let onboardingHeight: CGFloat = 500
+
+        // Main Workspace Window
+        public static let minWidth: CGFloat = 960
+        public static let minHeight: CGFloat = 600
+        public static let idealWidth: CGFloat = 1100
+        public static let idealHeight: CGFloat = 720
+    }
+
+    public enum Sidebar {
+        public static let widthMin: CGFloat = 200
+        public static let widthIdeal: CGFloat = 220
+        public static let widthMax: CGFloat = 280
+
+        public static let rowMinHeight: CGFloat = 20
+        public static let rowVerticalPadding: CGFloat = 5
+        public static let rowHorizontalPadding: CGFloat = 8
+        public static let rowCornerRadius: CGFloat = 8
+
+        public static let indentWidth: CGFloat = 16
+        public static let specialHeaderTopPadding: CGFloat = 12
+
+        public static let workspaceIconSize: CGFloat = 22
+        public static let workspaceCornerRadius: CGFloat = 5
+        public static let actionButtonSize: CGFloat = 20
+
+        public static let hoverBgOpacity: Double = 0.08
+        public static let selectedBgOpacity: Double = 0.08
+        public static let dividerColor = Color.primary.opacity(0.06)
+    }
+}

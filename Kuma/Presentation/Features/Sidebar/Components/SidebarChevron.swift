@@ -1,0 +1,37 @@
+//
+//  SidebarChevron.swift
+//  Kuma
+//
+//  Created for Kuma Native macOS App.
+//  100% Pixel-Perfect Match with Kuma V3 SidebarChevron.
+//
+
+import SwiftUI
+
+public struct SidebarChevron: View {
+    public let isExpanded: Bool
+    public var onToggle: (() -> Void)? = nil
+
+    @State private var isHovering = false
+
+    public init(isExpanded: Bool, onToggle: (() -> Void)? = nil) {
+        self.isExpanded = isExpanded
+        self.onToggle = onToggle
+    }
+
+    public var body: some View {
+        Image(systemName: "chevron.right")
+            .imageScale(.small)
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            .frame(width: 20, height: 20)
+            .contentShape(Rectangle())
+            .help(isExpanded ? "Collapse" : "Expand")
+            .onHover { isHovering = $0 }
+            .onTapGesture {
+                onToggle?()
+            }
+            .animation(.easeInOut(duration: 0.1), value: isHovering)
+    }
+}

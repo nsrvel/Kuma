@@ -6,6 +6,16 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		49517C36302F5D10004CD8C5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 49517C11302F5C06004CD8C5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 49517C18302F5C06004CD8C5;
+			remoteInfo = Kuma;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		49517C19302F5C06004CD8C5 /* Kuma.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kuma.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		49517C2F302F5D00004CD8C5 /* KumaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KumaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -96,6 +106,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				49517C35302F5D10004CD8C5 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				49517C30302F5D00004CD8C5 /* KumaTests */,
@@ -179,6 +190,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		49517C35302F5D10004CD8C5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 49517C18302F5C06004CD8C5 /* Kuma */;
+			targetProxy = 49517C36302F5D10004CD8C5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		49517C22302F5C07004CD8C5 /* Debug */ = {

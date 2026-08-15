@@ -7,28 +7,15 @@
 
 import SwiftUI
 
-import SwiftUI
-
 struct ContentView: View {
-    @AppStorage("kuma.has_completed_onboarding") private var hasCompletedOnboarding: Bool = false
+    @Environment(AppCoordinator.self) private var coordinator
+    @Environment(WorkspaceStore.self) private var workspaceStore
+    @State private var sidebarStore = SidebarStore.makeDefault()
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         NavigationSplitView {
-            // Sidebar Workspace List
-            List {
-                Section("Workspaces") {
-                    Label("Default", systemImage: "square.grid.2x2.fill")
-                }
-
-                Section("Providers") {
-                    Label("Kubernetes", systemImage: "hexagon.fill")
-                    Label("Docker", systemImage: "shippingbox.fill")
-                    Label("Podman", systemImage: "cube.transparent.fill")
-                    Label("Tunnels", systemImage: "bolt.horizontal.fill")
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+            SidebarView(store: sidebarStore, workspaceStore: workspaceStore)
         } detail: {
             // Main Dashboard Workspace Stage
             VStack(spacing: KumaSpacing.lg) {
@@ -53,6 +40,16 @@ struct ContentView: View {
         }
         .containerBackground(.thickMaterial, for: .window)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .frame(minWidth: KumaTheme.Window.minWidth, minHeight: KumaTheme.Window.minHeight)
+        .sheet(isPresented: Bindable(workspaceStore).showCreateSheet) {
+            WorkspaceFormSheet(store: workspaceStore, mode: .create, isPresented: Bindable(workspaceStore).showCreateSheet)
+        }
+        .sheet(item: Bindable(workspaceStore).workspaceToEdit) { ws in
+            WorkspaceFormSheet(store: workspaceStore, mode: .edit(ws), isPresented: Binding(
+                get: { workspaceStore.workspaceToEdit != nil },
+                set: { if !$0 { workspaceStore.workspaceToEdit = nil } }
+            ))
+        }
     }
 }
 
