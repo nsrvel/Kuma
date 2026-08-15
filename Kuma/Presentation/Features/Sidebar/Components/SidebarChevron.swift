@@ -32,6 +32,5 @@ public struct SidebarChevron: View {
             .onTapGesture {
                 onToggle?()
             }
-            .animation(.easeInOut(duration: 0.1), value: isHovering)
     }
 }

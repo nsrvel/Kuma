@@ -40,6 +40,14 @@ struct KumaApp: App {
         .defaultSize(width: KumaTheme.Window.idealWidth, height: KumaTheme.Window.idealHeight)
         .windowResizability(.contentMinSize)
         .commands {
+            // 0. App Settings Menu & Shortcut (⌘,)
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    NotificationCenter.default.post(name: NSNotification.Name("kuma.openSettings"), object: nil)
+                }
+                .keyboardShortcut(",", modifiers: [.command])
+            }
+
             // 1. Workspaces Menu & Global Keyboard Shortcuts (⌘1, ⌘2, ⌘3...)
             CommandMenu("Workspaces") {
                 ForEach(Array(workspaceStore.workspaces.enumerated()), id: \.element.id) { index, ws in

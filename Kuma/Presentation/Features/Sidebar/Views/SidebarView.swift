@@ -147,7 +147,7 @@ public struct SidebarView: View {
                 KumaDivider(opacity: 0.08, horizontalPadding: 8)
 
                 HStack(spacing: 8) {
-                    SidebarFooterButton(icon: "gear", tooltip: "Settings") {
+                    SidebarFooterButton(icon: "gear", tooltip: "Settings (⌘,)") {
                         store.selectedID = .stable("settings")
                     }
 
@@ -188,9 +188,7 @@ public struct SidebarView: View {
                     indentLevel: item.indentLevel,
                     onSelect: { store.selectedID = node.id },
                     onToggleExpand: {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            store.toggleExpanded(node.id)
-                        }
+                        store.toggleExpanded(node.id)
                     }
                 )
             }
@@ -233,9 +231,7 @@ public struct SidebarView: View {
                case .item(let node) = row.entry,
                node.children != nil,
                store.isExpanded(selectedID) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    _ = store.expandedIDs.remove(selectedID)
-                }
+                _ = store.expandedIDs.remove(selectedID)
             }
         case .right:
             if let selectedID = store.selectedID,
@@ -243,9 +239,7 @@ public struct SidebarView: View {
                case .item(let node) = row.entry,
                node.children != nil,
                !store.isExpanded(selectedID) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    _ = store.expandedIDs.insert(selectedID)
-                }
+                _ = store.expandedIDs.insert(selectedID)
             }
         default:
             break

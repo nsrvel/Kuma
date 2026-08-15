@@ -47,8 +47,14 @@ public enum KumaFont {
     public static let stepTitle = Font.system(size: 26, weight: .bold, design: .rounded)
     /// 18pt Bold — Section titles, Window header
     public static let title = Font.system(size: 18, weight: .bold, design: .default)
+    /// 16pt Semibold — Section titles, Empty state titles
+    public static let title3 = Font.system(size: 16, weight: .semibold, design: .default)
     /// 14pt Semibold — Card titles, primary actions
     public static let heading = Font.system(size: 14, weight: .semibold, design: .default)
+    /// 13pt Bold — Card bold labels
+    public static let bodyBold = Font.system(size: 13, weight: .bold, design: .default)
+    /// 13pt Medium — Form labels, emphasized body
+    public static let bodyMedium = Font.system(size: 13, weight: .medium, design: .default)
     /// 13pt Regular — Standard body text, descriptions
     public static let body = Font.system(size: 13, weight: .regular, design: .default)
     /// 15pt Regular — Welcome & hero subheadings
@@ -57,6 +63,8 @@ public enum KumaFont {
     public static let subheadline = Font.system(size: 11, weight: .medium, design: .default)
     /// 10pt Regular — Footnotes, timestamp, secondary hints
     public static let caption = Font.system(size: 10, weight: .regular, design: .default)
+    /// 10pt Bold / Semibold — Section uppercase headers
+    public static let captionBold = Font.system(size: 10, weight: .bold, design: .default)
     /// 12pt Monospaced — Ports, URLs, CLI commands, logs
     public static let code = Font.system(size: 12, weight: .regular, design: .monospaced)
 }

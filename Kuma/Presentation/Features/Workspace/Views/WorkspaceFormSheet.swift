@@ -151,7 +151,7 @@ public struct WorkspaceFormSheet: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if case .edit(let ws) = mode {
-                Text("Are you sure you want to delete '\(ws.name)'? This action cannot be undone.")
+                Text("All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.")
             }
         }
         .onAppear {

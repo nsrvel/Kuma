@@ -82,7 +82,16 @@ public struct WorkspaceSwitcherPopover: View {
                         Divider()
 
                         Button(role: .destructive) {
-                            store.deleteWorkspace(activeWS)
+                            isPresented = false
+                            DispatchQueue.main.async {
+                                AlertService.shared.confirmDelete(
+                                    title: "Delete Workspace?",
+                                    message: "All services and configurations in “\(activeWS.name)” will be permanently deleted. This action cannot be undone.",
+                                    onConfirm: {
+                                        store.deleteWorkspace(activeWS)
+                                    }
+                                )
+                            }
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
@@ -112,7 +121,16 @@ public struct WorkspaceSwitcherPopover: View {
                                     }
                                 },
                                 onDelete: {
-                                    store.deleteWorkspace(ws)
+                                    isPresented = false
+                                    DispatchQueue.main.async {
+                                        AlertService.shared.confirmDelete(
+                                            title: "Delete Workspace?",
+                                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
+                                            onConfirm: {
+                                                store.deleteWorkspace(ws)
+                                            }
+                                        )
+                                    }
                                 }
                             )
                         }

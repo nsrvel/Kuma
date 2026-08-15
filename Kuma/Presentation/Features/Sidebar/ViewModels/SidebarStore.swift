@@ -20,8 +20,8 @@ public final class SidebarStore {
     public var selectedID: UUID?
     public var expandedIDs: Set<UUID>
 
-    /// Cached snapshot to avoid redundant rebuilds.
-    private var lastProviderCounts: [ProviderCategory: Int] = [:]
+    /// Cached snapshot to avoid redundant rebuilds. Nil means "never built yet".
+    private var lastProviderCounts: [ProviderCategory: Int]? = nil
 
     public init(
         entries: [SidebarEntry] = [],
@@ -112,13 +112,13 @@ public final class SidebarStore {
 // MARK: - Factory
 
 extension SidebarStore {
-    /// Creates a fresh sidebar for an empty or new workspace (only "All Services" visible).
+    /// Creates a fresh sidebar for a new workspace — only "All Services" visible.
+    /// Provider rows will appear automatically once services are created via `updateProviderCounts(_:)`.
     public static func makeDefault() -> SidebarStore {
         let store = SidebarStore(
             selectedID: .stable("all-services"),
             expandedIDs: []
         )
-        // Empty workspace: just "All Services", no provider rows
         store.updateProviderCounts([:])
         return store
     }

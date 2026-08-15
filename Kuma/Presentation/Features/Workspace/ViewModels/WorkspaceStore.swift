@@ -27,6 +27,7 @@ public final class WorkspaceStore {
     }
     public var showCreateSheet: Bool = false
     public var workspaceToEdit: Workspace? = nil
+    public var workspaceToDelete: Workspace? = nil
 
     public var activeWorkspace: Workspace? {
         workspaces.first(where: { $0.id == selectedWorkspaceId }) ?? workspaces.first
@@ -86,13 +87,31 @@ public final class WorkspaceStore {
         Self.logger.info("Updated workspace \(workspace.id)")
     }
 
-    public func deleteWorkspace(_ workspace: Workspace) {
-        workspaces.removeAll(where: { $0.id == workspace.id })
-        if selectedWorkspaceId == workspace.id {
+    public func deleteWorkspace(id: UUID) {
+        guard workspaces.count > 1 else {
+            Self.logger.warning("Attempted to delete the only remaining workspace. Disallowed.")
+            return
+        }
+
+        workspaces.removeAll(where: { $0.id == id })
+        if selectedWorkspaceId == id {
             selectedWorkspaceId = workspaces.first?.id
         }
         persistState()
-        Self.logger.info("Deleted workspace \(workspace.id)")
+        Self.logger.info("Deleted workspace id: \(id.uuidString)")
+    }
+
+    public func deleteWorkspace(_ workspace: Workspace) {
+        deleteWorkspace(id: workspace.id)
+    }
+
+    /// Replaces all workspaces with restored backup data and persists state.
+    public func restoreWorkspaces(_ restored: [Workspace]) {
+        guard !restored.isEmpty else { return }
+        self.workspaces = restored
+        self.selectedWorkspaceId = restored.first?.id
+        persistState()
+        Self.logger.info("Restored \(restored.count) workspaces from backup")
     }
 
     // MARK: - Persistence Helpers

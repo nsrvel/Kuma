@@ -31,6 +31,5 @@ public struct SidebarActionButton: View {
         .buttonStyle(.plain)
         .help(action.tooltip)
         .onHover { isHovering = $0 }
-        .animation(.easeInOut(duration: 0.1), value: isHovering)
     }
 }

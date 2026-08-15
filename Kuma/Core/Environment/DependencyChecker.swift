@@ -33,8 +33,66 @@ public struct DependencyStatus: Sendable, Equatable {
     }
 }
 
+public enum BinaryValidationResult: Equatable, Sendable {
+    case empty
+    case valid(path: String)
+    case fileNotFound
+    case notExecutable
+    case nameMismatch(expected: String, actual: String)
+
+    public var isValid: Bool {
+        if case .valid = self { return true }
+        return false
+    }
+
+    public var errorMessage: String? {
+        switch self {
+        case .empty, .valid:
+            return nil
+        case .fileNotFound:
+            return "File does not exist at specified path"
+        case .notExecutable:
+            return "File is not an executable binary"
+        case .nameMismatch(let expected, let actual):
+            return "Selected file '\(actual)' does not match expected '\(expected)' binary"
+        }
+    }
+}
+
 public enum DependencyChecker {
     private static let resolver = EnvironmentPathResolver.shared
+
+    /// Synchronously validates a custom binary path without spawning subprocesses (zero-latency).
+    public static func validateCustomBinary(path: String, expectedCommand: String) -> BinaryValidationResult {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .empty }
+
+        let nsPath = NSString(string: trimmed).expandingTildeInPath
+        let fm = FileManager.default
+
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: nsPath, isDirectory: &isDir) else {
+            return .fileNotFound
+        }
+
+        guard !isDir.boolValue else {
+            return .notExecutable
+        }
+
+        guard fm.isExecutableFile(atPath: nsPath) else {
+            return .notExecutable
+        }
+
+        let fileName = (nsPath as NSString).lastPathComponent.lowercased()
+        let expectedLower = expectedCommand.lowercased()
+
+        // Permissive check: binary name must contain or start with command name
+        if !fileName.contains(expectedLower) {
+            return .nameMismatch(expected: expectedCommand, actual: (nsPath as NSString).lastPathComponent)
+        }
+
+        return .valid(path: nsPath)
+    }
 
     /// Checks if a command binary is installed and executable.
     public static func isCommandInstalled(_ command: String, customPath: String? = nil) async -> Bool {

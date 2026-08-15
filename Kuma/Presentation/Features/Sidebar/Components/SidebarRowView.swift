@@ -92,7 +92,7 @@ public struct SidebarRowView: View {
         .clipShape(RoundedRectangle(cornerRadius: KumaTheme.Sidebar.rowCornerRadius, style: .continuous))
         .foregroundStyle(rowForeground)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) { isHovering = hovering }
+            isHovering = hovering
         }
         .onTapGesture {
             onSelect()

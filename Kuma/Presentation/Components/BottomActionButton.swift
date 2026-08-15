@@ -37,3 +37,12 @@ public struct BottomActionButton: View {
         .onHover { isHovered = $0 }
     }
 }
+
+#Preview {
+    VStack(spacing: 8) {
+        BottomActionButton(title: "Settings") {}
+        BottomActionButton(title: "Check for Updates…") {}
+    }
+    .padding()
+    .frame(width: 200)
+}
