@@ -1,10 +1,3 @@
-//
-//  OnboardingViewModelTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Testing
 @testable import Kuma
 

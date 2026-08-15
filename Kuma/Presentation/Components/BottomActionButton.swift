@@ -1,11 +1,3 @@
-//
-//  BottomActionButton.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 BottomActionButton.
-//
-
 import SwiftUI
 
 public struct BottomActionButton: View {

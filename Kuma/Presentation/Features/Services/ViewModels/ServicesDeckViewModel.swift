@@ -1,11 +1,3 @@
-//
-//  ServicesDeckViewModel.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean @Observable view model driving the Services Deck Stage, Toolbar, and Inspector states.
-//
-
 import SwiftUI
 import Observation
 
@@ -20,50 +12,59 @@ public final class ServicesDeckViewModel {
     public var isInspectorPresented: Bool = false
     public var selectedServiceID: UUID? = nil
 
-    public var services: [Service] = []
-    public var serviceProviders: [UUID: ProviderCategory] = [:]
-    public var portMappings: [UUID: [ServicePortMapping]] = [:]
-    public var serviceStates: [UUID: ServiceState] = [:]
-    public var loadingServiceIDs: Set<UUID> = []
+    // Tier 1: Static Snapshots (~64B per item)
+    public var snapshots: [ServiceCardSnapshot] = []
 
-    public init() {}
+    // Tier 2: Live Runtime States (isolated from static list)
+    public var runtimeStates: [UUID: ServiceRuntimeState] = [:]
 
-    // MARK: - Filtered & Sorted Services
+    private let serviceRepository: any ServiceRepositoryProtocol
 
-    public var filteredServices: [Service] {
-        var result = services
+    public init(serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()) {
+        self.serviceRepository = serviceRepository
+    }
 
-        // Search Filter
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if !query.isEmpty {
-            result = result.filter { service in
-                service.name.lowercased().contains(query) ||
-                (service.description?.lowercased().contains(query) ?? false)
+    // MARK: - Filtered & Sorted Projections
+
+    public var filteredSnapshots: [ServiceCardSnapshot] {
+        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasSearch = !trimmedQuery.isEmpty
+        let hasStatusFilter = !selectedStatuses.isEmpty
+        let hasProviderFilter = !selectedProviders.isEmpty
+
+        // 1. Single-Pass Zero-Allocation Filtering
+        var result = snapshots.filter { snapshot in
+            if hasSearch {
+                let nameMatch = snapshot.name.localizedStandardContains(trimmedQuery)
+                let subMatch = snapshot.subtitle.localizedStandardContains(trimmedQuery)
+                if !nameMatch && !subMatch { return false }
             }
+
+            if hasStatusFilter {
+                let state = runtimeStates[snapshot.id]?.status ?? .stopped
+                if !selectedStatuses.contains(state) { return false }
+            }
+
+            if hasProviderFilter {
+                if !selectedProviders.contains(snapshot.providerCategory) { return false }
+            }
+
+            return true
         }
 
-        // Status Filter
-        if !selectedStatuses.isEmpty {
-            result = result.filter { service in
-                let state = serviceStates[service.id] ?? .stopped
-                return selectedStatuses.contains(state)
-            }
-        }
-
-        // Provider Filter
-        if !selectedProviders.isEmpty {
-            result = result.filter { service in
-                let provider = serviceProviders[service.id] ?? .docker
-                return selectedProviders.contains(provider)
-            }
-        }
-
-        // Sort Order
+        // 2. Sort Order (Natural Status Priority + Stable Alpha Tiebreaker)
         switch sortBy {
         case .name:
             result.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .status:
-            result.sort { (serviceStates[$0.id] ?? .stopped).rawValue < (serviceStates[$1.id] ?? .stopped).rawValue }
+            result.sort {
+                let s0 = runtimeStates[$0.id]?.status ?? .stopped
+                let s1 = runtimeStates[$1.id]?.status ?? .stopped
+                if s0.sortPriority != s1.sortPriority {
+                    return s0.sortPriority < s1.sortPriority
+                }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
         case .created:
             result.sort { $0.createdAt > $1.createdAt }
         }
@@ -74,42 +75,48 @@ public final class ServicesDeckViewModel {
     // MARK: - Actions
 
     public func loadWorkspace(workspaceID: UUID) {
-        // Populate sample data for instant interactive visual testing if empty
-        if services.isEmpty {
-            let s1 = Service(name: "PostgreSQL Database", description: "Docker: postgres:16-alpine", workspaceID: workspaceID)
-            let s2 = Service(name: "Redis Cache", description: "Docker: redis:7-alpine", workspaceID: workspaceID)
-            let s3 = Service(name: "Backend Node API", description: "npm run start:dev", workspaceID: workspaceID)
-            let s4 = Service(name: "Frontend Next.js App", description: "npm run dev", workspaceID: workspaceID)
-
-            self.services = [s1, s2, s3, s4]
-            self.serviceProviders[s1.id] = .docker
-            self.serviceProviders[s2.id] = .docker
-            self.serviceProviders[s3.id] = .shell
-            self.serviceProviders[s4.id] = .shell
-
-            self.portMappings[s1.id] = [ServicePortMapping(localPort: 5432, remotePort: 5432)]
-            self.portMappings[s2.id] = [ServicePortMapping(localPort: 6379, remotePort: 6379)]
-            self.portMappings[s3.id] = [ServicePortMapping(localPort: 8080, remotePort: 8080)]
-            self.portMappings[s4.id] = [ServicePortMapping(localPort: 3000, remotePort: 3000)]
-
-            self.serviceStates[s1.id] = .running
-            self.serviceStates[s2.id] = .running
-            self.serviceStates[s3.id] = .stopped
-            self.serviceStates[s4.id] = .stopped
+        Task {
+            await loadWorkspaceAsync(workspaceID: workspaceID)
         }
     }
 
-    public func toggleService(_ service: Service) {
-        let current = serviceStates[service.id] ?? .stopped
-        if current.isOperational {
-            serviceStates[service.id] = .stopped
-        } else {
-            serviceStates[service.id] = .running
+    public func loadWorkspaceAsync(workspaceID: UUID) async {
+        do {
+            let loaded = try await serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
+            self.snapshots = loaded
+
+            // Ensure initial runtime state exists for each service
+            for snapshot in loaded {
+                if self.runtimeStates[snapshot.id] == nil {
+                    self.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .stopped, isLoading: false)
+                }
+            }
+        } catch {
+            self.snapshots = []
         }
+    }
+
+    public func toggleService(id: UUID) {
+        var current = runtimeStates[id] ?? ServiceRuntimeState()
+        if current.status.isOperational {
+            current.status = .stopped
+        } else {
+            current.status = .running
+        }
+        runtimeStates[id] = current
     }
 
     public func selectService(_ id: UUID) {
         self.selectedServiceID = id
         self.isInspectorPresented = true
+    }
+
+    /// Batch apply runtime updates from background actor without invalidating static snapshot array
+    public func applyRuntimeDiff(_ diff: [UUID: ServiceRuntimeState]) {
+        for (id, state) in diff {
+            if self.runtimeStates[id] != state {
+                self.runtimeStates[id] = state
+            }
+        }
     }
 }

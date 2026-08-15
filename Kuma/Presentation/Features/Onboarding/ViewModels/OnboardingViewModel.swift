@@ -1,11 +1,3 @@
-//
-//  OnboardingViewModel.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean @Observable state management for the multi-step Onboarding Wizard.
-//
-
 import Foundation
 import Observation
 

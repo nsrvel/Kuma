@@ -1,11 +1,3 @@
-//
-//  ServicesDeckView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Services Deck Stage with Toolbar, Filters, View Modes, and Collapsible Native Inspector.
-//
-
 import SwiftUI
 
 public struct ServicesDeckView: View {
@@ -40,14 +32,22 @@ public struct ServicesDeckView: View {
                     workspaceID: workspaceID,
                     viewModel: viewModel
                 )
-                .inspectorColumnWidth(min: 335, ideal: 450, max: 565)
+                .inspectorColumnWidth(
+                    min: KumaTheme.Inspector.widthMin,
+                    ideal: KumaTheme.Inspector.widthIdeal,
+                    max: KumaTheme.Inspector.widthMax
+                )
             } else {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
                     title: "No Selection",
                     description: "Select a service to view configuration details and live logs."
                 )
-                .inspectorColumnWidth(min: 335, ideal: 450, max: 565)
+                .inspectorColumnWidth(
+                    min: KumaTheme.Inspector.widthMin,
+                    ideal: KumaTheme.Inspector.widthIdeal,
+                    max: KumaTheme.Inspector.widthMax
+                )
             }
         }
     }
@@ -56,8 +56,8 @@ public struct ServicesDeckView: View {
 
     @ViewBuilder
     private var contentBody: some View {
-        if viewModel.filteredServices.isEmpty {
-            if viewModel.services.isEmpty {
+        if viewModel.filteredSnapshots.isEmpty {
+            if viewModel.snapshots.isEmpty {
                 KumaEmptyStateView(
                     iconName: "square.stack.3d.up.slash",
                     title: "No Services Yet",
@@ -85,20 +85,16 @@ public struct ServicesDeckView: View {
     private var cardsGrid: some View {
         ScrollView {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 300, maximum: 380), spacing: 18)],
-                spacing: 18
+                columns: [GridItem(.adaptive(minimum: 260, maximum: 380), spacing: 16)],
+                spacing: 16
             ) {
-                ForEach(viewModel.filteredServices) { service in
+                ForEach(viewModel.filteredSnapshots) { snapshot in
                     ServiceCardView(
-                        service: service,
-                        providerCategory: viewModel.serviceProviders[service.id] ?? .docker,
-                        detailDescription: service.description ?? "",
-                        portMappings: viewModel.portMappings[service.id] ?? [],
-                        isSelected: viewModel.selectedServiceID == service.id,
-                        status: viewModel.serviceStates[service.id] ?? .stopped,
-                        isLoading: viewModel.loadingServiceIDs.contains(service.id),
-                        onToggle: { viewModel.toggleService(service) },
-                        onSelect: { viewModel.selectService(service.id) }
+                        snapshot: snapshot,
+                        runtime: viewModel.runtimeStates[snapshot.id] ?? ServiceRuntimeState(),
+                        isSelected: viewModel.selectedServiceID == snapshot.id,
+                        onToggle: { viewModel.toggleService(id: snapshot.id) },
+                        onSelect: { viewModel.selectService(snapshot.id) }
                     )
                 }
             }
@@ -111,13 +107,11 @@ public struct ServicesDeckView: View {
     @ViewBuilder
     private var tableList: some View {
         ServiceTableView(
-            services: viewModel.filteredServices,
-            portMappings: viewModel.portMappings,
+            snapshots: viewModel.filteredSnapshots,
+            runtimeStates: viewModel.runtimeStates,
             selectedID: viewModel.selectedServiceID,
-            states: viewModel.serviceStates,
-            loadingIDs: viewModel.loadingServiceIDs,
-            onToggle: { viewModel.toggleService($0) },
-            onSelect: { viewModel.selectService($0.id) }
+            onToggle: { viewModel.toggleService(id: $0) },
+            onSelect: { viewModel.selectService($0) }
         )
     }
 }

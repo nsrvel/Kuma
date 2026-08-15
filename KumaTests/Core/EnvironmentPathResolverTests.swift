@@ -1,10 +1,3 @@
-//
-//  EnvironmentPathResolverTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Foundation
 import Testing
 @testable import Kuma

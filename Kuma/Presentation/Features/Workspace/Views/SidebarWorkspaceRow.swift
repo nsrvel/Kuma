@@ -1,11 +1,3 @@
-//
-//  SidebarWorkspaceRow.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 SidebarWorkspaceRow.
-//
-
 import SwiftUI
 
 public struct SidebarWorkspaceRow: View {

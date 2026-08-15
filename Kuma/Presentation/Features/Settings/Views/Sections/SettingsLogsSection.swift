@@ -1,11 +1,3 @@
-//
-//  SettingsLogsSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Logs Section.
-//
-
 import SwiftUI
 
 public struct SettingsLogsSection: View {

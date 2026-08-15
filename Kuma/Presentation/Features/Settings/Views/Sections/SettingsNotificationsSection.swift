@@ -1,11 +1,3 @@
-//
-//  SettingsNotificationsSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Notifications Section.
-//
-
 import SwiftUI
 import UserNotifications
 

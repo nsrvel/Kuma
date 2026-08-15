@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		49517EA530309480004CD8C5 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 49517EA430309480004CD8C5 /* GRDB */; };
+		49517EA630309480004CD8C5 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 49517EA430309480004CD8C5 /* GRDB */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		49517C36302F5D10004CD8C5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -39,6 +44,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				49517EA530309480004CD8C5 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,6 +52,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				49517EA630309480004CD8C5 /* GRDB in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,6 +97,7 @@
 			);
 			name = Kuma;
 			packageProductDependencies = (
+				49517EA430309480004CD8C5 /* GRDB */,
 			);
 			productName = Kuma;
 			productReference = 49517C19302F5C06004CD8C5 /* Kuma.app */;
@@ -146,6 +154,9 @@
 			);
 			mainGroup = 49517C10302F5C06004CD8C5;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				49517EA23030945A004CD8C5 /* XCRemoteSwiftPackageReference "GRDB" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 49517C1A302F5C06004CD8C5 /* Products */;
 			projectDirPath = "";
@@ -455,6 +466,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		49517EA23030945A004CD8C5 /* XCRemoteSwiftPackageReference "GRDB" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		49517EA430309480004CD8C5 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 49517EA23030945A004CD8C5 /* XCRemoteSwiftPackageReference "GRDB" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 49517C11302F5C06004CD8C5 /* Project object */;
 }

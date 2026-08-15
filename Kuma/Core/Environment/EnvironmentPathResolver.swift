@@ -1,11 +1,3 @@
-//
-//  EnvironmentPathResolver.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Thread-safe actor for sniffing user login shell $PATH and locating executable binaries.
-//
-
 import Foundation
 import os
 

@@ -1,15 +1,9 @@
-//
-//  DependencyCheckerTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Foundation
 import Testing
 @testable import Kuma
 
 @Suite("Core Engine Tests: DependencyChecker")
+@MainActor
 struct DependencyCheckerTests {
 
     @Test("DependencyChecker checkAll completes non-blocking")

@@ -1,11 +1,3 @@
-//
-//  SettingsDataSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Data Backup, Restore & Danger Zone Section.
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -112,7 +104,7 @@ public struct SettingsDataSection: View {
     private func exportData() {
         let panel = NSSavePanel()
         panel.title = "Export Kuma Backup"
-        panel.nameFieldStringValue = "kuma-backup-\(formattedDate()).json"
+        panel.nameFieldStringValue = "kuma-backup-\(DataPortService.backupDateString).json"
         panel.allowedContentTypes = [.json]
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -120,20 +112,15 @@ public struct SettingsDataSection: View {
         isProcessing = true
         Task {
             do {
-                let backup = DataPortService.KumaBackup(
-                    workspaces: workspaceStore.workspaces
-                )
+                let dataPort = DatabaseDataPort()
+                let backup = try await dataPort.exportAll()
                 let data = try DataPortService.encodeBackup(backup)
                 try data.write(to: url)
-                await MainActor.run {
-                    isProcessing = false
-                    alertMessage = "Backup successfully exported to \(url.lastPathComponent)."
-                }
+                isProcessing = false
+                alertMessage = "Backup successfully exported to \(url.lastPathComponent)."
             } catch {
-                await MainActor.run {
-                    isProcessing = false
-                    alertMessage = "Failed to export data: \(error.localizedDescription)"
-                }
+                isProcessing = false
+                alertMessage = "Failed to export data: \(error.localizedDescription)"
             }
         }
     }
@@ -153,16 +140,16 @@ public struct SettingsDataSection: View {
             do {
                 let data = try Data(contentsOf: url)
                 let backup = try DataPortService.decodeBackup(from: data)
-                await MainActor.run {
-                    workspaceStore.restoreWorkspaces(backup.workspaces)
-                    isProcessing = false
-                    alertMessage = "Backup successfully imported (\(backup.workspaces.count) workspaces restored)!"
-                }
+
+                let dataPort = DatabaseDataPort()
+                try await dataPort.importAll(from: backup)
+
+                workspaceStore.loadFromDatabase()
+                isProcessing = false
+                alertMessage = "Backup successfully imported (\(backup.workspaces.count) workspaces, \(backup.services.count) services restored)!"
             } catch {
-                await MainActor.run {
-                    isProcessing = false
-                    alertMessage = "Failed to import backup: \(error.localizedDescription)"
-                }
+                isProcessing = false
+                alertMessage = "Failed to import backup: \(error.localizedDescription)"
             }
         }
     }
@@ -170,17 +157,9 @@ public struct SettingsDataSection: View {
     private func resetData() {
         isProcessing = true
         Task {
-            DataPortService.resetAllUserDefaults()
-            await MainActor.run {
-                isProcessing = false
-                DataPortService.relaunchApp()
-            }
+            await DataPortService.resetAllAppStorage()
+            isProcessing = false
+            DataPortService.relaunchApp()
         }
-    }
-
-    private func formattedDate() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
     }
 }

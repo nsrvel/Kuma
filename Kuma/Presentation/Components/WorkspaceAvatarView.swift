@@ -1,11 +1,3 @@
-//
-//  WorkspaceAvatarView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Dynamic color avatar squircle generating deterministic gradients and initials.
-//
-
 import SwiftUI
 import AppKit
 

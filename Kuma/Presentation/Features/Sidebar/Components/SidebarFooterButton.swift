@@ -1,11 +1,3 @@
-//
-//  SidebarFooterButton.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 SidebarFooterButton.
-//
-
 import SwiftUI
 
 public struct SidebarFooterButton: View {

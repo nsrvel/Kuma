@@ -1,11 +1,3 @@
-//
-//  KumaToggleField.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Apple HIG form switch toggle field with title and description.
-//
-
 import SwiftUI
 
 // MARK: - KumaToggleField

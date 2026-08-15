@@ -1,11 +1,3 @@
-//
-//  SidebarModel.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Match with Kuma V3 Sidebar Navigation Domain Models.
-//
-
 import SwiftUI
 import CryptoKit
 

@@ -1,11 +1,3 @@
-//
-//  KumaFilePickerField.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Apple HIG file/directory picker field with native NSOpenPanel modal trigger.
-//
-
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers

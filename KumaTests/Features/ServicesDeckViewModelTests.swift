@@ -1,10 +1,3 @@
-//
-//  ServicesDeckViewModelTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Foundation
 import Testing
 @testable import Kuma
@@ -13,78 +6,99 @@ import Testing
 @MainActor
 struct ServicesDeckViewModelTests {
 
-    @Test("ServicesDeckViewModel loads initial workspace sample data")
-    func testLoadWorkspace() {
-        let vm = ServicesDeckViewModel()
+    private func createTestViewModelWithData() async -> (ServicesDeckViewModel, UUID) {
+        let db = AppDatabase(inMemory: true)
+        let wsRepo = WorkspaceRepository(dbWriter: db.dbWriter)
+        let repo = ServiceRepository(dbWriter: db.dbWriter)
+        let vm = ServicesDeckViewModel(serviceRepository: repo)
+
         let wid = UUID()
+        let ws = Workspace(id: wid, name: "Test Space")
+        try? await wsRepo.insert(ws)
 
-        #expect(vm.services.isEmpty == true)
-        vm.loadWorkspace(workspaceID: wid)
+        let s1 = Service(name: "PostgreSQL Database", workspaceID: wid)
+        let s2 = Service(name: "Redis Cache", workspaceID: wid)
+        let s3 = Service(name: "Backend Node API", workspaceID: wid)
+        let s4 = Service(name: "Frontend Next.js App", workspaceID: wid)
 
-        #expect(vm.services.count == 4)
-        #expect(vm.filteredServices.count == 4)
+        let p1 = Provider(serviceID: s1.id, type: .docker)
+        let p2 = Provider(serviceID: s2.id, type: .docker)
+        let p3 = Provider(serviceID: s3.id, type: .shell)
+        let p4 = Provider(serviceID: s4.id, type: .shell)
+
+        try? await repo.insertService(s1, defaultProvider: p1, portMappings: [ServicePortMapping(localPort: 5432, remotePort: 5432)])
+        try? await repo.insertService(s2, defaultProvider: p2, portMappings: [ServicePortMapping(localPort: 6379, remotePort: 6379)])
+        try? await repo.insertService(s3, defaultProvider: p3, portMappings: [ServicePortMapping(localPort: 8080, remotePort: 8080)])
+        try? await repo.insertService(s4, defaultProvider: p4, portMappings: [ServicePortMapping(localPort: 3000, remotePort: 3000)])
+
+        await vm.loadWorkspaceAsync(workspaceID: wid)
+        return (vm, wid)
+    }
+
+    @Test("ServicesDeckViewModel loads initial workspace data")
+    func testLoadWorkspace() async {
+        let (vm, _) = await createTestViewModelWithData()
+
+        #expect(vm.snapshots.count == 4)
+        #expect(vm.filteredSnapshots.count == 4)
     }
 
     @Test("ServicesDeckViewModel filters services by search query")
-    func testSearchFiltering() {
-        let vm = ServicesDeckViewModel()
-        vm.loadWorkspace(workspaceID: UUID())
+    func testSearchFiltering() async {
+        let (vm, _) = await createTestViewModelWithData()
 
         vm.searchText = "postgres"
-        #expect(vm.filteredServices.count == 1)
-        #expect(vm.filteredServices.first?.name == "PostgreSQL Database")
+        #expect(vm.filteredSnapshots.count == 1)
+        #expect(vm.filteredSnapshots.first?.name == "PostgreSQL Database")
 
         vm.searchText = "non_existent_search_query"
-        #expect(vm.filteredServices.isEmpty == true)
+        #expect(vm.filteredSnapshots.isEmpty == true)
     }
 
     @Test("ServicesDeckViewModel toggles operational status")
-    func testStatusToggle() {
-        let vm = ServicesDeckViewModel()
-        vm.loadWorkspace(workspaceID: UUID())
-        let service = vm.services.first!
+    func testStatusToggle() async {
+        let (vm, _) = await createTestViewModelWithData()
+        let snapshot = vm.snapshots.first!
 
-        let initialState = vm.serviceStates[service.id] ?? .stopped
-        vm.toggleService(service)
-        let toggledState = vm.serviceStates[service.id] ?? .stopped
+        let initialState = vm.runtimeStates[snapshot.id]?.status ?? .stopped
+        vm.toggleService(id: snapshot.id)
+        let toggledState = vm.runtimeStates[snapshot.id]?.status ?? .stopped
 
         #expect(initialState != toggledState)
     }
 
     @Test("ServicesDeckViewModel handles selection and inspector trigger")
-    func testSelectService() {
-        let vm = ServicesDeckViewModel()
-        vm.loadWorkspace(workspaceID: UUID())
-        let service = vm.services.first!
+    func testSelectService() async {
+        let (vm, _) = await createTestViewModelWithData()
+        let snapshot = vm.snapshots.first!
 
         #expect(vm.selectedServiceID == nil)
         #expect(vm.isInspectorPresented == false)
 
-        vm.selectService(service.id)
+        vm.selectService(snapshot.id)
 
-        #expect(vm.selectedServiceID == service.id)
+        #expect(vm.selectedServiceID == snapshot.id)
         #expect(vm.isInspectorPresented == true)
     }
 
     @Test("ServicesDeckViewModel filters services by provider category")
-    func testProviderFiltering() {
-        let vm = ServicesDeckViewModel()
-        vm.loadWorkspace(workspaceID: UUID())
+    func testProviderFiltering() async {
+        let (vm, _) = await createTestViewModelWithData()
 
-        #expect(vm.filteredServices.count == 4)
+        #expect(vm.filteredSnapshots.count == 4)
 
         // Filter Docker only
         vm.selectedProviders = [.docker]
-        #expect(vm.filteredServices.count == 2)
-        #expect(vm.filteredServices.allSatisfy { vm.serviceProviders[$0.id] == .docker })
+        #expect(vm.filteredSnapshots.count == 2)
+        #expect(vm.filteredSnapshots.allSatisfy { $0.providerCategory == .docker })
 
         // Filter Shell only
         vm.selectedProviders = [.shell]
-        #expect(vm.filteredServices.count == 2)
-        #expect(vm.filteredServices.allSatisfy { vm.serviceProviders[$0.id] == .shell })
+        #expect(vm.filteredSnapshots.count == 2)
+        #expect(vm.filteredSnapshots.allSatisfy { $0.providerCategory == .shell })
 
         // Reset
         vm.selectedProviders.removeAll()
-        #expect(vm.filteredServices.count == 4)
+        #expect(vm.filteredSnapshots.count == 4)
     }
 }

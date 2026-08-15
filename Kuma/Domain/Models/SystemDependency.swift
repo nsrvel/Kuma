@@ -1,11 +1,3 @@
-//
-//  SystemDependency.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Zero-dependency domain model representing system-level tools and CLIs.
-//
-
 import Foundation
 
 public enum DependencyCategory: String, Sendable {
@@ -24,7 +16,7 @@ public struct SystemDependency: Identifiable, Sendable, Equatable {
     public let description: String
     public let settingsKey: String
 
-    public init(
+    public nonisolated init(
         id: String,
         name: String,
         iconName: String,

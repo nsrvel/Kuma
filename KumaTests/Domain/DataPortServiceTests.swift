@@ -1,10 +1,3 @@
-//
-//  DataPortServiceTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Testing
 import Foundation
 @testable import Kuma

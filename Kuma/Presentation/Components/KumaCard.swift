@@ -1,11 +1,3 @@
-//
-//  KumaCard.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Reusable container providing native macOS glassmorphism, subtle borders, and optional hover feedback.
-//
-
 import SwiftUI
 
 public struct KumaCard<Content: View>: View {

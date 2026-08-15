@@ -1,11 +1,3 @@
-//
-//  KumaRowPickerField.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Apple HIG row picker field for macOS popup menus.
-//
-
 import SwiftUI
 
 // MARK: - KumaRowPickerField

@@ -1,11 +1,3 @@
-//
-//  OnboardingWindowContainerView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Container managing the dismissal of Onboarding Window and transition to Main Workspace.
-//
-
 import SwiftUI
 
 public struct OnboardingWindowContainerView: View {

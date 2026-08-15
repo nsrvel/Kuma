@@ -1,12 +1,3 @@
-//
-//  SidebarStore.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Swift 5.9+ @Observable store managing sidebar navigation tree, selection, and expansion.
-//  Provider rows are DYNAMIC: only providers with ≥1 service appear in the sidebar.
-//
-
 import SwiftUI
 import Observation
 import os

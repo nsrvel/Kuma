@@ -1,11 +1,3 @@
-//
-//  KumaStatusBadge.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Reusable status indicator badge with animated colored dot and descriptive label.
-//
-
 import SwiftUI
 
 public enum KumaBadgeState: Equatable {

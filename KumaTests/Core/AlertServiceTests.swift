@@ -1,11 +1,3 @@
-//
-//  AlertServiceTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//  Unit tests for AlertService and SystemNotificationCenter.
-//
-
 import XCTest
 import SwiftUI
 @testable import Kuma

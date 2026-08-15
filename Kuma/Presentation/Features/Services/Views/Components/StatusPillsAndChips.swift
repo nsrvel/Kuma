@@ -1,11 +1,3 @@
-//
-//  StatusPillsAndChips.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect StatusPillView and PortChipsView components.
-//
-
 import SwiftUI
 
 public struct StatusPillView: View {

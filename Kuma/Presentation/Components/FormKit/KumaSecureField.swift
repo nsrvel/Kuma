@@ -1,11 +1,3 @@
-//
-//  KumaSecureField.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Apple HIG secure form password/token input field.
-//
-
 import SwiftUI
 import AppKit
 

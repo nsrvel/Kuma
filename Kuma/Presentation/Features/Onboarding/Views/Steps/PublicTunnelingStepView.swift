@@ -1,11 +1,3 @@
-//
-//  TunnelingToolsStepView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Step 2: Inspect optional tunneling CLIs (cloudflared, ngrok).
-//
-
 import SwiftUI
 
 public struct PublicTunnelingStepView: View {

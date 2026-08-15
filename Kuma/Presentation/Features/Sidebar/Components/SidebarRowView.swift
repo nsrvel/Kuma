@@ -1,11 +1,3 @@
-//
-//  SidebarRowView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 SidebarRowView.
-//
-
 import SwiftUI
 
 public struct SidebarRowView: View {

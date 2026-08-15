@@ -1,11 +1,3 @@
-//
-//  ReadyStepView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Step 3: Ready to start and initial workspace introduction.
-//
-
 import SwiftUI
 
 public struct ReadyStepView: View {

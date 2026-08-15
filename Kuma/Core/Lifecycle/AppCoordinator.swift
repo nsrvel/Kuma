@@ -1,11 +1,3 @@
-//
-//  AppCoordinator.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean @Observable root coordinator managing global app lifecycle and phase transitions.
-//
-
 import Foundation
 import Observation
 import os

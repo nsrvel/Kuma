@@ -1,11 +1,3 @@
-//
-//  SingleInstanceGuard.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Guards application against duplicate process launches by activating existing instance.
-//
-
 import AppKit
 import Foundation
 import os

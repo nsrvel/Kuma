@@ -1,11 +1,3 @@
-//
-//  OnboardingWizardView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Main container orchestrating the multi-step Onboarding flow with responsive controls and transitions.
-//
-
 import SwiftUI
 
 public struct OnboardingWizardView: View {

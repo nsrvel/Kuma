@@ -1,16 +1,10 @@
-//
-//  KumaSoundManager.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Singleton manager for playing custom Kuma notification sounds safely without deallocation issues.
-//
-
 import Foundation
 import AVFoundation
 import AppKit
+import os
 
 public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate, @unchecked Sendable {
+    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "KumaSoundManager")
     public static let shared = KumaSoundManager()
 
     private var audioPlayer: AVAudioPlayer?
@@ -43,7 +37,7 @@ public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate, @unchecked
 
             try fileManager.copyItem(at: bundleSoundURL, to: destinationURL)
         } catch {
-            print("[KumaSoundManager] Could not sync sound to ~/Library/Sounds: \(error)")
+            Self.logger.error("Could not sync sound to ~/Library/Sounds: \(error)")
         }
     }
 
@@ -62,7 +56,7 @@ public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate, @unchecked
             audioPlayer?.prepareToPlay()
             audioPlayer?.play()
         } catch {
-            print("[KumaSoundManager] Failed to play notification sound: \(error)")
+            Self.logger.error("Failed to play notification sound: \(error)")
             NSSound(named: "Funk")?.play()
         }
     }

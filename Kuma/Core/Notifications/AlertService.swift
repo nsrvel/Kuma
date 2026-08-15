@@ -1,11 +1,3 @@
-//
-//  AlertService.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Centralized @Observable In-App Alert and Confirmation Dialog Coordinator.
-//
-
 import SwiftUI
 import Observation
 

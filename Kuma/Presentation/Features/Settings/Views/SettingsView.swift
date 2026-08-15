@@ -1,11 +1,3 @@
-//
-//  SettingsView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Single Scrollable Settings Page with Rich Materials & Visual Hierarchy.
-//
-
 import SwiftUI
 
 public struct SettingsView: View {

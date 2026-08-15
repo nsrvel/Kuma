@@ -1,11 +1,3 @@
-//
-//  WorkspaceStore.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean @Observable store managing workspace state, selection, and operations.
-//
-
 import Foundation
 import Observation
 import os
@@ -14,15 +6,17 @@ import os
 @Observable
 public final class WorkspaceStore {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "WorkspaceStore")
-
-    public static let storageKey = "kuma.workspaces.storage"
     public static let selectedWorkspaceKey = "kuma.selectedWorkspaceId.storage"
 
     private let userDefaults: UserDefaults
+    private let repository: any WorkspaceRepositoryProtocol
+
     public private(set) var workspaces: [Workspace] = []
     public var selectedWorkspaceId: UUID? {
         didSet {
-            persistState()
+            if let selectedWorkspaceId {
+                userDefaults.set(selectedWorkspaceId.uuidString, forKey: Self.selectedWorkspaceKey)
+            }
         }
     }
     public var showCreateSheet: Bool = false
@@ -33,26 +27,43 @@ public final class WorkspaceStore {
         workspaces.first(where: { $0.id == selectedWorkspaceId }) ?? workspaces.first
     }
 
-    public init(initialWorkspaces: [Workspace]? = nil, userDefaults: UserDefaults = .standard) {
+    public init(
+        initialWorkspaces: [Workspace]? = nil,
+        repository: any WorkspaceRepositoryProtocol = WorkspaceRepository(),
+        userDefaults: UserDefaults = .standard
+    ) {
+        self.repository = repository
         self.userDefaults = userDefaults
+
         if let initial = initialWorkspaces {
             self.workspaces = initial
             self.selectedWorkspaceId = initial.first?.id
-        } else if let loaded = Self.loadPersistedWorkspaces(from: userDefaults), !loaded.isEmpty {
-            self.workspaces = loaded
-            let savedSelectedStr = userDefaults.string(forKey: Self.selectedWorkspaceKey)
-            if let savedUUID = savedSelectedStr.flatMap(UUID.init), loaded.contains(where: { $0.id == savedUUID }) {
-                self.selectedWorkspaceId = savedUUID
-            } else {
-                self.selectedWorkspaceId = loaded.first?.id
-            }
-            Self.logger.debug("WorkspaceStore restored \(loaded.count) workspaces from storage")
         } else {
-            let defaultWS = Workspace.defaultWorkspace
-            self.workspaces = [defaultWS]
-            self.selectedWorkspaceId = defaultWS.id
-            persistState()
-            Self.logger.debug("WorkspaceStore initialized with default starter workspace")
+            loadFromDatabase()
+        }
+    }
+
+    public func loadFromDatabase() {
+        Task {
+            do {
+                let fetched = try await repository.fetchAll()
+                if !fetched.isEmpty {
+                    self.workspaces = fetched
+                    let savedSelectedStr = userDefaults.string(forKey: Self.selectedWorkspaceKey)
+                    if let savedUUID = savedSelectedStr.flatMap(UUID.init), fetched.contains(where: { $0.id == savedUUID }) {
+                        self.selectedWorkspaceId = savedUUID
+                    } else {
+                        self.selectedWorkspaceId = fetched.first?.id
+                    }
+                } else {
+                    let defaultWS = Workspace.defaultWorkspace
+                    try? await repository.insert(defaultWS)
+                    self.workspaces = [defaultWS]
+                    self.selectedWorkspaceId = defaultWS.id
+                }
+            } catch {
+                Self.logger.error("Failed to load workspaces from DB: \(error)")
+            }
         }
     }
 
@@ -64,10 +75,23 @@ public final class WorkspaceStore {
     public func addWorkspace(name: String, imagePath: String? = nil) -> Workspace {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = trimmed.isEmpty ? "New Workspace" : trimmed
-        let newWorkspace = Workspace(name: finalName, imagePath: imagePath, sortOrder: workspaces.count)
+        let newWorkspaceID = UUID()
+
+        // If a file URL was provided, save a managed copy into internal storage
+        var finalImageFileName: String? = nil
+        if let imagePath, let url = URL(string: imagePath), url.isFileURL {
+            finalImageFileName = WorkspaceImageStore.shared.saveWorkspaceImage(from: url, workspaceID: newWorkspaceID)
+        } else {
+            finalImageFileName = imagePath
+        }
+
+        let newWorkspace = Workspace(id: newWorkspaceID, name: finalName, imagePath: finalImageFileName, sortOrder: workspaces.count)
         self.workspaces.append(newWorkspace)
         self.selectedWorkspaceId = newWorkspace.id
-        persistState()
+
+        Task {
+            try? await repository.insert(newWorkspace)
+        }
         Self.logger.info("Added new workspace: \(finalName)")
         return newWorkspace
     }
@@ -76,67 +100,54 @@ public final class WorkspaceStore {
         guard let index = workspaces.firstIndex(where: { $0.id == workspace.id }) else { return }
         workspaces[index].name = newName
         workspaces[index].updatedAt = Date()
-        persistState()
+        let updated = workspaces[index]
+
+        Task {
+            try? await repository.update(updated)
+        }
         Self.logger.info("Renamed workspace \(workspace.id) to \(newName)")
     }
 
     public func updateWorkspace(_ workspace: Workspace) {
         guard let index = workspaces.firstIndex(where: { $0.id == workspace.id }) else { return }
         workspaces[index] = workspace
-        persistState()
-        Self.logger.info("Updated workspace \(workspace.id)")
-    }
+        workspaces[index].updatedAt = Date()
+        let updated = workspaces[index]
 
-    public func deleteWorkspace(id: UUID) {
-        guard workspaces.count > 1 else {
-            Self.logger.warning("Attempted to delete the only remaining workspace. Disallowed.")
-            return
+        Task {
+            try? await repository.update(updated)
         }
-
-        workspaces.removeAll(where: { $0.id == id })
-        if selectedWorkspaceId == id {
-            selectedWorkspaceId = workspaces.first?.id
-        }
-        persistState()
-        Self.logger.info("Deleted workspace id: \(id.uuidString)")
+        Self.logger.info("Updated workspace: \(workspace.name)")
     }
 
     public func deleteWorkspace(_ workspace: Workspace) {
-        deleteWorkspace(id: workspace.id)
-    }
-
-    /// Replaces all workspaces with restored backup data and persists state.
-    public func restoreWorkspaces(_ restored: [Workspace]) {
-        guard !restored.isEmpty else { return }
-        self.workspaces = restored
-        self.selectedWorkspaceId = restored.first?.id
-        persistState()
-        Self.logger.info("Restored \(restored.count) workspaces from backup")
-    }
-
-    // MARK: - Persistence Helpers
-
-    private func persistState() {
-        do {
-            let data = try JSONEncoder().encode(workspaces)
-            userDefaults.set(data, forKey: Self.storageKey)
-            if let selectedWorkspaceId {
-                userDefaults.set(selectedWorkspaceId.uuidString, forKey: Self.selectedWorkspaceKey)
-            } else {
-                userDefaults.removeObject(forKey: Self.selectedWorkspaceKey)
-            }
-        } catch {
-            Self.logger.error("Failed to persist workspaces: \(error.localizedDescription)")
+        if let imagePath = workspace.imagePath {
+            WorkspaceImageStore.shared.deleteImage(for: imagePath)
         }
+
+        workspaces.removeAll { $0.id == workspace.id }
+
+        if selectedWorkspaceId == workspace.id {
+            selectedWorkspaceId = workspaces.first?.id
+        }
+
+        Task {
+            try? await repository.delete(id: workspace.id)
+        }
+        Self.logger.info("Deleted workspace: \(workspace.name)")
     }
 
-    private static func loadPersistedWorkspaces(from defaults: UserDefaults = .standard) -> [Workspace]? {
-        guard let data = defaults.data(forKey: storageKey) else { return nil }
-        do {
-            return try JSONDecoder().decode([Workspace].self, from: data)
-        } catch {
-            logger.error("Failed to decode persisted workspaces: \(error.localizedDescription)")
-            return nil
+    public func moveWorkspace(from sourceIndex: Int, to destinationIndex: Int) {
+        guard sourceIndex < workspaces.count && destinationIndex < workspaces.count else { return }
+        workspaces.swapAt(sourceIndex, destinationIndex)
+
+        for (index, _) in workspaces.enumerated() {
+            workspaces[index].sortOrder = index
+            workspaces[index].updatedAt = Date()
+            let updated = workspaces[index]
+            Task {
+                try? await repository.update(updated)
+            }
         }
     }
 }

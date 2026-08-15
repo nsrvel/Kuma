@@ -1,11 +1,3 @@
-//
-//  KumaTheme.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Design system tokens: Spacing, Radius, Typography, and Semantic Colors.
-//
-
 import SwiftUI
 
 // MARK: - Spacing Scale (Zero Magic Numbers)
@@ -97,10 +89,16 @@ public enum KumaTheme {
         public static let onboardingHeight: CGFloat = 500
 
         // Main Workspace Window
-        public static let minWidth: CGFloat = 960
-        public static let minHeight: CGFloat = 600
-        public static let idealWidth: CGFloat = 1100
-        public static let idealHeight: CGFloat = 720
+        public static let minWidth: CGFloat = 1000
+        public static let minHeight: CGFloat = 640
+        public static let idealWidth: CGFloat = 1260
+        public static let idealHeight: CGFloat = 760
+    }
+
+    public enum Inspector {
+        public static let widthMin: CGFloat = 335
+        public static let widthIdeal: CGFloat = 450
+        public static let widthMax: CGFloat = 565
     }
 
     public enum Sidebar {

@@ -1,11 +1,3 @@
-//
-//  KumaEmptyStateView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Reusable Empty State component.
-//
-
 import SwiftUI
 
 public struct KumaEmptyStateView: View {

@@ -1,11 +1,3 @@
-//
-//  KumaDivider.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Subtle, crisp 1px hairline divider matching macOS Pro app design standards.
-//
-
 import SwiftUI
 
 public struct KumaDivider: View {

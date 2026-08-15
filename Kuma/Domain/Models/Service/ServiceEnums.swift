@@ -1,11 +1,3 @@
-//
-//  ServiceEnums.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Enumerations for Service execution status, deck display modes, and sorting.
-//
-
 import SwiftUI
 
 // MARK: - Service State
@@ -16,7 +8,6 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
     case running
     case stopping
     case crashed
-    case degraded
 
     public var title: String {
         switch self {
@@ -25,7 +16,6 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
         case .running:  return "Running"
         case .stopping: return "Stopping"
         case .crashed:  return "Crashed"
-        case .degraded: return "Degraded"
         }
     }
 
@@ -36,7 +26,6 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
         case .running:  return .green
         case .stopping: return .orange
         case .crashed:  return .red
-        case .degraded: return .orange
         }
     }
 
@@ -47,12 +36,22 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
         case .running:  return "checkmark.circle.fill"
         case .stopping: return "pause.circle.fill"
         case .crashed:  return "exclamationmark.triangle.fill"
-        case .degraded: return "exclamationmark.circle.fill"
         }
     }
 
     public var isOperational: Bool {
         self == .running || self == .starting
+    }
+
+    /// Natural status sorting priority (Running > Starting > Stopping > Crashed > Stopped)
+    public var sortPriority: Int {
+        switch self {
+        case .running:  return 0
+        case .starting: return 1
+        case .stopping: return 2
+        case .crashed:  return 3
+        case .stopped:  return 4
+        }
     }
 }
 

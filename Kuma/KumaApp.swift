@@ -1,14 +1,23 @@
-//
-//  KumaApp.swift
-//  Kuma
-//
-//  Created by Putra Rama on 14/08/26.
-//
-
 import SwiftUI
+import UserNotifications
+
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+}
 
 @main
 struct KumaApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var coordinator = AppCoordinator()
     @State private var workspaceStore = WorkspaceStore()
 
@@ -32,12 +41,14 @@ struct KumaApp: App {
         .windowBackgroundDragBehavior(.enabled)
 
         // 2. Main Dashboard Window (Opens after onboarding or on subsequent launches)
-        WindowGroup("Kuma", id: "main-workspace") {
+        WindowGroup(id: "main-workspace") {
             ContentView()
                 .environment(coordinator)
                 .environment(workspaceStore)
+                .containerBackground(.thickMaterial, for: .window)
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         }
-        .defaultSize(width: KumaTheme.Window.idealWidth, height: KumaTheme.Window.idealHeight)
+        .defaultSize(width: 1100, height: 750)
         .windowResizability(.contentMinSize)
         .commands {
             // 0. App Settings Menu & Shortcut (⌘,)

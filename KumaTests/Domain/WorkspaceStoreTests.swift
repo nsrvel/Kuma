@@ -1,10 +1,3 @@
-//
-//  WorkspaceStoreTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Testing
 import Foundation
 @testable import Kuma
@@ -16,7 +9,10 @@ struct WorkspaceStoreTests {
     @Test("WorkspaceStore initial default state")
     func testInitialState() {
         let testDefaults = UserDefaults(suiteName: "kuma.test.\(UUID().uuidString)")!
-        let store = WorkspaceStore(userDefaults: testDefaults)
+        let db = AppDatabase(inMemory: true)
+        let repo = WorkspaceRepository(dbWriter: db.dbWriter)
+        let store = WorkspaceStore(initialWorkspaces: [Workspace.defaultWorkspace], repository: repo, userDefaults: testDefaults)
+
         #expect(store.workspaces.count == 1)
         #expect(store.workspaces.first?.name == Workspace.defaultName)
         #expect(store.activeWorkspace?.name == Workspace.defaultName)
@@ -25,7 +21,9 @@ struct WorkspaceStoreTests {
     @Test("WorkspaceStore add, rename, select, and delete")
     func testWorkspaceOperations() {
         let testDefaults = UserDefaults(suiteName: "kuma.test.\(UUID().uuidString)")!
-        let store = WorkspaceStore(userDefaults: testDefaults)
+        let db = AppDatabase(inMemory: true)
+        let repo = WorkspaceRepository(dbWriter: db.dbWriter)
+        let store = WorkspaceStore(initialWorkspaces: [Workspace.defaultWorkspace], repository: repo, userDefaults: testDefaults)
 
         // 1. Add
         let staging = store.addWorkspace(name: "Staging Cluster")

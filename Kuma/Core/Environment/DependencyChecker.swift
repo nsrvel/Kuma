@@ -1,11 +1,3 @@
-//
-//  DependencyChecker.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Non-blocking scanner for discovering system CLIs and configuration files.
-//
-
 import Foundation
 
 public struct DependencyStatus: Sendable, Equatable {
@@ -16,7 +8,7 @@ public struct DependencyStatus: Sendable, Equatable {
     public var cloudflaredInstalled: Bool
     public var ngrokInstalled: Bool
 
-    public init(
+    public nonisolated init(
         kubectlInstalled: Bool = false,
         kubeconfigExists: Bool = false,
         dockerInstalled: Bool = false,

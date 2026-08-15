@@ -1,11 +1,3 @@
-//
-//  ServiceEnginesStepView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Step 1: Discover and inspect core service CLI engines (kubectl, kubeconfig, docker, podman).
-//
-
 import SwiftUI
 
 public struct ContainersAndClustersStepView: View {

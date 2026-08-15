@@ -1,11 +1,3 @@
-//
-//  Workspace.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Pure zero-dependency domain model representing an isolated Workspace environment.
-//
-
 import Foundation
 
 public struct Workspace: Identifiable, Codable, Sendable, Equatable, Hashable {

@@ -1,14 +1,8 @@
-//
-//  SystemDependencyTests.swift
-//  KumaTests
-//
-//  Created for Kuma Native macOS App.
-//
-
 import Testing
 @testable import Kuma
 
 @Suite("Domain Model Tests: SystemDependency")
+@MainActor
 struct SystemDependencyTests {
 
     @Test("SystemDependency initialization and properties")

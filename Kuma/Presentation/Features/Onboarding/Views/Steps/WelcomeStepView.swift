@@ -1,11 +1,3 @@
-//
-//  WelcomeStepView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Step 0: Hero welcome headline and core feature highlights.
-//
-
 import SwiftUI
 
 public struct WelcomeStepView: View {

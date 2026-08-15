@@ -1,11 +1,3 @@
-//
-//  KumaTextField.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Apple HIG form text input field with translucent glass background and focus stroke.
-//
-
 import SwiftUI
 import AppKit
 

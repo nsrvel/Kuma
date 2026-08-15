@@ -1,11 +1,3 @@
-//
-//  KumaFormSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Apple HIG form section wrapper with icon, title, subtitle and danger styles.
-//
-
 import SwiftUI
 
 // MARK: - KumaFormSection Style

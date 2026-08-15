@@ -1,70 +1,55 @@
-//
-//  ServiceTableView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Table View for Services Deck.
-//
-
 import SwiftUI
 
 public struct ServiceTableView: View {
-    public let services: [Service]
-    public let portMappings: [UUID: [ServicePortMapping]]
+    public let snapshots: [ServiceCardSnapshot]
+    public let runtimeStates: [UUID: ServiceRuntimeState]
     public let selectedID: UUID?
-    public let states: [UUID: ServiceState]
-    public let loadingIDs: Set<UUID>
 
-    public var onToggle: (Service) -> Void
-    public var onSelect: (Service) -> Void
+    public var onToggle: (UUID) -> Void
+    public var onSelect: (UUID) -> Void
 
     @State private var selection: Set<UUID> = []
 
     public init(
-        services: [Service],
-        portMappings: [UUID: [ServicePortMapping]],
+        snapshots: [ServiceCardSnapshot],
+        runtimeStates: [UUID: ServiceRuntimeState],
         selectedID: UUID?,
-        states: [UUID: ServiceState],
-        loadingIDs: Set<UUID>,
-        onToggle: @escaping (Service) -> Void,
-        onSelect: @escaping (Service) -> Void
+        onToggle: @escaping (UUID) -> Void,
+        onSelect: @escaping (UUID) -> Void
     ) {
-        self.services = services
-        self.portMappings = portMappings
+        self.snapshots = snapshots
+        self.runtimeStates = runtimeStates
         self.selectedID = selectedID
-        self.states = states
-        self.loadingIDs = loadingIDs
         self.onToggle = onToggle
         self.onSelect = onSelect
     }
 
     public var body: some View {
-        Table(services, selection: $selection) {
-            TableColumn("Name") { service in
-                let status = states[service.id] ?? .stopped
-                let isLoading = loadingIDs.contains(service.id)
+        Table(snapshots, selection: $selection) {
+            TableColumn("Name") { snapshot in
+                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
 
                 HStack(spacing: 10) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(Color.accentColor.gradient)
+                            .fill(snapshot.providerCategory.color.gradient)
                             .frame(width: 24, height: 24)
                             .shadow(color: Color.black.opacity(0.06), radius: 1, y: 0.5)
 
-                        Image(systemName: "shippingbox.fill")
+                        Image(systemName: snapshot.providerCategory.icon)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.12), radius: 0.5, y: 0.5)
-                            .symbolEffect(.pulse, isActive: isLoading || status == .starting)
+                            .symbolEffect(.pulse, isActive: runtime.isLoading || runtime.status == .starting)
                     }
 
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
-                            Text(service.name)
+                            Text(snapshot.name)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.primary)
 
-                            if service.isDisabled {
+                            if snapshot.isDisabled {
                                 Text("disabled")
                                     .font(.system(size: 8, weight: .medium))
                                     .foregroundStyle(.secondary)
@@ -76,80 +61,49 @@ public struct ServiceTableView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { onSelect(service) }
+                .onTapGesture { onSelect(snapshot.id) }
             }
 
-            TableColumn("Configuration") { service in
-                Text(service.description ?? "Docker: postgres:16-alpine")
+            TableColumn("Configuration") { snapshot in
+                Text(snapshot.subtitle.isEmpty ? snapshot.providerCategory.sidebarLabel : snapshot.subtitle)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
-                    .onTapGesture { onSelect(service) }
+                    .onTapGesture { onSelect(snapshot.id) }
             }
 
-            TableColumn("Ports") { service in
-                let ports = portMappings[service.id] ?? []
+            TableColumn("Ports") { snapshot in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    PortChipsView(ports: ports.map { "\($0.localPort):\($0.remotePort)" }, limit: 4)
+                    PortChipsView(ports: snapshot.portDisplays.map { "\($0)" }, limit: 4)
                         .padding(.vertical, 2)
                 }
             }
 
-            TableColumn("Status") { service in
-                let state = states[service.id] ?? .stopped
-
-                let statusColor: Color = {
-                    if service.isDisabled { return .secondary }
-                    switch state {
-                    case .running:    return .green
-                    case .crashed:    return .red
-                    case .starting:   return .accentColor
-                    case .stopping:   return .orange
-                    default:          return .secondary
-                    }
-                }()
-
-                let statusText: String = {
-                    if service.isDisabled { return "disabled" }
-                    switch state {
-                    case .running:    return "running"
-                    case .crashed:    return "failed"
-                    case .starting:   return "starting"
-                    case .stopping:   return "stopping"
-                    default:          return "stopped"
-                    }
-                }()
-
-                StatusPillView(
-                    text: statusText,
-                    color: statusColor,
-                    showDot: true,
-                    isGlowing: state == .running,
-                    isLoading: state == .starting || state == .stopping
-                )
-                .onTapGesture { onSelect(service) }
+            TableColumn("Status") { snapshot in
+                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
+                ServiceStatusObserver(state: runtime)
+                    .onTapGesture { onSelect(snapshot.id) }
             }
 
-            TableColumn("") { service in
-                let status = states[service.id] ?? .stopped
-                let isLoading = loadingIDs.contains(service.id)
+            TableColumn("") { snapshot in
+                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
 
                 let isOnBinding = Binding<Bool>(
-                    get: { status == .running || status == .starting },
-                    set: { _ in onToggle(service) }
+                    get: { runtime.status == .running || runtime.status == .starting },
+                    set: { _ in onToggle(snapshot.id) }
                 )
 
                 Toggle("", isOn: isOnBinding)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .labelsHidden()
-                    .disabled(service.isDisabled || isLoading)
+                    .disabled(snapshot.isDisabled || runtime.isLoading)
             }
             .width(44)
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
         .onChange(of: selection) { _, new in
-            if let id = new.first, id != selectedID, let service = services.first(where: { $0.id == id }) {
-                onSelect(service)
+            if let id = new.first, id != selectedID {
+                onSelect(id)
             }
         }
         .onChange(of: selectedID) { _, id in

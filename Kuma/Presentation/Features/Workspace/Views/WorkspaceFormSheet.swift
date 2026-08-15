@@ -1,11 +1,3 @@
-//
-//  WorkspaceFormSheet.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 WorkspaceFormSheet (Create & Edit Settings).
-//
-
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers

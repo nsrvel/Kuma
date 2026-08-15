@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  Kuma
-//
-//  Created by Putra Rama on 14/08/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
@@ -21,9 +14,7 @@ struct ContentView: View {
         } detail: {
             detailView(for: sidebarStore.selectedID)
         }
-        .containerBackground(.thickMaterial, for: .window)
-        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        .frame(minWidth: KumaTheme.Window.minWidth, minHeight: KumaTheme.Window.minHeight)
+        .navigationSplitViewStyle(.balanced)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("kuma.openSettings"))) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 sidebarStore.selectedID = .stable("settings")

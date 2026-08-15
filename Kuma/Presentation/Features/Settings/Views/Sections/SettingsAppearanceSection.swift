@@ -1,11 +1,3 @@
-//
-//  SettingsAppearanceSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Appearance Section with Live Mini Window Theme Cards.
-//
-
 import SwiftUI
 
 public struct SettingsAppearanceSection: View {

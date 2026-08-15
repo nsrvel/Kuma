@@ -1,11 +1,3 @@
-//
-//  DependencyStatusRowView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Reusable card row showing status, icon, and path of a CLI dependency.
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 

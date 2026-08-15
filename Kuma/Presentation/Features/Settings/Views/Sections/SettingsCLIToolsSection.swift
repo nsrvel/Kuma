@@ -1,11 +1,3 @@
-//
-//  SettingsCLIToolsSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect CLI Tools Section with Live Status Badges & Browse Pickers.
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 

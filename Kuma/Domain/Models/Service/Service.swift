@@ -1,11 +1,3 @@
-//
-//  Service.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Core Service entity model representing a running service / container / job.
-//
-
 import Foundation
 
 public struct Service: Identifiable, Codable, Equatable, Sendable, Hashable {
@@ -20,7 +12,7 @@ public struct Service: Identifiable, Codable, Equatable, Sendable, Hashable {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(
+    public nonisolated init(
         id: UUID = UUID(),
         name: String,
         icon: String? = nil,

@@ -1,11 +1,3 @@
-//
-//  SettingsStore.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Clean Swift 5.9+ @Observable store managing user preferences and application settings.
-//
-
 import SwiftUI
 import Observation
 import ServiceManagement

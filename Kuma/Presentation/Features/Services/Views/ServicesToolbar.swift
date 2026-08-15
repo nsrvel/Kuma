@@ -1,11 +1,3 @@
-//
-//  ServicesToolbar.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Toolbar Extension for ServicesDeckView.
-//
-
 import SwiftUI
 
 extension ServicesDeckView {
@@ -31,85 +23,39 @@ extension ServicesDeckView {
             .help("Switch between card and table view")
         }
 
-        // 3. Filter Menu (Statuses & Providers as Nested Submenus)
+        // 3. Filter Menu (Pure macOS HIG: Sections + Native Toggles)
         ToolbarItem {
             Menu {
-                // Status Submenu
-                Menu("Status") {
-                    Button {
-                        viewModel.selectedStatuses.removeAll()
-                    } label: {
-                        HStack {
-                            Text("All Statuses")
-                            if viewModel.selectedStatuses.isEmpty {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
+                Section("Status") {
+                    Toggle("Running", isOn: Binding(
+                        get: { viewModel.selectedStatuses.contains(.running) },
+                        set: { _ in toggleStatusFilter(.running) }
+                    ))
 
-                    Divider()
+                    Toggle("Stopped", isOn: Binding(
+                        get: { viewModel.selectedStatuses.contains(.stopped) },
+                        set: { _ in toggleStatusFilter(.stopped) }
+                    ))
 
-                    Button {
-                        toggleStatusFilter(.running)
-                    } label: {
-                        HStack {
-                            Text("Running")
-                            if viewModel.selectedStatuses.contains(.running) {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-
-                    Button {
-                        toggleStatusFilter(.stopped)
-                    } label: {
-                        HStack {
-                            Text("Stopped")
-                            if viewModel.selectedStatuses.contains(.stopped) {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
+                    Toggle("Crashed", isOn: Binding(
+                        get: { viewModel.selectedStatuses.contains(.crashed) },
+                        set: { _ in toggleStatusFilter(.crashed) }
+                    ))
                 }
 
-                // Providers Submenu
-                Menu("Providers") {
-                    Button {
-                        viewModel.selectedProviders.removeAll()
-                    } label: {
-                        HStack {
-                            Text("All Providers")
-                            if viewModel.selectedProviders.isEmpty {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-
-                    Divider()
-
+                Section("Provider") {
                     ForEach(ProviderCategory.allCases, id: \.self) { prov in
-                        Button {
-                            if viewModel.selectedProviders.contains(prov) {
-                                viewModel.selectedProviders.remove(prov)
-                            } else {
-                                viewModel.selectedProviders.insert(prov)
-                            }
-                        } label: {
-                            HStack {
-                                Text(prov.sidebarLabel)
-                                if viewModel.selectedProviders.contains(prov) {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
+                        Toggle(prov.sidebarLabel, isOn: Binding(
+                            get: { viewModel.selectedProviders.contains(prov) },
+                            set: { _ in toggleProviderFilter(prov) }
+                        ))
                     }
                 }
 
-                // Reset All Filters (if any active)
                 if !viewModel.selectedStatuses.isEmpty || !viewModel.selectedProviders.isEmpty {
                     Divider()
 
-                    Button("Reset All Filters") {
+                    Button("Reset Filters") {
                         viewModel.selectedStatuses.removeAll()
                         viewModel.selectedProviders.removeAll()
                     }
@@ -121,19 +67,15 @@ extension ServicesDeckView {
             .help("Filter services")
         }
 
-        // 4. Sort Menu (Name, Status, Created)
+        // 4. Sort Menu (Pure macOS HIG: Section + Native Radio Toggles)
         ToolbarItem {
             Menu {
-                ForEach(ServiceSortOption.allCases, id: \.self) { sortOpt in
-                    Button {
-                        viewModel.sortBy = sortOpt
-                    } label: {
-                        HStack {
-                            Text(sortOpt.rawValue)
-                            if viewModel.sortBy == sortOpt {
-                                Image(systemName: "checkmark")
-                            }
-                        }
+                Section("Sort By") {
+                    ForEach(ServiceSortOption.allCases, id: \.self) { sortOpt in
+                        Toggle(sortOpt.rawValue, isOn: Binding(
+                            get: { viewModel.sortBy == sortOpt },
+                            set: { if $0 { viewModel.sortBy = sortOpt } }
+                        ))
                     }
                 }
             } label: {
@@ -153,16 +95,16 @@ extension ServicesDeckView {
                 }
 
                 Button {
-                    for service in viewModel.services {
-                        viewModel.serviceStates[service.id] = .running
+                    for snapshot in viewModel.snapshots {
+                        viewModel.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
                     }
                 } label: {
                     Label("Start All", systemImage: "play.fill")
                 }
 
                 Button {
-                    for service in viewModel.services {
-                        viewModel.serviceStates[service.id] = .stopped
+                    for snapshot in viewModel.snapshots {
+                        viewModel.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .stopped, isLoading: false)
                     }
                 } label: {
                     Label("Stop All", systemImage: "stop.fill")
@@ -195,7 +137,8 @@ extension ServicesDeckView {
             } label: {
                 Image(systemName: "sidebar.trailing")
             }
-            .help(viewModel.isInspectorPresented ? "Hide detail panel" : "Show detail panel")
+            .help(viewModel.isInspectorPresented ? "Hide detail panel (⌘I)" : "Show detail panel (⌘I)")
+            .keyboardShortcut("i", modifiers: [.command])
         }
     }
 
@@ -204,6 +147,14 @@ extension ServicesDeckView {
             viewModel.selectedStatuses.remove(state)
         } else {
             viewModel.selectedStatuses.insert(state)
+        }
+    }
+
+    private func toggleProviderFilter(_ prov: ProviderCategory) {
+        if viewModel.selectedProviders.contains(prov) {
+            viewModel.selectedProviders.remove(prov)
+        } else {
+            viewModel.selectedProviders.insert(prov)
         }
     }
 }

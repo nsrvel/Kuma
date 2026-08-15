@@ -1,22 +1,10 @@
-//
-//  ServiceCardView.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Service Card with Provider Badges, Status Toggles, and Port Mapping pills.
-//
-
 import SwiftUI
 import AppKit
 
 public struct ServiceCardView: View {
-    public let service: Service
-    public let providerCategory: ProviderCategory
-    public let detailDescription: String
-    public let portMappings: [ServicePortMapping]
+    public let snapshot: ServiceCardSnapshot
+    public let runtime: ServiceRuntimeState
     public let isSelected: Bool
-    public let status: ServiceState
-    public let isLoading: Bool
 
     public var onToggle: () -> Void
     public var onSelect: () -> Void
@@ -25,47 +13,17 @@ public struct ServiceCardView: View {
     @State private var isPortHovered: [Int: Bool] = [:]
 
     public init(
-        service: Service,
-        providerCategory: ProviderCategory = .docker,
-        detailDescription: String = "",
-        portMappings: [ServicePortMapping] = [],
+        snapshot: ServiceCardSnapshot,
+        runtime: ServiceRuntimeState = ServiceRuntimeState(),
         isSelected: Bool = false,
-        status: ServiceState = .stopped,
-        isLoading: Bool = false,
         onToggle: @escaping () -> Void = {},
         onSelect: @escaping () -> Void = {}
     ) {
-        self.service = service
-        self.providerCategory = providerCategory
-        self.detailDescription = detailDescription
-        self.portMappings = portMappings
+        self.snapshot = snapshot
+        self.runtime = runtime
         self.isSelected = isSelected
-        self.status = status
-        self.isLoading = isLoading
         self.onToggle = onToggle
         self.onSelect = onSelect
-    }
-
-    private var statusColor: Color {
-        switch status {
-        case .running:    return .green
-        case .starting:   return .accentColor
-        case .stopping:   return .orange
-        case .crashed:    return .red
-        case .degraded:   return .orange
-        case .stopped:    return .secondary
-        }
-    }
-
-    private var statusText: String {
-        switch status {
-        case .running:    return "running"
-        case .starting:   return "starting"
-        case .stopping:   return "stopping"
-        case .crashed:    return "failed"
-        case .degraded:   return "degraded"
-        case .stopped:    return "stopped"
-        }
     }
 
     public var body: some View {
@@ -74,23 +32,23 @@ public struct ServiceCardView: View {
                 // Service Provider Icon
                 ZStack {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(providerCategory.color.gradient)
+                        .fill(snapshot.providerCategory.color.gradient)
                         .frame(width: 34, height: 34)
                         .shadow(color: Color.black.opacity(0.04), radius: 1, y: 0.5)
 
-                    Image(systemName: providerCategory.icon)
+                    Image(systemName: snapshot.providerCategory.icon)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.white)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(service.name)
+                        Text(snapshot.name)
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(service.isDisabled ? .secondary : .primary)
+                            .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
                             .lineLimit(1)
 
-                        if service.isDisabled {
+                        if snapshot.isDisabled {
                             Text("Disabled")
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundStyle(.secondary)
@@ -100,7 +58,7 @@ public struct ServiceCardView: View {
                         }
                     }
 
-                    Text(detailDescription.isEmpty ? providerCategory.sidebarLabel : detailDescription)
+                    Text(snapshot.subtitle.isEmpty ? snapshot.providerCategory.sidebarLabel : snapshot.subtitle)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -108,36 +66,35 @@ public struct ServiceCardView: View {
 
                 Spacer(minLength: 8)
 
-                // Native macOS Toggle Switch (100% V3 Match)
-                if service.isDisabled {
+                // Native macOS Toggle Switch
+                if snapshot.isDisabled {
                     Image(systemName: "lock.circle.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(.tertiary)
                 } else {
                     let isOnBinding = Binding<Bool>(
-                        get: { status == .running || status == .starting },
+                        get: { runtime.status == .running || runtime.status == .starting },
                         set: { _ in onToggle() }
                     )
                     Toggle("", isOn: isOnBinding)
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .labelsHidden()
-                        .disabled(isLoading || status == .starting || status == .stopping)
+                        .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
                 }
             }
 
-            // Port Mappings and Status Footprint
-            if !portMappings.isEmpty || status != .stopped {
+            // Port Displays and Live Status Pill
+            if !snapshot.portDisplays.isEmpty || runtime.status != .stopped {
                 HStack(spacing: 6) {
-                    if !portMappings.isEmpty {
+                    if !snapshot.portDisplays.isEmpty {
                         Image(systemName: "arrow.left.arrow.right")
                             .font(.system(size: 9))
                             .foregroundStyle(.tertiary)
 
                         // Clickable Port Chips
                         HStack(spacing: 4) {
-                            ForEach(portMappings) { mapping in
-                                let port = mapping.localPort
+                            ForEach(snapshot.portDisplays, id: \.self) { port in
                                 Button {
                                     if let url = URL(string: "http://localhost:\(port)") {
                                         NSWorkspace.shared.open(url)
@@ -166,13 +123,7 @@ public struct ServiceCardView: View {
 
                     Spacer()
 
-                    StatusPillView(
-                        text: statusText,
-                        color: statusColor,
-                        showDot: true,
-                        isGlowing: status == .running,
-                        isLoading: status == .starting || status == .stopping
-                    )
+                    ServiceStatusObserver(state: runtime)
                 }
                 .padding(.top, 2)
             }
@@ -195,9 +146,7 @@ public struct ServiceCardView: View {
             onSelect()
         }
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
         }
     }
 }

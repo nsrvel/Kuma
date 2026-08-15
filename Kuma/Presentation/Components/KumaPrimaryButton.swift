@@ -1,11 +1,3 @@
-//
-//  KumaPrimaryButton.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Crafted macOS-native Primary CTA button following Apple HIG with tactile press & subtle elevation.
-//
-
 import SwiftUI
 
 /// Custom ButtonStyle providing Apple-grade tactile press state and crisp depth.

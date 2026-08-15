@@ -1,11 +1,3 @@
-//
-//  SettingsTunnelingToolsSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect Tunneling Tools Section.
-//
-
 import SwiftUI
 import UniformTypeIdentifiers
 

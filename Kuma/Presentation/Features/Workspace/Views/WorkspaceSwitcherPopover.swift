@@ -1,18 +1,9 @@
-//
-//  WorkspaceSwitcherPopover.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 WorkspaceSwitcherPopover.
-//
-
 import SwiftUI
 
 public struct WorkspaceSwitcherPopover: View {
     @Bindable var store: WorkspaceStore
     @Binding var isPresented: Bool
 
-    @State private var isHoveringActiveRow = false
     @State private var isHoveringActiveSettings = false
 
     public init(store: WorkspaceStore, isPresented: Binding<Bool>) {
@@ -67,7 +58,6 @@ public struct WorkspaceSwitcherPopover: View {
                 .padding(.horizontal, 10)
                 .padding(.top, 10)
                 .padding(.bottom, 8)
-                .onHover { isHoveringActiveRow = $0 }
                 .contextMenu {
                     Button {
                         isPresented = false

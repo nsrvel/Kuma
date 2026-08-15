@@ -1,11 +1,3 @@
-//
-//  ServicePortMapping.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Represents a mapped port pair (local port -> remote target container/service port).
-//
-
 import Foundation
 
 public struct ServicePortMapping: Identifiable, Codable, Equatable, Sendable, Hashable {
@@ -14,7 +6,7 @@ public struct ServicePortMapping: Identifiable, Codable, Equatable, Sendable, Ha
     public var remotePort: Int
     public var protocolType: String
 
-    public init(
+    public nonisolated init(
         id: UUID = UUID(),
         localPort: Int,
         remotePort: Int,
@@ -26,7 +18,7 @@ public struct ServicePortMapping: Identifiable, Codable, Equatable, Sendable, Ha
         self.protocolType = protocolType
     }
 
-    public var displayString: String {
+    public nonisolated var displayString: String {
         "\(localPort):\(remotePort)"
     }
 }

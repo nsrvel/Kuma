@@ -1,11 +1,3 @@
-//
-//  SettingsGeneralSection.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% V3 Pixel-Perfect General Section.
-//
-
 import SwiftUI
 
 public struct SettingsGeneralSection: View {

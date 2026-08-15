@@ -1,11 +1,3 @@
-//
-//  ProviderCategory.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  Single source of truth for provider metadata: short labels, icons, colors, and stable IDs.
-//
-
 import SwiftUI
 
 public enum ProviderCategory: String, CaseIterable, Codable, Sendable, Hashable {
@@ -20,7 +12,7 @@ public enum ProviderCategory: String, CaseIterable, Codable, Sendable, Hashable 
 
     // MARK: - Short Sidebar Display Name
 
-    public var sidebarLabel: String {
+    public nonisolated var sidebarLabel: String {
         switch self {
         case .docker:         return "Docker"
         case .kubernetes:     return "Kubernetes"

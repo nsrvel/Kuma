@@ -1,11 +1,3 @@
-//
-//  SidebarChevron.swift
-//  Kuma
-//
-//  Created for Kuma Native macOS App.
-//  100% Pixel-Perfect Match with Kuma V3 SidebarChevron.
-//
-
 import SwiftUI
 
 public struct SidebarChevron: View {
