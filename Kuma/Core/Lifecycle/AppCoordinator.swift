@@ -12,13 +12,15 @@ public enum AppPhase: String, Sendable, Equatable {
 public final class AppCoordinator {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "AppCoordinator")
 
+    public static let completedOnboardingKey = "kuma.has_completed_onboarding"
+
     public private(set) var currentPhase: AppPhase
 
     public init(initialPhase: AppPhase? = nil) {
         if let initialPhase {
             self.currentPhase = initialPhase
         } else {
-            let hasCompleted = UserDefaults.standard.bool(forKey: "kuma.has_completed_onboarding")
+            let hasCompleted = UserDefaults.standard.bool(forKey: Self.completedOnboardingKey)
             self.currentPhase = hasCompleted ? .mainWorkspace : .onboarding
         }
         Self.logger.debug("AppCoordinator initialized with phase: \(self.currentPhase.rawValue)")
@@ -29,13 +31,16 @@ public final class AppCoordinator {
         Self.logger.info("Transitioning AppPhase to: \(phase.rawValue)")
         self.currentPhase = phase
         if phase == .mainWorkspace {
-            UserDefaults.standard.set(true, forKey: "kuma.has_completed_onboarding")
+            UserDefaults.standard.set(true, forKey: Self.completedOnboardingKey)
+        } else if phase == .onboarding {
+            UserDefaults.standard.set(false, forKey: Self.completedOnboardingKey)
         }
+        UserDefaults.standard.synchronize()
     }
 
-    /// Triggers onboarding from menu bar / help menu.
+    /// Triggers onboarding from menu bar / help menu / factory reset.
     public func resetToOnboarding() {
         Self.logger.info("Resetting phase to onboarding")
-        self.currentPhase = .onboarding
+        transitionTo(.onboarding)
     }
 }

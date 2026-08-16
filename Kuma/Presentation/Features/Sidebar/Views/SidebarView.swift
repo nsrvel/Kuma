@@ -1,11 +1,11 @@
 import SwiftUI
 
 public struct SidebarView: View {
-    @Bindable var store: SidebarStore
+    @Bindable var viewModel: SidebarViewModel
     @Bindable var workspaceStore: WorkspaceStore
 
-    public init(store: SidebarStore, workspaceStore: WorkspaceStore) {
-        self.store = store
+    public init(viewModel: SidebarViewModel, workspaceStore: WorkspaceStore) {
+        self.viewModel = viewModel
         self.workspaceStore = workspaceStore
     }
 
@@ -44,7 +44,7 @@ public struct SidebarView: View {
                 )
             )
 
-            if case .item(let node) = entry, let children = node.children, store.isExpanded(node.id) {
+            if case .item(let node) = entry, let children = node.children, viewModel.isExpanded(node.id) {
                 if children.isEmpty {
                     let placeholderId = UUID.stable(node.id.uuidString + ".empty-placeholder")
                     let placeholderNode = SidebarNode(
@@ -69,7 +69,7 @@ public struct SidebarView: View {
             }
         }
 
-        for (index, entry) in store.entries.enumerated() {
+        for (index, entry) in viewModel.entries.enumerated() {
             if case .divider = entry {
                 continue
             }
@@ -78,7 +78,7 @@ public struct SidebarView: View {
             appendEntry(entry, indentLevel: 0)
 
             let nextIndex = index + 1
-            if nextIndex < store.entries.count, case .divider = store.entries[nextIndex] {
+            if nextIndex < viewModel.entries.count, case .divider = viewModel.entries[nextIndex] {
                 if result.count > startCount, let lastIndex = result.indices.last {
                     result[lastIndex] = FlattenedRow(
                         id: result[lastIndex].id,
@@ -140,7 +140,7 @@ public struct SidebarView: View {
 
                 HStack(spacing: 8) {
                     SidebarFooterButton(icon: "gear", tooltip: "Settings (⌘,)") {
-                        store.selectedID = .stable("settings")
+                        viewModel.selectedID = .stable("settings")
                     }
 
                     SidebarFooterButton(icon: "questionmark.circle", tooltip: "Help") {
@@ -175,12 +175,12 @@ public struct SidebarView: View {
             } else {
                 SidebarRowView(
                     node: node,
-                    isSelected: store.selectedID == node.id,
-                    isExpanded: store.isExpanded(node.id),
+                    isSelected: viewModel.selectedID == node.id,
+                    isExpanded: viewModel.isExpanded(node.id),
                     indentLevel: item.indentLevel,
-                    onSelect: { store.selectedID = node.id },
+                    onSelect: { viewModel.selectedID = node.id },
                     onToggleExpand: {
-                        store.toggleExpanded(node.id)
+                        viewModel.toggleExpanded(node.id)
                     }
                 )
             }
@@ -196,42 +196,42 @@ public struct SidebarView: View {
         let navigableRows = flattenedRows.filter { isNavigable($0) }
         guard !navigableRows.isEmpty else { return }
 
-        let currentIndex = navigableRows.firstIndex(where: { $0.id == store.selectedID })
+        let currentIndex = navigableRows.firstIndex(where: { $0.id == viewModel.selectedID })
 
         switch direction {
         case .down:
             if let index = currentIndex {
                 let nextIndex = index + 1
                 if nextIndex < navigableRows.count {
-                    store.selectedID = navigableRows[nextIndex].id
+                    viewModel.selectedID = navigableRows[nextIndex].id
                 }
             } else {
-                store.selectedID = navigableRows.first?.id
+                viewModel.selectedID = navigableRows.first?.id
             }
         case .up:
             if let index = currentIndex {
                 let prevIndex = index - 1
                 if prevIndex >= 0 {
-                    store.selectedID = navigableRows[prevIndex].id
+                    viewModel.selectedID = navigableRows[prevIndex].id
                 }
             } else {
-                store.selectedID = navigableRows.last?.id
+                viewModel.selectedID = navigableRows.last?.id
             }
         case .left:
-            if let selectedID = store.selectedID,
+            if let selectedID = viewModel.selectedID,
                let row = navigableRows.first(where: { $0.id == selectedID }),
                case .item(let node) = row.entry,
                node.children != nil,
-               store.isExpanded(selectedID) {
-                _ = store.expandedIDs.remove(selectedID)
+               viewModel.isExpanded(selectedID) {
+                _ = viewModel.expandedIDs.remove(selectedID)
             }
         case .right:
-            if let selectedID = store.selectedID,
+            if let selectedID = viewModel.selectedID,
                let row = navigableRows.first(where: { $0.id == selectedID }),
                case .item(let node) = row.entry,
                node.children != nil,
-               !store.isExpanded(selectedID) {
-                _ = store.expandedIDs.insert(selectedID)
+               !viewModel.isExpanded(selectedID) {
+                _ = viewModel.expandedIDs.insert(selectedID)
             }
         default:
             break

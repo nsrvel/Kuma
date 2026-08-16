@@ -73,14 +73,14 @@ public struct ServiceTableView: View {
 
             TableColumn("Ports") { snapshot in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    PortChipsView(ports: snapshot.portDisplays.map { "\($0)" }, limit: 4)
+                    PortChipsView(ports: snapshot.portDisplays, limit: 4)
                         .padding(.vertical, 2)
                 }
             }
 
             TableColumn("Status") { snapshot in
                 let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
-                ServiceStatusObserver(state: runtime)
+                ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
                     .onTapGesture { onSelect(snapshot.id) }
             }
 

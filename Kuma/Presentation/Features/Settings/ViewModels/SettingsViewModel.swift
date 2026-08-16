@@ -49,8 +49,8 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
 
 @MainActor
 @Observable
-public final class SettingsStore {
-    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SettingsStore")
+public final class SettingsViewModel {
+    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SettingsViewModel")
     private let userDefaults: UserDefaults
 
     // MARK: - Keys

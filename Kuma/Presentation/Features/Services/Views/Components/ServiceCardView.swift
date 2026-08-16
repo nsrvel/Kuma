@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 public struct ServiceCardView: View {
     public let snapshot: ServiceCardSnapshot
@@ -8,9 +7,6 @@ public struct ServiceCardView: View {
 
     public var onToggle: () -> Void
     public var onSelect: () -> Void
-
-    @State private var isHovered = false
-    @State private var isPortHovered: [Int: Bool] = [:]
 
     public init(
         snapshot: ServiceCardSnapshot,
@@ -28,38 +24,33 @@ public struct ServiceCardView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
+            // Header Row: Provider Icon + Name/Target Subtitle + Native Toggle
+            HStack(spacing: 11) {
                 // Service Provider Icon
                 ZStack {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(snapshot.providerCategory.color.gradient)
+                        .fill(
+                            snapshot.isDisabled
+                            ? Color.secondary.opacity(0.18).gradient
+                            : snapshot.providerCategory.color.gradient
+                        )
                         .frame(width: 34, height: 34)
-                        .shadow(color: Color.black.opacity(0.04), radius: 1, y: 0.5)
+                        .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.04), radius: 1, y: 0.5)
 
                     Image(systemName: snapshot.providerCategory.icon)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(snapshot.isDisabled ? Color.secondary : .white)
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(snapshot.name)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
-                            .lineLimit(1)
+                // Name & Contextual Target Subtitle (Image/Namespace/Target)
+                VStack(alignment: .leading, spacing: 2.5) {
+                    Text(snapshot.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
+                        .lineLimit(1)
 
-                        if snapshot.isDisabled {
-                            Text("Disabled")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1.5)
-                                .background(Color.secondary.opacity(0.15), in: Capsule())
-                        }
-                    }
-
-                    Text(snapshot.subtitle.isEmpty ? snapshot.providerCategory.sidebarLabel : snapshot.subtitle)
-                        .font(.system(size: 11))
+                    Text(targetSubtitle)
+                        .font(.system(size: 11, design: isMonospacedTarget ? .monospaced : .default))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -69,7 +60,7 @@ public struct ServiceCardView: View {
                 // Native macOS Toggle Switch
                 if snapshot.isDisabled {
                     Image(systemName: "lock.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 18))
                         .foregroundStyle(.tertiary)
                 } else {
                     let isOnBinding = Binding<Bool>(
@@ -84,69 +75,101 @@ public struct ServiceCardView: View {
                 }
             }
 
-            // Port Displays and Live Status Pill
-            if !snapshot.portDisplays.isEmpty || runtime.status != .stopped {
-                HStack(spacing: 6) {
-                    if !snapshot.portDisplays.isEmpty {
-                        Image(systemName: "arrow.left.arrow.right")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
-
-                        // Clickable Port Chips
-                        HStack(spacing: 4) {
-                            ForEach(snapshot.portDisplays, id: \.self) { port in
-                                Button {
-                                    if let url = URL(string: "http://localhost:\(port)") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                } label: {
-                                    HStack(spacing: 3) {
-                                        Text("\(port)")
-                                            .font(.system(size: 10, design: .monospaced))
-                                        if isPortHovered[port] == true {
-                                            Image(systemName: "link")
-                                                .font(.system(size: 8))
-                                        }
-                                    }
-                                    .foregroundStyle(isPortHovered[port] == true ? Color.accentColor : Color.secondary)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(isPortHovered[port] == true ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 4))
-                                }
-                                .buttonStyle(.plain)
-                                .onHover { hovering in
-                                    isPortHovered[port] = hovering
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer()
-
-                    ServiceStatusObserver(state: runtime)
+            // Footer Row: Static Ports OR Contextual Provider Badge + Live Status Observer
+            HStack(spacing: 6) {
+                if !snapshot.portDisplays.isEmpty {
+                    PortChipsView(ports: snapshot.portDisplays, limit: 3)
+                } else {
+                    // Contextual Badge for services without port bindings
+                    nonPortBadge
                 }
-                .padding(.top, 2)
+
+                Spacer(minLength: 4)
+
+                // Micro-Observer: Updates only this pill when status changes
+                ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
-        .background(Color.primary.opacity(isHovered ? 0.02 : 0.0))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // Adaptive translucent surface that harmonizes with window material
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .textBackgroundColor).opacity(snapshot.isDisabled ? 0.35 : 0.55))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(
-                    isSelected ? Color.accentColor.opacity(0.8) : (isHovered ? Color.primary.opacity(0.15) : Color.primary.opacity(0.06)),
-                    lineWidth: isSelected ? 2 : 1
+                    isSelected ? Color.accentColor : Color(nsColor: .separatorColor).opacity(snapshot.isDisabled ? 0.35 : 0.55),
+                    lineWidth: isSelected ? 1.5 : 0.5
                 )
         }
-        .shadow(color: .black.opacity(isSelected ? 0.05 : 0.02), radius: isSelected ? 6 : 2, y: 1)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .opacity(snapshot.isDisabled ? 0.75 : 1.0)
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .onTapGesture {
             onSelect()
         }
-        .onHover { hovering in
-            isHovered = hovering
+    }
+
+    // MARK: - Contextual Non-Port Badge
+
+    @ViewBuilder
+    private var nonPortBadge: some View {
+        let (icon, label) = nonPortMetadata
+
+        HStack(spacing: 3.5) {
+            Image(systemName: icon)
+                .font(.system(size: 8.5))
+                .foregroundStyle(.tertiary)
+            Text(label)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 5.5)
+        .padding(.vertical, 2)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+        }
+    }
+
+    private var nonPortMetadata: (icon: String, label: String) {
+        switch snapshot.providerCategory {
+        case .httpCheck:
+            return ("waveform.path.ecg", "Health Check")
+        case .shell:
+            return ("terminal", "Shell Script")
+        case .processMonitor:
+            return ("cpu", "Process")
+        case .docker, .podman:
+            return ("arrow.triangle.2.circlepath", "Worker")
+        case .ssh:
+            return ("server.rack", "SSH Session")
+        case .tunnel:
+            return ("cloud", "Tunnel")
+        case .kubernetes:
+            return ("network", "Cluster Pod")
+        }
+    }
+
+    // MARK: - Contextual Subtitle
+
+    private var targetSubtitle: String {
+        if !snapshot.subtitle.isEmpty {
+            return snapshot.subtitle
+        }
+        return snapshot.providerCategory.sidebarLabel
+    }
+
+    private var isMonospacedTarget: Bool {
+        switch snapshot.providerCategory {
+        case .docker, .podman, .kubernetes, .shell, .ssh:
+            return !snapshot.subtitle.isEmpty
+        default:
+            return false
         }
     }
 }

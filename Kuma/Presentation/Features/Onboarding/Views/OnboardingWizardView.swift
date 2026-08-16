@@ -2,6 +2,8 @@ import SwiftUI
 
 public struct OnboardingWizardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var viewModel = OnboardingViewModel()
     @State private var isHoveringBack = false
     @State private var isTransitioning = false
@@ -142,6 +144,8 @@ public struct OnboardingWizardView: View {
                     }
                 } else {
                     onComplete?()
+                    openWindow(id: "main-workspace")
+                    dismissWindow(id: "onboarding")
                 }
             }
             .keyboardShortcut(.defaultAction)

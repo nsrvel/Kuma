@@ -10,6 +10,7 @@ public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
     public let providerCategory: ProviderCategory
     public let portDisplays: [Int]
     public let createdAt: Date
+    public let searchKey: String
 
     public nonisolated init(
         id: UUID,
@@ -27,5 +28,6 @@ public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
         self.providerCategory = providerCategory
         self.portDisplays = portDisplays
         self.createdAt = createdAt
+        self.searchKey = "\(name) \(subtitle)".lowercased()
     }
 }

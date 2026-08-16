@@ -1,10 +1,10 @@
 import SwiftUI
 
 public struct SettingsGeneralSection: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
 
-    public init(store: SettingsStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -15,7 +15,7 @@ public struct SettingsGeneralSection: View {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 KumaToggleField(
                     label: "Launch at Login",
-                    value: $store.launchAtLogin,
+                    value: $viewModel.launchAtLogin,
                     description: "Automatically open Kuma when you log into your Mac."
                 )
 
@@ -23,7 +23,7 @@ public struct SettingsGeneralSection: View {
 
                 KumaToggleField(
                     label: "Auto-start Services",
-                    value: $store.autoResumeServices,
+                    value: $viewModel.autoResumeServices,
                     description: "Automatically resume services that were active when Kuma was last quit."
                 )
 
@@ -31,7 +31,7 @@ public struct SettingsGeneralSection: View {
 
                 KumaToggleField(
                     label: "Confirm Before Quitting",
-                    value: $store.confirmBeforeQuit,
+                    value: $viewModel.confirmBeforeQuit,
                     description: "Show a confirmation prompt when quitting Kuma while services are running."
                 )
             }

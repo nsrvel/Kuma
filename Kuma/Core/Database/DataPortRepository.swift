@@ -2,13 +2,13 @@ import Foundation
 import GRDB
 import os
 
-public protocol DataPortImportExportProtocol: Sendable {
+public protocol DataPortRepositoryProtocol: Sendable {
     func exportAll() async throws -> DataPortService.KumaBackup
     func importAll(from backup: DataPortService.KumaBackup) async throws
 }
 
-public final class DatabaseDataPort: DataPortImportExportProtocol {
-    private let logger = Logger(subsystem: "lokastudio.kuma", category: "DatabaseDataPort")
+public final class DataPortRepository: DataPortRepositoryProtocol {
+    private let logger = Logger(subsystem: "lokastudio.kuma", category: "DataPortRepository")
     private let dbWriter: any DatabaseWriter
 
     public nonisolated init(dbWriter: (any DatabaseWriter)? = nil) {
@@ -50,9 +50,20 @@ public final class DatabaseDataPort: DataPortImportExportProtocol {
             }
 
             let exportPortMappings = portMappings.map { pm in
-                DataPortService.ExportPortMapping(
+                // In V3 JSON, providerID in portMappings maps to the service's active provider
+                var associatedProviderID = pm.serviceID ?? pm.id
+                if let sID = pm.serviceID {
+                    if let service = services.first(where: { $0.id == sID }),
+                       let activePID = service.activeProviderID {
+                        associatedProviderID = activePID
+                    } else if let firstProv = providers.first(where: { $0.serviceID == sID }) {
+                        associatedProviderID = firstProv.id
+                    }
+                }
+
+                return DataPortService.ExportPortMapping(
                     id: pm.id,
-                    providerID: pm.id,
+                    providerID: associatedProviderID,
                     localPort: pm.localPort,
                     remotePort: pm.remotePort
                 )

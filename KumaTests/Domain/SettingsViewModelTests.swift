@@ -2,9 +2,9 @@ import Testing
 import Foundation
 @testable import Kuma
 
-@Suite("SettingsStore Tests")
+@Suite("SettingsViewModel Tests")
 @MainActor
-struct SettingsStoreTests {
+struct SettingsViewModelTests {
 
     private func createIsolatedDefaults() -> (UserDefaults, String) {
         let suiteName = "kuma.test.settings.\(UUID().uuidString)"
@@ -12,12 +12,12 @@ struct SettingsStoreTests {
         return (defaults, suiteName)
     }
 
-    @Test("SettingsStore initializes with standard defaults")
+    @Test("SettingsViewModel initializes with standard defaults")
     func testInitializationDefaults() {
         let (defaults, suiteName) = createIsolatedDefaults()
         defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
 
-        let store = SettingsStore(userDefaults: defaults)
+        let store = SettingsViewModel(userDefaults: defaults)
 
         #expect(store.launchAtLogin == false)
         #expect(store.autoResumeServices == true)
@@ -31,12 +31,12 @@ struct SettingsStoreTests {
         #expect(store.defaultShell == "/bin/zsh")
     }
 
-    @Test("SettingsStore updates and persists property mutations")
+    @Test("SettingsViewModel updates and persists property mutations")
     func testPersistence() {
         let (defaults, suiteName) = createIsolatedDefaults()
         defer { UserDefaults.standard.removePersistentDomain(forName: suiteName) }
 
-        let store = SettingsStore(userDefaults: defaults)
+        let store = SettingsViewModel(userDefaults: defaults)
 
         store.autoResumeServices = false
         store.confirmBeforeQuit = false
@@ -46,12 +46,12 @@ struct SettingsStoreTests {
         store.ngrokRegion = "ap"
         store.logRetentionLimit = .hundredMB
 
-        #expect(defaults.bool(forKey: SettingsStore.Keys.autoResumeServices) == false)
-        #expect(defaults.bool(forKey: SettingsStore.Keys.confirmBeforeQuit) == false)
-        #expect(defaults.string(forKey: SettingsStore.Keys.appearance) == "dark")
-        #expect(defaults.string(forKey: SettingsStore.Keys.customPathOverride) == "/custom/bin:/opt/bin")
-        #expect(defaults.string(forKey: SettingsStore.Keys.ngrokAuthToken) == "secret_token_123")
-        #expect(defaults.string(forKey: SettingsStore.Keys.ngrokRegion) == "ap")
-        #expect(defaults.integer(forKey: SettingsStore.Keys.logRetentionLimit) == 100)
+        #expect(defaults.bool(forKey: SettingsViewModel.Keys.autoResumeServices) == false)
+        #expect(defaults.bool(forKey: SettingsViewModel.Keys.confirmBeforeQuit) == false)
+        #expect(defaults.string(forKey: SettingsViewModel.Keys.appearance) == "dark")
+        #expect(defaults.string(forKey: SettingsViewModel.Keys.customPathOverride) == "/custom/bin:/opt/bin")
+        #expect(defaults.string(forKey: SettingsViewModel.Keys.ngrokAuthToken) == "secret_token_123")
+        #expect(defaults.string(forKey: SettingsViewModel.Keys.ngrokRegion) == "ap")
+        #expect(defaults.integer(forKey: SettingsViewModel.Keys.logRetentionLimit) == 100)
     }
 }

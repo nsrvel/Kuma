@@ -1,11 +1,11 @@
 import SwiftUI
 
 public struct SettingsView: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
     @Bindable var workspaceStore: WorkspaceStore
 
-    public init(store: SettingsStore, workspaceStore: WorkspaceStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel, workspaceStore: WorkspaceStore) {
+        self.viewModel = viewModel
         self.workspaceStore = workspaceStore
     }
 
@@ -13,14 +13,14 @@ public struct SettingsView: View {
         ScrollView {
             VStack(spacing: KumaSpacing.xxl) {
                 // User & App Preferences
-                SettingsGeneralSection(store: store)
-                SettingsAppearanceSection(store: store)
-                SettingsNotificationsSection(store: store)
+                SettingsGeneralSection(viewModel: viewModel)
+                SettingsAppearanceSection(viewModel: viewModel)
+                SettingsNotificationsSection(viewModel: viewModel)
 
                 // Developer & Engine Tools
-                SettingsCLIToolsSection(store: store)
-                SettingsTunnelingToolsSection(store: store)
-                SettingsLogsSection(store: store)
+                SettingsCLIToolsSection(viewModel: viewModel)
+                SettingsTunnelingToolsSection(viewModel: viewModel)
+                SettingsLogsSection(viewModel: viewModel)
 
                 // Data & Storage Management
                 SettingsDataSection(workspaceStore: workspaceStore)
@@ -37,7 +37,7 @@ public struct SettingsView: View {
 
 #Preview {
     SettingsView(
-        store: SettingsStore(),
+        viewModel: SettingsViewModel(),
         workspaceStore: WorkspaceStore()
     )
     .frame(width: 750, height: 800)

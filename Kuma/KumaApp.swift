@@ -29,18 +29,8 @@ struct KumaApp: App {
     }
 
     var body: some Scene {
-        // 1. Dedicated Onboarding Window (Opens on first launch)
-        Window("Kuma Onboarding", id: "onboarding") {
-            OnboardingWindowContainerView()
-                .environment(coordinator)
-                .gesture(WindowDragGesture())
-        }
-        .windowStyle(.plain)
-        .windowResizability(.contentSize)
-        .restorationBehavior(.disabled)
-        .windowBackgroundDragBehavior(.enabled)
-
-        // 2. Main Dashboard Window (Opens after onboarding or on subsequent launches)
+        // ─── Scene 1: Main Workspace Window ───────────────────────────
+        // Default root window scene opened by macOS
         WindowGroup(id: "main-workspace") {
             ContentView()
                 .environment(coordinator)
@@ -50,11 +40,12 @@ struct KumaApp: App {
         }
         .defaultSize(width: 1100, height: 750)
         .windowResizability(.contentMinSize)
+        .restorationBehavior(.disabled)
         .commands {
             // 0. App Settings Menu & Shortcut (⌘,)
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") {
-                    NotificationCenter.default.post(name: NSNotification.Name("kuma.openSettings"), object: nil)
+                    NotificationCenter.default.post(name: .kumaOpenSettings, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: [.command])
             }
@@ -82,14 +73,36 @@ struct KumaApp: App {
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             }
 
-            // 2. Help Menu
+            // 2. Help Menu — re-show the onboarding guide
             CommandGroup(replacing: .help) {
                 Button("Kuma Onboarding Guide") {
                     coordinator.resetToOnboarding()
-                    NSApp.sendAction(Selector(("openWindow:")), to: nil, from: "onboarding")
+                    NotificationCenter.default.post(name: .kumaOpenOnboarding, object: nil)
                 }
                 .keyboardShortcut("?", modifiers: [.command])
             }
         }
+
+        // ─── Scene 2: Onboarding Wizard Window ─────────────────────────
+        // Compact plain utility window, floating, suppressed by default
+        Window("Welcome to Kuma", id: "onboarding") {
+            OnboardingWizardView {
+                coordinator.transitionTo(.mainWorkspace)
+            }
+            .environment(coordinator)
+        }
+        .windowStyle(.plain)
+        .windowResizability(.contentSize)
+        .windowLevel(.floating)
+        .windowBackgroundDragBehavior(.enabled)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
     }
+}
+
+// MARK: - Notification Names
+
+extension NSNotification.Name {
+    static let kumaOpenSettings = NSNotification.Name("kuma.openSettings")
+    static let kumaOpenOnboarding = NSNotification.Name("kuma.openOnboarding")
 }

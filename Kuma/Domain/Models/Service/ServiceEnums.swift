@@ -55,6 +55,24 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
     }
 }
 
+// MARK: - Service Status Filter Option
+
+public enum ServiceStatusFilterOption: String, Codable, Sendable, CaseIterable, Hashable {
+    case running = "running"
+    case stopped = "stopped"
+    case crashed = "crashed"
+    case disabled = "disabled"
+
+    public var title: String {
+        switch self {
+        case .running:  return "Running"
+        case .stopped:  return "Stopped"
+        case .crashed:  return "Crashed"
+        case .disabled: return "Disabled"
+        }
+    }
+}
+
 // MARK: - Deck View Mode
 
 public enum DeckViewMode: String, Codable, Sendable, CaseIterable {

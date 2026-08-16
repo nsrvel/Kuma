@@ -108,16 +108,22 @@ public final class WorkspaceStore {
         Self.logger.info("Renamed workspace \(workspace.id) to \(newName)")
     }
 
-    public func updateWorkspace(_ workspace: Workspace) {
+    public func updateWorkspace(_ workspace: Workspace, newExternalImageURL: URL? = nil) {
         guard let index = workspaces.firstIndex(where: { $0.id == workspace.id }) else { return }
-        workspaces[index] = workspace
-        workspaces[index].updatedAt = Date()
-        let updated = workspaces[index]
+        var updated = workspace
+
+        if let newExternalImageURL {
+            let managedFileName = WorkspaceImageStore.shared.saveWorkspaceImage(from: newExternalImageURL, workspaceID: workspace.id)
+            updated.imagePath = managedFileName
+        }
+
+        updated.updatedAt = Date()
+        workspaces[index] = updated
 
         Task {
             try? await repository.update(updated)
         }
-        Self.logger.info("Updated workspace: \(workspace.name)")
+        Self.logger.info("Updated workspace: \(updated.name)")
     }
 
     public func deleteWorkspace(_ workspace: Workspace) {

@@ -1,11 +1,11 @@
 import SwiftUI
 
 public struct SettingsAppearanceSection: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
     @Namespace private var selectionNamespace
 
-    public init(store: SettingsStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -22,11 +22,11 @@ public struct SettingsAppearanceSection: View {
                     ForEach(KumaAppearance.allCases, id: \.self) { mode in
                         AppearanceCard(
                             mode: mode,
-                            isSelected: store.appearance == mode,
+                            isSelected: viewModel.appearance == mode,
                             namespace: selectionNamespace,
                             onSelect: {
                                 withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
-                                    store.appearance = mode
+                                    viewModel.appearance = mode
                                 }
                             }
                         )
@@ -204,7 +204,7 @@ private struct ThemeCardButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    SettingsAppearanceSection(store: SettingsStore())
+    SettingsAppearanceSection(viewModel: SettingsViewModel())
         .padding()
         .frame(width: 600)
 }

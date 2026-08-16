@@ -2,32 +2,32 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct SettingsCLIToolsSection: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
 
     // Auto-detected default paths when custom path is empty
     @State private var defaultDockerPath: String = ""
     @State private var defaultKubectlPath: String = ""
     @State private var defaultPodmanPath: String = ""
 
-    public init(store: SettingsStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
     }
 
     // MARK: - Validation Computations (Zero-latency)
 
     private var kubectlValidation: BinaryValidationResult {
-        DependencyChecker.validateCustomBinary(path: store.customKubectlPath, expectedCommand: "kubectl")
+        DependencyChecker.validateCustomBinary(path: viewModel.customKubectlPath, expectedCommand: "kubectl")
     }
 
     private var isKubectlAvailable: Bool {
-        if store.customKubectlPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.customKubectlPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return !defaultKubectlPath.isEmpty
         }
         return kubectlValidation.isValid
     }
 
     private var kubeconfigValidation: String? {
-        let trimmed = store.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = viewModel.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let nsPath = NSString(string: trimmed).expandingTildeInPath
         if !FileManager.default.fileExists(atPath: nsPath) {
@@ -37,29 +37,29 @@ public struct SettingsCLIToolsSection: View {
     }
 
     private var isKubeconfigAvailable: Bool {
-        if store.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return DependencyChecker.isKubeconfigPresent()
         }
         return kubeconfigValidation == nil
     }
 
     private var dockerValidation: BinaryValidationResult {
-        DependencyChecker.validateCustomBinary(path: store.customDockerPath, expectedCommand: "docker")
+        DependencyChecker.validateCustomBinary(path: viewModel.customDockerPath, expectedCommand: "docker")
     }
 
     private var isDockerAvailable: Bool {
-        if store.customDockerPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.customDockerPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return !defaultDockerPath.isEmpty
         }
         return dockerValidation.isValid
     }
 
     private var podmanValidation: BinaryValidationResult {
-        DependencyChecker.validateCustomBinary(path: store.customPodmanPath, expectedCommand: "podman")
+        DependencyChecker.validateCustomBinary(path: viewModel.customPodmanPath, expectedCommand: "podman")
     }
 
     private var isPodmanAvailable: Bool {
-        if store.customPodmanPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.customPodmanPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return !defaultPodmanPath.isEmpty
         }
         return podmanValidation.isValid
@@ -82,7 +82,7 @@ public struct SettingsCLIToolsSection: View {
                     }
                     KumaFilePickerField(
                         label: "",
-                        path: $store.customKubectlPath,
+                        path: $viewModel.customKubectlPath,
                         placeholder: defaultKubectlPath.isEmpty ? "/opt/homebrew/bin/kubectl" : defaultKubectlPath,
                         chooseFiles: true,
                         chooseDirectories: false,
@@ -104,7 +104,7 @@ public struct SettingsCLIToolsSection: View {
                     }
                     KumaFilePickerField(
                         label: "",
-                        path: $store.customKubeconfigPath,
+                        path: $viewModel.customKubeconfigPath,
                         placeholder: "~/.kube/config",
                         chooseFiles: true,
                         chooseDirectories: false,
@@ -125,7 +125,7 @@ public struct SettingsCLIToolsSection: View {
                     }
                     KumaFilePickerField(
                         label: "",
-                        path: $store.customDockerPath,
+                        path: $viewModel.customDockerPath,
                         placeholder: defaultDockerPath.isEmpty ? "/usr/local/bin/docker" : defaultDockerPath,
                         chooseFiles: true,
                         chooseDirectories: false,
@@ -147,7 +147,7 @@ public struct SettingsCLIToolsSection: View {
                     }
                     KumaFilePickerField(
                         label: "",
-                        path: $store.customPodmanPath,
+                        path: $viewModel.customPodmanPath,
                         placeholder: defaultPodmanPath.isEmpty ? "/opt/homebrew/bin/podman" : defaultPodmanPath,
                         chooseFiles: true,
                         chooseDirectories: false,
@@ -163,7 +163,7 @@ public struct SettingsCLIToolsSection: View {
                     label: "Default Shell",
                     description: "The shell to use when executing custom shell processes.",
                     options: DefaultShell.allCases.map(\.rawValue),
-                    selection: $store.defaultShell,
+                    selection: $viewModel.defaultShell,
                     titleResolver: { (DefaultShell(rawValue: $0) ?? .zsh).label }
                 )
             }

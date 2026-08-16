@@ -41,6 +41,11 @@ extension ServicesDeckView {
                         get: { viewModel.selectedStatuses.contains(.crashed) },
                         set: { _ in toggleStatusFilter(.crashed) }
                     ))
+
+                    Toggle("Disabled", isOn: Binding(
+                        get: { viewModel.selectedStatuses.contains(.disabled) },
+                        set: { _ in toggleStatusFilter(.disabled) }
+                    ))
                 }
 
                 Section("Provider") {
@@ -142,7 +147,7 @@ extension ServicesDeckView {
         }
     }
 
-    private func toggleStatusFilter(_ state: ServiceState) {
+    private func toggleStatusFilter(_ state: ServiceStatusFilterOption) {
         if viewModel.selectedStatuses.contains(state) {
             viewModel.selectedStatuses.remove(state)
         } else {

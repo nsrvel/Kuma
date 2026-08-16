@@ -217,6 +217,8 @@ public struct WorkspaceFormSheet: View {
         }
     }
 
+    @State private var selectedImageURL: URL? = nil
+
     private func selectImage() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -225,6 +227,7 @@ public struct WorkspaceFormSheet: View {
         panel.allowedContentTypes = [.image]
 
         if panel.runModal() == .OK, let url = panel.url {
+            self.selectedImageURL = url
             self.selectedImagePath = url.path
             self.previewImage = NSImage(contentsOfFile: url.path)
         }
@@ -239,13 +242,19 @@ public struct WorkspaceFormSheet: View {
 
         switch mode {
         case .create:
-            let newWS = store.addWorkspace(name: trimmedName, imagePath: selectedImagePath)
+            let newWS = store.addWorkspace(name: trimmedName, imagePath: selectedImageURL?.path ?? selectedImagePath)
             store.selectWorkspace(newWS)
         case .edit(var ws):
             ws.name = trimmedName
-            ws.imagePath = selectedImagePath
+            if selectedImagePath == nil {
+                // User removed photo
+                if let oldPath = ws.imagePath {
+                    WorkspaceImageStore.shared.deleteImage(for: oldPath)
+                }
+                ws.imagePath = nil
+            }
             ws.updatedAt = Date()
-            store.updateWorkspace(ws)
+            store.updateWorkspace(ws, newExternalImageURL: selectedImageURL)
         }
         isPresented = false
     }

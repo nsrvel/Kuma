@@ -4,8 +4,14 @@ import Observation
 @MainActor
 @Observable
 public final class ServicesDeckViewModel {
-    public var searchText: String = ""
-    public var selectedStatuses: Set<ServiceState> = []
+    public var debouncedSearchText: String = ""
+    public var searchText: String = "" {
+        didSet {
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            debouncedSearchText = query
+        }
+    }
+    public var selectedStatuses: Set<ServiceStatusFilterOption> = []
     public var selectedProviders: Set<ProviderCategory> = []
     public var sortBy: ServiceSortOption = .name
     public var viewMode: DeckViewMode = .card
@@ -24,25 +30,36 @@ public final class ServicesDeckViewModel {
         self.serviceRepository = serviceRepository
     }
 
-    // MARK: - Filtered & Sorted Projections
+    // MARK: - Filtered & Sorted Projections (Ultra-Fast Zero Allocation)
 
     public var filteredSnapshots: [ServiceCardSnapshot] {
-        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasSearch = !trimmedQuery.isEmpty
+        let query = debouncedSearchText
+        let hasSearch = !query.isEmpty
         let hasStatusFilter = !selectedStatuses.isEmpty
         let hasProviderFilter = !selectedProviders.isEmpty
 
-        // 1. Single-Pass Zero-Allocation Filtering
+        // 1. Single-Pass High-Speed Token Matching
         var result = snapshots.filter { snapshot in
             if hasSearch {
-                let nameMatch = snapshot.name.localizedStandardContains(trimmedQuery)
-                let subMatch = snapshot.subtitle.localizedStandardContains(trimmedQuery)
-                if !nameMatch && !subMatch { return false }
+                if !snapshot.searchKey.contains(query) {
+                    return false
+                }
             }
 
             if hasStatusFilter {
-                let state = runtimeStates[snapshot.id]?.status ?? .stopped
-                if !selectedStatuses.contains(state) { return false }
+                if snapshot.isDisabled {
+                    if !selectedStatuses.contains(.disabled) { return false }
+                } else {
+                    let state = runtimeStates[snapshot.id]?.status ?? .stopped
+                    switch state {
+                    case .running, .starting:
+                        if !selectedStatuses.contains(.running) { return false }
+                    case .stopped, .stopping:
+                        if !selectedStatuses.contains(.stopped) { return false }
+                    case .crashed:
+                        if !selectedStatuses.contains(.crashed) { return false }
+                    }
+                }
             }
 
             if hasProviderFilter {

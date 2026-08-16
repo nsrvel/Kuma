@@ -36,14 +36,14 @@ public final class ServiceRepository: ServiceRepositoryProtocol {
                 if let activeProvID = service.activeProviderID,
                    let provider = try Provider.fetchOne(db, key: activeProvID.uuidString) {
                     category = provider.type
-                    if subtitle.isEmpty {
-                        subtitle = provider.displayName
-                    }
+                    subtitle = provider.resolvedTarget
                 } else if let firstProv = try Provider.filter(Column("serviceID") == service.id.uuidString).fetchOne(db) {
                     category = firstProv.type
-                    if subtitle.isEmpty {
-                        subtitle = firstProv.displayName
-                    }
+                    subtitle = firstProv.resolvedTarget
+                }
+
+                if subtitle.isEmpty, let desc = service.description, !desc.isEmpty {
+                    subtitle = desc
                 }
 
                 let ports = try ServicePortMapping

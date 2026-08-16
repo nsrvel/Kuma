@@ -1,10 +1,10 @@
 import SwiftUI
 
 public struct SettingsLogsSection: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
 
-    public init(store: SettingsStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -17,7 +17,7 @@ public struct SettingsLogsSection: View {
                     label: "Max Log Buffer in Memory",
                     description: "Maximum memory buffer kept per running service inspector.",
                     options: LogRetentionLimit.allCases,
-                    selection: $store.logRetentionLimit,
+                    selection: $viewModel.logRetentionLimit,
                     titleResolver: { $0.title }
                 )
 
@@ -25,7 +25,7 @@ public struct SettingsLogsSection: View {
 
                 KumaToggleField(
                     label: "Clear Buffer on Service Restart",
-                    value: $store.clearLogsOnSwitch,
+                    value: $viewModel.clearLogsOnSwitch,
                     description: "Flush previous console output when triggering a service restart."
                 )
             }

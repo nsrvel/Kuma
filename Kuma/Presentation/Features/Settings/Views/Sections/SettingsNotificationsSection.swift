@@ -2,11 +2,11 @@ import SwiftUI
 import UserNotifications
 
 public struct SettingsNotificationsSection: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
     @State private var showPermissionAlert = false
 
-    public init(store: SettingsStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
     }
 
     public var body: some View {
@@ -17,10 +17,10 @@ public struct SettingsNotificationsSection: View {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 KumaToggleField(
                     label: "Notify on Service Failure",
-                    value: $store.notifyOnCrash,
+                    value: $viewModel.notifyOnCrash,
                     description: "Send a macOS system notification when a service crashes or exits unexpectedly."
                 )
-                .onChange(of: store.notifyOnCrash) { _, newValue in
+                .onChange(of: viewModel.notifyOnCrash) { _, newValue in
                     handleNotifyOnCrashToggle(newValue: newValue)
                 }
 
@@ -28,7 +28,7 @@ public struct SettingsNotificationsSection: View {
 
                 KumaToggleField(
                     label: "Notify on Health Check Failure",
-                    value: $store.notifyOnHealthFailure,
+                    value: $viewModel.notifyOnHealthFailure,
                     description: "Send alerts when a monitored endpoint or socket stops responding."
                 )
 
@@ -36,7 +36,7 @@ public struct SettingsNotificationsSection: View {
 
                 KumaToggleField(
                     label: "Port Collision Safety Alerts",
-                    value: $store.warnOnPortCollision,
+                    value: $viewModel.warnOnPortCollision,
                     description: "Alert before starting a service if the target local port is already bound."
                 )
             }
@@ -65,24 +65,24 @@ public struct SettingsNotificationsSection: View {
                 do {
                     let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
                     await MainActor.run {
-                        store.notifyOnCrash = granted
+                        viewModel.notifyOnCrash = granted
                         if !granted {
                             showPermissionAlert = true
                         }
                     }
                 } catch {
                     await MainActor.run {
-                        store.notifyOnCrash = false
+                        viewModel.notifyOnCrash = false
                     }
                 }
             case .denied:
                 await MainActor.run {
-                    store.notifyOnCrash = false
+                    viewModel.notifyOnCrash = false
                     showPermissionAlert = true
                 }
             case .authorized, .provisional, .ephemeral:
                 await MainActor.run {
-                    store.notifyOnCrash = true
+                    viewModel.notifyOnCrash = true
                 }
             @unknown default:
                 break

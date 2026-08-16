@@ -38,15 +38,7 @@ public struct WorkspaceAvatarView: View {
     }
 
     private func cachedImage(from path: String) -> NSImage? {
-        let key = path as NSString
-        if let cached = Self.imageCache.object(forKey: key) {
-            return cached
-        }
-        if let img = NSImage(contentsOfFile: path) {
-            Self.imageCache.setObject(img, forKey: key)
-            return img
-        }
-        return nil
+        WorkspaceImageStore.shared.thumbnail(for: path, maxDimension: size * 2)
     }
 
     private var initials: String {

@@ -109,4 +109,88 @@ public struct Provider: Identifiable, Codable, Sendable, Equatable, Hashable {
         }
         return type.sidebarLabel
     }
+
+    /// Computes the exact contextual target string for the card UI (e.g. image name, kube target, command, url).
+    public nonisolated var resolvedTarget: String {
+        switch type {
+        case .docker, .podman:
+            if let yaml = yamlConfig, let image = extractComposeImage(from: yaml) {
+                return image
+            }
+            if let label, !label.isEmpty {
+                return label
+            }
+            return type.sidebarLabel
+
+        case .kubernetes:
+            let target = targetName?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !target.isEmpty {
+                return target
+            }
+            return type.sidebarLabel
+
+        case .shell:
+            if let cmd = runCommand, !cmd.trimmingCharacters(in: .whitespaces).isEmpty {
+                return cmd.trimmingCharacters(in: .whitespaces)
+            }
+            return type.sidebarLabel
+
+        case .ssh:
+            if let label, !label.trimmingCharacters(in: .whitespaces).isEmpty {
+                return label.trimmingCharacters(in: .whitespaces)
+            }
+            let host = sshHost?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !host.isEmpty {
+                return host
+            }
+            return type.sidebarLabel
+
+        case .httpCheck:
+            if let url = httpCheckUrl, !url.trimmingCharacters(in: .whitespaces).isEmpty {
+                return url.trimmingCharacters(in: .whitespaces)
+            }
+            return type.sidebarLabel
+
+        case .tunnel:
+            if let target = tunnelTargetUrl, !target.trimmingCharacters(in: .whitespaces).isEmpty {
+                return target.trimmingCharacters(in: .whitespaces)
+            }
+            return type.sidebarLabel
+
+        case .processMonitor:
+            if let proc = monitorProcessName, !proc.trimmingCharacters(in: .whitespaces).isEmpty {
+                return proc.trimmingCharacters(in: .whitespaces)
+            }
+            return type.sidebarLabel
+        }
+    }
+
+    /// Fast single-pass scanner to extract `image: ...` from Docker/Podman compose YAML and normalize to short image:tag
+    private nonisolated func extractComposeImage(from yaml: String) -> String? {
+        let lines = yaml.components(separatedBy: .newlines)
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("image:") {
+                let rawImage = line.dropFirst("image:".count).trimmingCharacters(in: .whitespaces)
+                var cleaned = rawImage.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                
+                // Strip common bloated registry prefixes:
+                // e.g. "docker.io/library/mongo:7" -> "mongo:7"
+                // e.g. "docker.io/redis:alpine" -> "redis:alpine"
+                // e.g. "library/postgres:16" -> "postgres:16"
+                if cleaned.hasPrefix("docker.io/library/") {
+                    cleaned = String(cleaned.dropFirst("docker.io/library/".count))
+                } else if cleaned.hasPrefix("docker.io/") {
+                    cleaned = String(cleaned.dropFirst("docker.io/".count))
+                } else if cleaned.hasPrefix("library/") {
+                    cleaned = String(cleaned.dropFirst("library/".count))
+                }
+
+                if !cleaned.isEmpty {
+                    return cleaned
+                }
+            }
+        }
+        return nil
+    }
 }

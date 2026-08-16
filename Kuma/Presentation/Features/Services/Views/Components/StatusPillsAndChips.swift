@@ -49,10 +49,10 @@ public struct StatusPillView: View {
 }
 
 public struct PortChipsView: View {
-    public let ports: [String]
+    public let ports: [Int]
     public var limit: Int
 
-    public init(ports: [String], limit: Int = 2) {
+    public init(ports: [Int], limit: Int = 3) {
         self.ports = ports
         self.limit = limit
     }
@@ -62,26 +62,25 @@ public struct PortChipsView: View {
         let overflow = ports.count - visible.count
 
         HStack(spacing: 4) {
-            ForEach(Array(visible.enumerated()), id: \.offset) { _, value in
-                Text(value)
-                    .font(.system(size: 9.5, design: .monospaced))
+            ForEach(visible, id: \.self) { port in
+                Text("\(port)")
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2.5)
-                    .background(Color.primary.opacity(0.03))
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                            .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
                     }
                     .fixedSize()
             }
             if overflow > 0 {
                 Text("+\(overflow)")
-                    .font(.system(size: 10))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.tertiary)
+                    .padding(.horizontal, 3)
                     .fixedSize()
             }
         }

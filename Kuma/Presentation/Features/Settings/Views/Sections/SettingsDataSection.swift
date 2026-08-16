@@ -5,8 +5,14 @@ public struct SettingsDataSection: View {
     @Bindable var workspaceStore: WorkspaceStore
 
     @State private var showResetConfirmation = false
+    @State private var showImportConfirmation = false
+    @State private var pendingImportURL: URL? = nil
     @State private var alertMessage: String? = nil
     @State private var isProcessing = false
+
+    @Environment(AppCoordinator.self) private var coordinator
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
 
     public init(workspaceStore: WorkspaceStore) {
         self.workspaceStore = workspaceStore
@@ -47,7 +53,7 @@ public struct SettingsDataSection: View {
                         }
                         Spacer()
                         Button("Import…") {
-                            importData()
+                            promptImportFile()
                         }
                         .buttonStyle(.bordered)
                         .disabled(isProcessing)
@@ -91,6 +97,22 @@ public struct SettingsDataSection: View {
         } message: {
             Text("This action cannot be undone. All your configured workspaces and services will be permanently deleted.")
         }
+        .confirmationDialog(
+            "Import Backup Configuration?",
+            isPresented: $showImportConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Import & Merge Data") {
+                if let url = pendingImportURL {
+                    executeImport(from: url)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                pendingImportURL = nil
+            }
+        } message: {
+            Text("Importing will safely merge workspaces and services from the backup. If identical services exist, their configurations will be updated.")
+        }
         .alert("Database Operation", isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
@@ -112,7 +134,7 @@ public struct SettingsDataSection: View {
         isProcessing = true
         Task {
             do {
-                let dataPort = DatabaseDataPort()
+                let dataPort = DataPortRepository()
                 let backup = try await dataPort.exportAll()
                 let data = try DataPortService.encodeBackup(backup)
                 try data.write(to: url)
@@ -125,7 +147,7 @@ public struct SettingsDataSection: View {
         }
     }
 
-    private func importData() {
+    private func promptImportFile() {
         let panel = NSOpenPanel()
         panel.title = "Import Kuma Backup"
         panel.allowsMultipleSelection = false
@@ -134,14 +156,18 @@ public struct SettingsDataSection: View {
         panel.allowedContentTypes = [.json]
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        self.pendingImportURL = url
+        self.showImportConfirmation = true
+    }
 
+    private func executeImport(from url: URL) {
         isProcessing = true
         Task {
             do {
                 let data = try Data(contentsOf: url)
                 let backup = try DataPortService.decodeBackup(from: data)
 
-                let dataPort = DatabaseDataPort()
+                let dataPort = DataPortRepository()
                 try await dataPort.importAll(from: backup)
 
                 workspaceStore.loadFromDatabase()
@@ -158,8 +184,11 @@ public struct SettingsDataSection: View {
         isProcessing = true
         Task {
             await DataPortService.resetAllAppStorage()
+            workspaceStore.loadFromDatabase()
+            coordinator.resetToOnboarding()
             isProcessing = false
-            DataPortService.relaunchApp()
+            openWindow(id: "onboarding")
+            dismissWindow(id: "main-workspace")
         }
     }
 }

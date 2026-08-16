@@ -2,35 +2,35 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct SettingsTunnelingToolsSection: View {
-    @Bindable var store: SettingsStore
+    @Bindable var viewModel: SettingsViewModel
 
     // Auto-detected default paths when custom path is empty
     @State private var defaultCloudflaredPath: String = ""
     @State private var defaultNgrokPath: String = ""
 
-    public init(store: SettingsStore) {
-        self.store = store
+    public init(viewModel: SettingsViewModel) {
+        self.viewModel = viewModel
     }
 
     // MARK: - Validation Computations (Zero-latency)
 
     private var cloudflaredValidation: BinaryValidationResult {
-        DependencyChecker.validateCustomBinary(path: store.cloudflaredPath, expectedCommand: "cloudflared")
+        DependencyChecker.validateCustomBinary(path: viewModel.cloudflaredPath, expectedCommand: "cloudflared")
     }
 
     private var isCloudflaredAvailable: Bool {
-        if store.cloudflaredPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.cloudflaredPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return !defaultCloudflaredPath.isEmpty
         }
         return cloudflaredValidation.isValid
     }
 
     private var ngrokValidation: BinaryValidationResult {
-        DependencyChecker.validateCustomBinary(path: store.customNgrokPath, expectedCommand: "ngrok")
+        DependencyChecker.validateCustomBinary(path: viewModel.customNgrokPath, expectedCommand: "ngrok")
     }
 
     private var isNgrokAvailable: Bool {
-        if store.customNgrokPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.customNgrokPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return !defaultNgrokPath.isEmpty
         }
         return ngrokValidation.isValid
@@ -53,7 +53,7 @@ public struct SettingsTunnelingToolsSection: View {
                     }
                     KumaFilePickerField(
                         label: "",
-                        path: $store.cloudflaredPath,
+                        path: $viewModel.cloudflaredPath,
                         placeholder: defaultCloudflaredPath.isEmpty ? "/opt/homebrew/bin/cloudflared" : defaultCloudflaredPath,
                         chooseFiles: true,
                         chooseDirectories: false,
@@ -75,7 +75,7 @@ public struct SettingsTunnelingToolsSection: View {
                     }
                     KumaFilePickerField(
                         label: "",
-                        path: $store.customNgrokPath,
+                        path: $viewModel.customNgrokPath,
                         placeholder: defaultNgrokPath.isEmpty ? "/opt/homebrew/bin/ngrok" : defaultNgrokPath,
                         chooseFiles: true,
                         chooseDirectories: false,
