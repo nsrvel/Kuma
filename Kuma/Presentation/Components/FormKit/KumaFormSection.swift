@@ -60,20 +60,13 @@ public struct KumaFormSection<Content: View>: View {
             .padding(KumaSpacing.lg)
             .background(
                 RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        Group {
-                            if style == .danger {
-                                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                                    .fill(Color.red.opacity(0.02))
-                            }
-                        }
-                    )
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.30))
             )
+            .clipShape(RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .stroke(
-                        style == .danger ? Color.red.opacity(0.2) : Color.primary.opacity(0.08),
+                    .strokeBorder(
+                        Color(nsColor: .separatorColor).opacity(0.55),
                         lineWidth: 0.5
                     )
             )

@@ -35,6 +35,41 @@ extension Workspace: FetchableRecord, PersistableRecord {
     }
 }
 
+// MARK: - ServiceGroup GRDB Record Conformance
+
+extension ServiceGroup: FetchableRecord, PersistableRecord {
+    public static let databaseTableName = "service_group"
+
+    public nonisolated init(row: Row) throws {
+        let idStr: String = row["id"]
+        let id = UUID(uuidString: idStr) ?? UUID()
+        let wsStr: String = row["workspaceID"]
+        let workspaceID = UUID(uuidString: wsStr) ?? UUID()
+        let name: String = row["name"]
+        let sortOrder: Int = row["sortOrder"]
+        let createdAt: Date = row["createdAt"]
+        let updatedAt: Date = row["updatedAt"]
+
+        self.init(
+            id: id,
+            workspaceID: workspaceID,
+            name: name,
+            sortOrder: sortOrder,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    public nonisolated func encode(to container: inout PersistenceContainer) throws {
+        container["id"] = id.uuidString
+        container["workspaceID"] = workspaceID.uuidString
+        container["name"] = name
+        container["sortOrder"] = sortOrder
+        container["createdAt"] = createdAt
+        container["updatedAt"] = updatedAt
+    }
+}
+
 // MARK: - Service GRDB Record Conformance
 
 extension Service: FetchableRecord, PersistableRecord {
@@ -45,6 +80,8 @@ extension Service: FetchableRecord, PersistableRecord {
         let id = UUID(uuidString: idStr) ?? UUID()
         let wsStr: String? = row["workspaceID"]
         let workspaceID = wsStr.flatMap(UUID.init)
+        let groupStr: String? = row["groupID"]
+        let groupID = groupStr.flatMap(UUID.init)
         let name: String = row["name"]
         let icon: String? = row["icon"]
         let colorHex: String? = row["colorHex"]
@@ -52,6 +89,7 @@ extension Service: FetchableRecord, PersistableRecord {
         let activeProvStr: String? = row["activeProviderID"]
         let activeProviderID = activeProvStr.flatMap(UUID.init)
         let isDisabled: Bool = row["isDisabled"]
+        let isStarred: Bool = row["isStarred"] ?? false
         let createdAt: Date = row["createdAt"]
         let updatedAt: Date = row["updatedAt"]
 
@@ -63,7 +101,9 @@ extension Service: FetchableRecord, PersistableRecord {
             description: description,
             activeProviderID: activeProviderID,
             workspaceID: workspaceID,
+            groupID: groupID,
             isDisabled: isDisabled,
+            isStarred: isStarred,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -72,12 +112,14 @@ extension Service: FetchableRecord, PersistableRecord {
     public nonisolated func encode(to container: inout PersistenceContainer) throws {
         container["id"] = id.uuidString
         container["workspaceID"] = workspaceID?.uuidString
+        container["groupID"] = groupID?.uuidString
         container["name"] = name
         container["icon"] = icon
         container["colorHex"] = colorHex
         container["description"] = description
         container["activeProviderID"] = activeProviderID?.uuidString
         container["isDisabled"] = isDisabled
+        container["isStarred"] = isStarred
         container["createdAt"] = createdAt
         container["updatedAt"] = updatedAt
     }

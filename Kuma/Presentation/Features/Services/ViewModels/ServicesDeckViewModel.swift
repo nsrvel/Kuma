@@ -17,6 +17,9 @@ public final class ServicesDeckViewModel {
     public var viewMode: DeckViewMode = .card
     public var isInspectorPresented: Bool = false
     public var selectedServiceID: UUID? = nil
+    public var isStarredOnly: Bool = false
+    public var filterGroupID: UUID? = nil
+    public var hasInitialLoaded: Bool = false
 
     // Tier 1: Static Snapshots (~64B per item)
     public var snapshots: [ServiceCardSnapshot] = []
@@ -26,8 +29,14 @@ public final class ServicesDeckViewModel {
 
     private let serviceRepository: any ServiceRepositoryProtocol
 
-    public init(serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()) {
+    public init(
+        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
+        isStarredOnly: Bool = false,
+        filterGroupID: UUID? = nil
+    ) {
         self.serviceRepository = serviceRepository
+        self.isStarredOnly = isStarredOnly
+        self.filterGroupID = filterGroupID
     }
 
     // MARK: - Filtered & Sorted Projections (Ultra-Fast Zero Allocation)
@@ -37,9 +46,17 @@ public final class ServicesDeckViewModel {
         let hasSearch = !query.isEmpty
         let hasStatusFilter = !selectedStatuses.isEmpty
         let hasProviderFilter = !selectedProviders.isEmpty
+        let starredOnly = isStarredOnly
+        let groupFilter = filterGroupID
 
         // 1. Single-Pass High-Speed Token Matching
         var result = snapshots.filter { snapshot in
+            if starredOnly && !snapshot.isStarred {
+                return false
+            }
+            if let targetGroup = groupFilter, snapshot.groupID != targetGroup {
+                return false
+            }
             if hasSearch {
                 if !snapshot.searchKey.contains(query) {
                     return false
@@ -74,13 +91,14 @@ public final class ServicesDeckViewModel {
         case .name:
             result.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .status:
-            result.sort {
-                let s0 = runtimeStates[$0.id]?.status ?? .stopped
-                let s1 = runtimeStates[$1.id]?.status ?? .stopped
-                if s0.sortPriority != s1.sortPriority {
-                    return s0.sortPriority < s1.sortPriority
+            result.sort { a, b in
+                let priorityA: Int = a.isDisabled ? 5 : (runtimeStates[a.id]?.status.sortPriority ?? 4)
+                let priorityB: Int = b.isDisabled ? 5 : (runtimeStates[b.id]?.status.sortPriority ?? 4)
+                
+                if priorityA != priorityB {
+                    return priorityA < priorityB
                 }
-                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
         case .created:
             result.sort { $0.createdAt > $1.createdAt }
@@ -101,6 +119,7 @@ public final class ServicesDeckViewModel {
         do {
             let loaded = try await serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
             self.snapshots = loaded
+            self.hasInitialLoaded = true
 
             // Ensure initial runtime state exists for each service
             for snapshot in loaded {
@@ -110,6 +129,7 @@ public final class ServicesDeckViewModel {
             }
         } catch {
             self.snapshots = []
+            self.hasInitialLoaded = true
         }
     }
 
@@ -121,6 +141,34 @@ public final class ServicesDeckViewModel {
             current.status = .running
         }
         runtimeStates[id] = current
+    }
+
+    public func toggleStarred(id: UUID, workspaceID: UUID) {
+        // 1. Optimistic zero-latency UI update
+        if let idx = snapshots.firstIndex(where: { $0.id == id }) {
+            let current = snapshots[idx]
+            let updated = ServiceCardSnapshot(
+                id: current.id,
+                name: current.name,
+                isDisabled: current.isDisabled,
+                isStarred: !current.isStarred,
+                subtitle: current.subtitle,
+                providerCategory: current.providerCategory,
+                portDisplays: current.portDisplays,
+                createdAt: current.createdAt
+            )
+            snapshots[idx] = updated
+        }
+
+        // 2. Asynchronously persist to SQLite
+        Task {
+            do {
+                _ = try await serviceRepository.toggleStarred(serviceID: id)
+            } catch {
+                // Rollback on failure
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+            }
+        }
     }
 
     public func selectService(_ id: UUID) {

@@ -31,7 +31,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol {
                     name: s.name,
                     description: s.description,
                     workspaceID: s.workspaceID,
-                    isDisabled: s.isDisabled
+                    isDisabled: s.isDisabled,
+                    isStarred: s.isStarred
                 )
             }
 
@@ -126,7 +127,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol {
                     name: exportService.name,
                     description: exportService.description,
                     workspaceID: exportService.workspaceID,
-                    isDisabled: exportService.isDisabled ?? false
+                    isDisabled: exportService.isDisabled ?? false,
+                    isStarred: exportService.isStarred ?? false
                 )
                 try service.save(db)
             }
@@ -190,5 +192,198 @@ public final class DataPortRepository: DataPortRepositoryProtocol {
 
             self.logger.info("Imported backup: \(backup.workspaces.count) workspaces, \(backup.services.count) services, \(backup.providers.count) providers")
         }
+    }
+
+    /// Selectively restores chosen workspaces and services into SQLite.
+    public func importSelective(
+        from backup: DataPortService.KumaBackup,
+        selectedWorkspaceIDs: Set<UUID>,
+        selectedServiceIDs: Set<UUID>
+    ) async throws {
+        let filteredWorkspaces = backup.workspaces.filter { selectedWorkspaceIDs.contains($0.id) }
+        let filteredServices = backup.services.filter { selectedServiceIDs.contains($0.id) }
+        let filteredServiceIdSet = Set(filteredServices.map(\.id))
+        let filteredProviders = backup.providers.filter { filteredServiceIdSet.contains($0.serviceID) }
+        let filteredProviderIdSet = Set(filteredProviders.map(\.id))
+        let filteredPortMappings = backup.portMappings.filter {
+            filteredProviderIdSet.contains($0.providerID) || filteredServiceIdSet.contains($0.providerID)
+        }
+
+        let filteredBackup = DataPortService.KumaBackup(
+            version: backup.version,
+            exportedAt: backup.exportedAt,
+            workspaces: filteredWorkspaces,
+            workspaceImages: backup.workspaceImages,
+            services: filteredServices,
+            providers: filteredProviders,
+            portMappings: filteredPortMappings,
+            kubeConfigs: []
+        )
+
+        try await importAll(from: filteredBackup)
+    }
+
+    /// Exports only data belonging to a single workspace.
+    public func exportWorkspace(id: UUID) async throws -> DataPortService.KumaBackup {
+        let (workspaces, exportServices, exportProviders, exportPortMappings) = try await dbWriter.read { db in
+            let workspaces = try Workspace.filter(Column("id") == id.uuidString).fetchAll(db)
+            let services = try Service.filter(Column("workspaceID") == id.uuidString).order(Column("createdAt").asc).fetchAll(db)
+            let serviceIDs = Set(services.map(\.id))
+            let allProviders = try Provider.order(Column("createdAt").asc).fetchAll(db)
+            let providers = allProviders.filter { serviceIDs.contains($0.serviceID) }
+            let allPortMappings = try ServicePortMapping.fetchAll(db)
+            let portMappings = allPortMappings.filter { pm in
+                if let sID = pm.serviceID, serviceIDs.contains(sID) { return true }
+                return false
+            }
+
+            let exportServices = services.map { s in
+                DataPortService.ExportService(
+                    id: s.id,
+                    name: s.name,
+                    description: s.description,
+                    workspaceID: s.workspaceID,
+                    isDisabled: s.isDisabled
+                )
+            }
+
+            let exportProviders = providers.map { p in
+                DataPortService.ExportProvider(
+                    id: p.id,
+                    serviceID: p.serviceID,
+                    type: p.type.rawValue,
+                    label: p.label,
+                    runCommand: p.runCommand,
+                    yamlConfig: p.yamlConfig,
+                    kubeContext: p.kubeContext,
+                    kubeNamespace: p.kubeNamespace,
+                    targetName: p.targetName
+                )
+            }
+
+            let exportPortMappings = portMappings.map { pm in
+                var associatedProviderID = pm.serviceID ?? pm.id
+                if let sID = pm.serviceID {
+                    if let service = services.first(where: { $0.id == sID }),
+                       let activePID = service.activeProviderID {
+                        associatedProviderID = activePID
+                    } else if let firstProv = providers.first(where: { $0.serviceID == sID }) {
+                        associatedProviderID = firstProv.id
+                    }
+                }
+
+                return DataPortService.ExportPortMapping(
+                    id: pm.id,
+                    providerID: associatedProviderID,
+                    localPort: pm.localPort,
+                    remotePort: pm.remotePort
+                )
+            }
+
+            return (workspaces, exportServices, exportProviders, exportPortMappings)
+        }
+
+        var imagesMap: [String: String] = [:]
+        for ws in workspaces {
+            if let imagePath = ws.imagePath,
+               let base64 = WorkspaceImageStore.shared.loadBase64Image(for: imagePath) {
+                imagesMap[ws.id.uuidString] = base64
+            }
+        }
+
+        return DataPortService.KumaBackup(
+            version: DataPortService.currentVersion,
+            exportedAt: Date(),
+            workspaces: workspaces,
+            workspaceImages: imagesMap.isEmpty ? nil : imagesMap,
+            services: exportServices,
+            providers: exportProviders,
+            portMappings: exportPortMappings,
+            kubeConfigs: []
+        )
+    }
+
+    /// Selectively imports services directly into a target workspace (generating new UUIDs to prevent ID collision/stealing).
+    public func importIntoWorkspace(
+        targetWorkspaceID: UUID,
+        backup: DataPortService.KumaBackup,
+        selectedServiceIDs: Set<UUID>
+    ) async throws {
+        // 1. Create ID mapping from old service ID -> new service ID
+        var serviceIDMap: [UUID: UUID] = [:]
+        var providerIDMap: [UUID: UUID] = [:]
+
+        let chosenExportServices = backup.services.filter { selectedServiceIDs.contains($0.id) }
+        for s in chosenExportServices {
+            serviceIDMap[s.id] = UUID()
+        }
+
+        let newServices = chosenExportServices.map { s in
+            DataPortService.ExportService(
+                id: serviceIDMap[s.id] ?? UUID(),
+                name: s.name,
+                description: s.description,
+                workspaceID: targetWorkspaceID,
+                isDisabled: s.isDisabled
+            )
+        }
+
+        // 2. Map and re-ID Providers
+        let oldServiceIdSet = Set(chosenExportServices.map(\.id))
+        let chosenExportProviders = backup.providers.filter { oldServiceIdSet.contains($0.serviceID) }
+        for p in chosenExportProviders {
+            providerIDMap[p.id] = UUID()
+        }
+
+        let newProviders = chosenExportProviders.map { p in
+            DataPortService.ExportProvider(
+                id: providerIDMap[p.id] ?? UUID(),
+                serviceID: serviceIDMap[p.serviceID] ?? p.serviceID,
+                type: p.type,
+                label: p.label,
+                runCommand: p.runCommand,
+                yamlConfig: p.yamlConfig,
+                kubeContext: p.kubeContext,
+                kubeNamespace: p.kubeNamespace,
+                targetName: p.targetName
+            )
+        }
+
+        // 3. Map and re-ID Port Mappings
+        let oldProviderIdSet = Set(chosenExportProviders.map(\.id))
+        let chosenExportPortMappings = backup.portMappings.filter {
+            oldProviderIdSet.contains($0.providerID) || oldServiceIdSet.contains($0.providerID)
+        }
+
+        let newPortMappings = chosenExportPortMappings.map { pm in
+            let newProvID: UUID
+            if let mappedPID = providerIDMap[pm.providerID] {
+                newProvID = mappedPID
+            } else if let mappedSID = serviceIDMap[pm.providerID] {
+                newProvID = mappedSID
+            } else {
+                newProvID = pm.providerID
+            }
+
+            return DataPortService.ExportPortMapping(
+                id: UUID(),
+                providerID: newProvID,
+                localPort: pm.localPort,
+                remotePort: pm.remotePort
+            )
+        }
+
+        let newBackup = DataPortService.KumaBackup(
+            version: backup.version,
+            exportedAt: backup.exportedAt,
+            workspaces: [],
+            workspaceImages: nil,
+            services: newServices,
+            providers: newProviders,
+            portMappings: newPortMappings,
+            kubeConfigs: []
+        )
+
+        try await importAll(from: newBackup)
     }
 }

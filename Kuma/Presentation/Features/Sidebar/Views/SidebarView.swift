@@ -98,17 +98,15 @@ public struct SidebarView: View {
         VStack(spacing: 0) {
             // Main Navigation List (Pure Apple HIG Native Inset Layout)
             List {
-                // 1. Workspace Header Row + Divider (Single List Item for tight pixel-perfect gap)
-                VStack(spacing: 0) {
+                // 1. Workspace Header Row + New Service Button + Divider
+                VStack(spacing: 2) {
                     SidebarWorkspaceRow(store: workspaceStore)
-                        .padding(.top, 2)
-                        .padding(.bottom, 4)
 
-                    KumaDivider(opacity: 0.08, verticalPadding: 0, horizontalPadding: 4)
-                        .padding(.top, 2)
-                        .padding(.bottom, 2)
+                    SidebarNewServiceButton()
+
+                    KumaDivider(opacity: 0.08, verticalPadding: 6, horizontalPadding: 8)
                 }
-                .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 2, trailing: 4))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
 
@@ -118,10 +116,10 @@ public struct SidebarView: View {
                         cellView(for: item)
 
                         if item.hasDividerAfter {
-                            KumaDivider(opacity: 0.08, verticalPadding: 4, horizontalPadding: 4)
+                            KumaDivider(opacity: 0.08, verticalPadding: 6, horizontalPadding: 8)
                         }
                     }
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                    .listRowInsets(EdgeInsets(top: 1, leading: 4, bottom: 1, trailing: 4))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
                 }
@@ -136,7 +134,7 @@ public struct SidebarView: View {
 
             // Sidebar Sticky Footer (Settings & Help)
             VStack(spacing: 0) {
-                KumaDivider(opacity: 0.08, horizontalPadding: 8)
+                KumaDivider(opacity: 0.08, verticalPadding: 0, horizontalPadding: 8)
 
                 HStack(spacing: 8) {
                     SidebarFooterButton(icon: "gear", tooltip: "Settings (⌘,)") {
@@ -161,6 +159,21 @@ public struct SidebarView: View {
             ideal: KumaTheme.Sidebar.widthIdeal,
             max: KumaTheme.Sidebar.widthMax
         )
+        .onAppear {
+            if let ws = workspaceStore.activeWorkspace {
+                viewModel.loadGroups(forWorkspace: ws.id)
+            }
+        }
+        .onChange(of: workspaceStore.activeWorkspace?.id) { _, newID in
+            if let newID {
+                viewModel.loadGroups(forWorkspace: newID)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("kumaCreateGroupRequested"))) { _ in
+            if let ws = workspaceStore.activeWorkspace {
+                viewModel.createNewGroup(workspaceID: ws.id)
+            }
+        }
     }
 
     @ViewBuilder
@@ -171,6 +184,29 @@ public struct SidebarView: View {
                 SidebarEmptyPlaceholderRow(
                     title: node.title,
                     indentLevel: item.indentLevel
+                )
+            } else if item.indentLevel > 0, !node.isSpecialHeader {
+                let wsID = workspaceStore.activeWorkspace?.id ?? UUID()
+                let group = ServiceGroup(
+                    id: node.id,
+                    workspaceID: wsID,
+                    name: node.title
+                )
+                SidebarGroupRowView(
+                    group: group,
+                    isSelected: viewModel.selectedID == node.id,
+                    isEditing: viewModel.editingGroupID == node.id,
+                    indentLevel: item.indentLevel,
+                    onSelect: { viewModel.selectedID = node.id },
+                    onCommitName: { newName in
+                        viewModel.commitGroupName(id: node.id, newName: newName, workspaceID: wsID)
+                    },
+                    onStartRename: {
+                        viewModel.editingGroupID = node.id
+                    },
+                    onDelete: {
+                        viewModel.deleteGroup(id: node.id, workspaceID: wsID)
+                    }
                 )
             } else {
                 SidebarRowView(

@@ -56,6 +56,9 @@ public struct OnboardingWizardView: View {
             RoundedRectangle(cornerRadius: KumaRadius.xl, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
         )
+        .onAppear {
+            viewModel.currentStep = 0
+        }
         .task {
             // Instant zero-latency pre-scan in background while user reads Step 0
             await viewModel.scanDependenciesIfNeeded()

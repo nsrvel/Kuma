@@ -90,10 +90,10 @@ struct KumaApp: App {
                 coordinator.transitionTo(.mainWorkspace)
             }
             .environment(coordinator)
+            .gesture(WindowDragGesture())
         }
         .windowStyle(.plain)
         .windowResizability(.contentSize)
-        .windowLevel(.floating)
         .windowBackgroundDragBehavior(.enabled)
         .defaultLaunchBehavior(.suppressed)
         .restorationBehavior(.disabled)

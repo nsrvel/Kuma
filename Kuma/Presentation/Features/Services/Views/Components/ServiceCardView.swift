@@ -8,42 +8,64 @@ public struct ServiceCardView: View {
     public var onToggle: () -> Void
     public var onSelect: () -> Void
 
+    public let onToggleStar: () -> Void
+
     public init(
         snapshot: ServiceCardSnapshot,
         runtime: ServiceRuntimeState = ServiceRuntimeState(),
         isSelected: Bool = false,
         onToggle: @escaping () -> Void = {},
+        onToggleStar: @escaping () -> Void = {},
         onSelect: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.runtime = runtime
         self.isSelected = isSelected
         self.onToggle = onToggle
+        self.onToggleStar = onToggleStar
         self.onSelect = onSelect
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             // Header Row: Provider Icon + Name/Target Subtitle + Native Toggle
-            HStack(spacing: 11) {
-                // Service Provider Icon
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(
-                            snapshot.isDisabled
-                            ? Color.secondary.opacity(0.18).gradient
-                            : snapshot.providerCategory.color.gradient
-                        )
-                        .frame(width: 34, height: 34)
-                        .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.04), radius: 1, y: 0.5)
+            HStack(spacing: 12) {
+                // Service Provider Icon with Star Overlay Badge
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(
+                                snapshot.isDisabled
+                                ? Color.secondary.opacity(0.18).gradient
+                                : snapshot.providerCategory.color.gradient
+                            )
+                            .frame(width: 34, height: 34)
+                            .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.04), radius: 1, y: 0.5)
 
-                    Image(systemName: snapshot.providerCategory.icon)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(snapshot.isDisabled ? Color.secondary : .white)
+                        Image(systemName: snapshot.providerCategory.icon)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(snapshot.isDisabled ? Color.secondary : .white)
+                    }
+
+                    if snapshot.isStarred {
+                        ZStack {
+                            Circle()
+                                .fill(Color(nsColor: .windowBackgroundColor))
+                                .frame(width: 14, height: 14)
+
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(Color.yellow)
+                        }
+                        .offset(x: 4, y: -4)
+                        .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
+                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                    }
                 }
+                .animation(.spring(response: 0.26, dampingFraction: 0.65), value: snapshot.isStarred)
 
                 // Name & Contextual Target Subtitle (Image/Namespace/Target)
-                VStack(alignment: .leading, spacing: 2.5) {
+                VStack(alignment: .leading, spacing: 1.5) {
                     Text(snapshot.name)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
@@ -90,25 +112,34 @@ public struct ServiceCardView: View {
                 ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
             }
         }
-        .padding(12)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Adaptive translucent surface that harmonizes with window material
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(snapshot.isDisabled ? 0.35 : 0.55))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color(nsColor: .textBackgroundColor).opacity(snapshot.isDisabled ? 0.35 : 0.40))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(
                     isSelected ? Color.accentColor : Color(nsColor: .separatorColor).opacity(snapshot.isDisabled ? 0.35 : 0.55),
                     lineWidth: isSelected ? 1.5 : 0.5
                 )
         }
         .opacity(snapshot.isDisabled ? 0.75 : 1.0)
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onTapGesture {
             onSelect()
+        }
+        .contextMenu {
+            ServiceActionContextMenu(
+                snapshot: snapshot,
+                runtime: runtime,
+                onToggle: onToggle,
+                onToggleStar: onToggleStar,
+                onSelect: onSelect
+            )
         }
     }
 

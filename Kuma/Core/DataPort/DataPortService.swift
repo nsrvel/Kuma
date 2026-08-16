@@ -27,7 +27,8 @@ public nonisolated enum DataPortService {
 
     // MARK: - Backup Payload (100% V3 JSON Compatible)
 
-    public struct KumaBackup: Codable, Sendable {
+    public struct KumaBackup: Codable, Sendable, Identifiable {
+        public var id: String { "\(version)_\(exportedAt.timeIntervalSince1970)_\(workspaces.count)" }
         public let version: Int
         public let exportedAt: Date
         public let workspaces: [Workspace]
@@ -58,20 +59,28 @@ public nonisolated enum DataPortService {
         }
     }
 
-    // Flexible models supporting V3 JSON structure
     public struct ExportService: Codable, Sendable, Identifiable {
         public let id: UUID
         public let name: String
         public let description: String?
         public let workspaceID: UUID?
         public let isDisabled: Bool?
+        public let isStarred: Bool?
 
-        public nonisolated init(id: UUID = UUID(), name: String, description: String? = nil, workspaceID: UUID? = nil, isDisabled: Bool? = false) {
+        public nonisolated init(
+            id: UUID = UUID(),
+            name: String,
+            description: String? = nil,
+            workspaceID: UUID? = nil,
+            isDisabled: Bool? = false,
+            isStarred: Bool? = false
+        ) {
             self.id = id
             self.name = name
             self.description = description
             self.workspaceID = workspaceID
             self.isDisabled = isDisabled
+            self.isStarred = isStarred
         }
     }
 

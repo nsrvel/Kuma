@@ -5,7 +5,9 @@ import Foundation
 public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
     public let id: UUID
     public let name: String
+    public let groupID: UUID?
     public let isDisabled: Bool
+    public let isStarred: Bool
     public let subtitle: String
     public let providerCategory: ProviderCategory
     public let portDisplays: [Int]
@@ -15,7 +17,9 @@ public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
     public nonisolated init(
         id: UUID,
         name: String,
+        groupID: UUID? = nil,
         isDisabled: Bool = false,
+        isStarred: Bool = false,
         subtitle: String = "",
         providerCategory: ProviderCategory = .docker,
         portDisplays: [Int] = [],
@@ -23,7 +27,9 @@ public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
     ) {
         self.id = id
         self.name = name
+        self.groupID = groupID
         self.isDisabled = isDisabled
+        self.isStarred = isStarred
         self.subtitle = subtitle
         self.providerCategory = providerCategory
         self.portDisplays = portDisplays

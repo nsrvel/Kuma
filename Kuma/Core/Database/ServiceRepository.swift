@@ -8,7 +8,14 @@ public protocol ServiceRepositoryProtocol: Sendable {
     func fetchPortMappings(forService serviceID: UUID) async throws -> [ServicePortMapping]
     func insertService(_ service: Service, defaultProvider: Provider?, portMappings: [ServicePortMapping]) async throws
     func updateService(_ service: Service) async throws
+    func toggleStarred(serviceID: UUID) async throws -> Bool
     func deleteService(id: UUID) async throws
+
+    // Group Management
+    func fetchGroups(forWorkspace workspaceID: UUID) async throws -> [ServiceGroup]
+    func createGroup(workspaceID: UUID, name: String) async throws -> ServiceGroup
+    func renameGroup(id: UUID, newName: String) async throws
+    func deleteGroup(id: UUID) async throws
 }
 
 public final class ServiceRepository: ServiceRepositoryProtocol {
@@ -55,7 +62,9 @@ public final class ServiceRepository: ServiceRepositoryProtocol {
                     ServiceCardSnapshot(
                         id: service.id,
                         name: service.name,
+                        groupID: service.groupID,
                         isDisabled: service.isDisabled,
+                        isStarred: service.isStarred,
                         subtitle: subtitle,
                         providerCategory: category,
                         portDisplays: ports,
@@ -71,6 +80,18 @@ public final class ServiceRepository: ServiceRepositoryProtocol {
     public func fetchService(id: UUID) async throws -> Service? {
         try await dbWriter.read { db in
             try Service.fetchOne(db, key: id.uuidString)
+        }
+    }
+
+    public func toggleStarred(serviceID: UUID) async throws -> Bool {
+        try await dbWriter.write { db in
+            guard var service = try Service.fetchOne(db, key: serviceID.uuidString) else {
+                return false
+            }
+            service.isStarred.toggle()
+            service.updatedAt = Date()
+            try service.update(db)
+            return service.isStarred
         }
     }
 
@@ -121,6 +142,54 @@ public final class ServiceRepository: ServiceRepositoryProtocol {
     public func deleteService(id: UUID) async throws {
         try await dbWriter.write { db in
             _ = try Service.deleteOne(db, key: id.uuidString)
+        }
+    }
+
+    // MARK: - Group Operations
+
+    public func fetchGroups(forWorkspace workspaceID: UUID) async throws -> [ServiceGroup] {
+        try await dbWriter.read { db in
+            try ServiceGroup
+                .filter(Column("workspaceID") == workspaceID.uuidString)
+                .order(Column("sortOrder").asc, Column("createdAt").asc)
+                .fetchAll(db)
+        }
+    }
+
+    public func createGroup(workspaceID: UUID, name: String) async throws -> ServiceGroup {
+        try await dbWriter.write { db in
+            let count = try ServiceGroup.filter(Column("workspaceID") == workspaceID.uuidString).fetchCount(db)
+            let group = ServiceGroup(
+                id: UUID(),
+                workspaceID: workspaceID,
+                name: name,
+                sortOrder: count,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            try group.insert(db)
+            return group
+        }
+    }
+
+    public func renameGroup(id: UUID, newName: String) async throws {
+        try await dbWriter.write { db in
+            if var group = try ServiceGroup.fetchOne(db, key: id.uuidString) {
+                group.name = newName
+                group.updatedAt = Date()
+                try group.update(db)
+            }
+        }
+    }
+
+    public func deleteGroup(id: UUID) async throws {
+        try await dbWriter.write { db in
+            // Detach any services assigned to this group
+            try db.execute(
+                sql: "UPDATE service SET groupID = NULL WHERE groupID = ?",
+                arguments: [id.uuidString]
+            )
+            _ = try ServiceGroup.deleteOne(db, key: id.uuidString)
         }
     }
 }

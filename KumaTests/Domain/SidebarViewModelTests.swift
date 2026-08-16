@@ -6,10 +6,10 @@ import Foundation
 @MainActor
 struct SidebarViewModelTests {
 
-    @Test("Default sidebar shows All Services navigation entry")
+    @Test("Default sidebar shows All Services, Starred, Port Registry, Live Logs, and Groups")
     func testDefaultSidebar() {
         let store = SidebarViewModel.makeDefault()
-        #expect(store.entries.count == 1)
+        #expect(store.entries.count == 7) // 5 items + 2 dividers
         #expect(store.selectedID == .stable("all-services"))
 
         if case .item(let node) = store.entries[0] {

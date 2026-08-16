@@ -6,6 +6,7 @@ public struct ServiceTableView: View {
     public let selectedID: UUID?
 
     public var onToggle: (UUID) -> Void
+    public var onToggleStar: (UUID) -> Void
     public var onSelect: (UUID) -> Void
 
     @State private var selection: Set<UUID> = []
@@ -15,12 +16,14 @@ public struct ServiceTableView: View {
         runtimeStates: [UUID: ServiceRuntimeState],
         selectedID: UUID?,
         onToggle: @escaping (UUID) -> Void,
+        onToggleStar: @escaping (UUID) -> Void = { _ in },
         onSelect: @escaping (UUID) -> Void
     ) {
         self.snapshots = snapshots
         self.runtimeStates = runtimeStates
         self.selectedID = selectedID
         self.onToggle = onToggle
+        self.onToggleStar = onToggleStar
         self.onSelect = onSelect
     }
 
@@ -49,6 +52,12 @@ public struct ServiceTableView: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Color.primary)
 
+                            if snapshot.isStarred {
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.yellow)
+                            }
+
                             if snapshot.isDisabled {
                                 Text("disabled")
                                     .font(.system(size: 8, weight: .medium))
@@ -62,6 +71,15 @@ public struct ServiceTableView: View {
                 }
                 .contentShape(Rectangle())
                 .onTapGesture { onSelect(snapshot.id) }
+                .contextMenu {
+                    ServiceActionContextMenu(
+                        snapshot: snapshot,
+                        runtime: runtime,
+                        onToggle: { onToggle(snapshot.id) },
+                        onToggleStar: { onToggleStar(snapshot.id) },
+                        onSelect: { onSelect(snapshot.id) }
+                    )
+                }
             }
 
             TableColumn("Configuration") { snapshot in

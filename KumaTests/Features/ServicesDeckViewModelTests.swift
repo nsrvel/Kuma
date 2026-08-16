@@ -101,4 +101,34 @@ struct ServicesDeckViewModelTests {
         vm.selectedProviders.removeAll()
         #expect(vm.filteredSnapshots.count == 4)
     }
+
+    @Test("ServicesDeckViewModel filters and toggles starred services")
+    func testStarredServices() async {
+        let (vm, _) = await createTestViewModelWithData()
+        let repo = ServiceRepository()
+
+        #expect(vm.filteredSnapshots.count == 4)
+
+        // Switch to isStarredOnly mode
+        let starredVM = ServicesDeckViewModel(serviceRepository: repo, isStarredOnly: true)
+        starredVM.snapshots = vm.snapshots
+
+        #expect(starredVM.filteredSnapshots.isEmpty == true)
+
+        // Mark first service as starred
+        var updatedSnapshots = vm.snapshots
+        updatedSnapshots[0] = ServiceCardSnapshot(
+            id: vm.snapshots[0].id,
+            name: vm.snapshots[0].name,
+            isDisabled: vm.snapshots[0].isDisabled,
+            isStarred: true,
+            subtitle: vm.snapshots[0].subtitle,
+            providerCategory: vm.snapshots[0].providerCategory,
+            portDisplays: vm.snapshots[0].portDisplays
+        )
+        starredVM.snapshots = updatedSnapshots
+
+        #expect(starredVM.filteredSnapshots.count == 1)
+        #expect(starredVM.filteredSnapshots.first?.id == vm.snapshots[0].id)
+    }
 }

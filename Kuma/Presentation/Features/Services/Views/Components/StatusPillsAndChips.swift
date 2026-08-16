@@ -61,27 +61,33 @@ public struct PortChipsView: View {
         let visible = Array(ports.prefix(limit))
         let overflow = ports.count - visible.count
 
-        HStack(spacing: 4) {
-            ForEach(visible, id: \.self) { port in
-                Text("\(port)")
-                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                            .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
-                    }
-                    .fixedSize()
-            }
-            if overflow > 0 {
-                Text("+\(overflow)")
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 3)
-                    .fixedSize()
+        HStack(spacing: 5) {
+            Image(systemName: "arrow.left.arrow.right")
+                .font(.system(size: 8.5))
+                .foregroundStyle(.tertiary)
+
+            HStack(spacing: 4) {
+                ForEach(visible, id: \.self) { port in
+                    Text("\(port)")
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                        }
+                        .fixedSize()
+                }
+                if overflow > 0 {
+                    Text("+\(overflow)")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 3)
+                        .fixedSize()
+                }
             }
         }
     }

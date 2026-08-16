@@ -79,13 +79,9 @@ private struct AppearanceCard: View {
                         RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
                             .stroke(Color.accentColor.opacity(0.6), lineWidth: 1.5)
                             .matchedGeometryEffect(id: "themeCardSelectionBorder", in: namespace)
-                    } else {
-                        RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                            .stroke(Color(NSColor.separatorColor).opacity(isHovered ? 0.3 : 0.1), lineWidth: 0.5)
                     }
                 }
             )
-            .scaleEffect(isSelected ? 1.0 : (isHovered ? 1.02 : 1.0))
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
         }
         .buttonStyle(ThemeCardButtonStyle())

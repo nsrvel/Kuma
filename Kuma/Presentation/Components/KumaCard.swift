@@ -22,12 +22,13 @@ public struct KumaCard<Content: View>: View {
             .padding(padding)
             .background(
                 RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .fill(isHovered && isInteractive ? .ultraThickMaterial : .ultraThinMaterial)
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(isHovered && isInteractive ? 0.45 : 0.30))
             )
+            .clipShape(RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .stroke(
-                        isHovered && isInteractive ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor),
+                    .strokeBorder(
+                        isHovered && isInteractive ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor).opacity(0.55),
                         lineWidth: isHovered && isInteractive ? 1.0 : 0.5
                     )
             )

@@ -108,16 +108,28 @@ public nonisolated final class AppDatabase: Sendable {
                 t.column("updatedAt", .datetime).notNull()
             }
 
+            // 1b. Service Group Table
+            try db.create(table: "service_group") { t in
+                t.column("id", .text).primaryKey()
+                t.column("workspaceID", .text).notNull().references("workspace", onDelete: .cascade)
+                t.column("name", .text).notNull()
+                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+                t.column("createdAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+            }
+
             // 2. Service Table
             try db.create(table: "service") { t in
                 t.column("id", .text).primaryKey()
                 t.column("workspaceID", .text).notNull().references("workspace", onDelete: .cascade)
+                t.column("groupID", .text).references("service_group", onDelete: .setNull)
                 t.column("name", .text).notNull()
                 t.column("icon", .text)
                 t.column("colorHex", .text)
                 t.column("description", .text)
                 t.column("activeProviderID", .text)
                 t.column("isDisabled", .boolean).notNull().defaults(to: false)
+                t.column("isStarred", .boolean).notNull().defaults(to: false)
                 t.column("createdAt", .datetime).notNull()
                 t.column("updatedAt", .datetime).notNull()
             }

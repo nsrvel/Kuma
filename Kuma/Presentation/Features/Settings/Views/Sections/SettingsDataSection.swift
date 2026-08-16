@@ -5,8 +5,9 @@ public struct SettingsDataSection: View {
     @Bindable var workspaceStore: WorkspaceStore
 
     @State private var showResetConfirmation = false
-    @State private var showImportConfirmation = false
-    @State private var pendingImportURL: URL? = nil
+    @State private var showImportPreview = false
+    @State private var loadedBackup: DataPortService.KumaBackup? = nil
+    @State private var pendingImportFileName: String = ""
     @State private var alertMessage: String? = nil
     @State private var isProcessing = false
 
@@ -97,21 +98,20 @@ public struct SettingsDataSection: View {
         } message: {
             Text("This action cannot be undone. All your configured workspaces and services will be permanently deleted.")
         }
-        .confirmationDialog(
-            "Import Backup Configuration?",
-            isPresented: $showImportConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Import & Merge Data") {
-                if let url = pendingImportURL {
-                    executeImport(from: url)
+        .sheet(item: $loadedBackup) { backup in
+            ImportPreviewSheet(
+                backup: backup,
+                fileName: pendingImportFileName,
+                existingWorkspaceIDs: Set(workspaceStore.workspaces.map(\.id)),
+                onConfirmImport: { selectedWorkspaces, selectedServices in
+                    loadedBackup = nil
+                    executeSelectiveImport(
+                        backup: backup,
+                        selectedWorkspaces: selectedWorkspaces,
+                        selectedServices: selectedServices
+                    )
                 }
-            }
-            Button("Cancel", role: .cancel) {
-                pendingImportURL = nil
-            }
-        } message: {
-            Text("Importing will safely merge workspaces and services from the backup. If identical services exist, their configurations will be updated.")
+            )
         }
         .alert("Database Operation", isPresented: Binding(
             get: { alertMessage != nil },
@@ -156,23 +156,36 @@ public struct SettingsDataSection: View {
         panel.allowedContentTypes = [.json]
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        self.pendingImportURL = url
-        self.showImportConfirmation = true
+        
+        do {
+            let data = try Data(contentsOf: url)
+            let backup = try DataPortService.decodeBackup(from: data)
+            self.loadedBackup = backup
+            self.pendingImportFileName = url.lastPathComponent
+            self.showImportPreview = true
+        } catch {
+            alertMessage = "Failed to read backup file: \(error.localizedDescription)"
+        }
     }
 
-    private func executeImport(from url: URL) {
+    private func executeSelectiveImport(
+        backup: DataPortService.KumaBackup,
+        selectedWorkspaces: Set<UUID>,
+        selectedServices: Set<UUID>
+    ) {
         isProcessing = true
         Task {
             do {
-                let data = try Data(contentsOf: url)
-                let backup = try DataPortService.decodeBackup(from: data)
-
                 let dataPort = DataPortRepository()
-                try await dataPort.importAll(from: backup)
+                try await dataPort.importSelective(
+                    from: backup,
+                    selectedWorkspaceIDs: selectedWorkspaces,
+                    selectedServiceIDs: selectedServices
+                )
 
                 workspaceStore.loadFromDatabase()
                 isProcessing = false
-                alertMessage = "Backup successfully imported (\(backup.workspaces.count) workspaces, \(backup.services.count) services restored)!"
+                alertMessage = "Backup successfully imported (\(selectedWorkspaces.count) workspaces, \(selectedServices.count) services restored)!"
             } catch {
                 isProcessing = false
                 alertMessage = "Failed to import backup: \(error.localizedDescription)"

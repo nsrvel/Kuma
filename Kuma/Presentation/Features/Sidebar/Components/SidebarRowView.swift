@@ -28,14 +28,10 @@ public struct SidebarRowView: View {
 
     private var hasChildren: Bool { node.children != nil }
     private var showActions: Bool {
-        if hasChildren {
-            return isHovering || isSelected
-        } else {
-            return isHovering
-        }
+        isHovering || (hasChildren && isSelected && !node.isSpecialHeader)
     }
     private var showChevronActive: Bool {
-        isHovering || isSelected
+        isHovering || (hasChildren && isSelected && !node.isSpecialHeader)
     }
 
     public var body: some View {
@@ -51,7 +47,7 @@ public struct SidebarRowView: View {
             }
 
             Text(node.title)
-                .font(.system(size: 13, weight: node.isSpecialHeader ? .semibold : .regular))
+                .font(node.isSpecialHeader ? .system(size: 12, weight: .medium) : .system(size: 13, weight: .regular))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -87,7 +83,9 @@ public struct SidebarRowView: View {
             isHovering = hovering
         }
         .onTapGesture {
-            onSelect()
+            if !node.isSpecialHeader {
+                onSelect()
+            }
         }
         .accessibilityLabel(node.title)
         .accessibilityAddTraits(.isButton)
@@ -113,6 +111,9 @@ public struct SidebarRowView: View {
     }
 
     private var rowBackground: some ShapeStyle {
+        if node.isSpecialHeader {
+            return AnyShapeStyle(Color.clear)
+        }
         if isSelected {
             return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.selectedBgOpacity))
         } else if isHovering {
@@ -123,7 +124,9 @@ public struct SidebarRowView: View {
 
     private var rowForeground: some ShapeStyle {
         if node.isSpecialHeader {
-            return AnyShapeStyle(Color.primary)
+            return isHovering
+                ? AnyShapeStyle(Color.primary)
+                : AnyShapeStyle(Color.secondary.opacity(0.85))
         }
         return isSelected || isHovering
             ? AnyShapeStyle(Color.primary)
