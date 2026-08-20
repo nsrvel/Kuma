@@ -64,22 +64,39 @@ public enum KumaFont {
 // MARK: - Semantic Colors & Tints
 
 public enum KumaColors {
+    // Surfaces & Canvases (100% Pure Native SwiftUI / AppKit Semantic Colors)
+    /// Main Window & Dialog Canvas Background (Native macOS Window Canvas)
+    public static let canvasBackground = Color(nsColor: .windowBackgroundColor)
+
+    /// Card Surface with Calibrated Depth (Subtle translucent depth in Dark & Crisp Light Slate in Light)
+    public static let surfaceBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(red: 0.27, green: 0.27, blue: 0.27, alpha: 0.22) // Exact #232323 & #333333 in Dark
+            : NSColor(red: 0.95, green: 0.95, blue: 0.96, alpha: 1.0)   // #F2F2F5 Soft Light Slate (Clearly pops over Pure White Canvas)
+    }))
+    /// Secondary / Sub-panel Surface
+    public static let surfaceSecondary = Color(nsColor: .controlBackgroundColor)
+    /// Input Field Background Surface (Subtle Inset in Dark, Crisp Pure White in Light)
+    public static let inputBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 0.0, alpha: 0.20) // Soft Subtle Inset in Dark
+            : NSColor.white                    // Solid Pure White Input Field in Light
+    }))
+    /// Input Field Hairline Border
+    public static let inputBorder = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(white: 1.0, alpha: 0.08) // Soft hairline border in Dark
+            : NSColor(white: 0.0, alpha: 0.12) // Crisp subtle border in Light
+    }))
+    /// Native Hairline Border & Separator Line
+    public static let borderSubtle = Color(nsColor: .separatorColor)
+
     // Service Execution States
     public static let statusRunning = Color.green
     public static let statusStarting = Color.orange
     public static let statusStopped = Color.secondary
     public static let statusFailed = Color.red
     public static let statusDisabled = Color.secondary.opacity(0.4)
-
-    // Provider / Engine Tints (8 Providers)
-    public static let providerKube = Color.blue
-    public static let providerDocker = Color.cyan
-    public static let providerPodman = Color.purple
-    public static let providerShell = Color.green
-    public static let providerSSH = Color.gray
-    public static let providerHttp = Color.mint
-    public static let providerTunnel = Color.orange
-    public static let providerProcess = Color.red
 }
 
 public enum KumaTheme {

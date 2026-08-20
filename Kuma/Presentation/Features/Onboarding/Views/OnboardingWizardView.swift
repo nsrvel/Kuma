@@ -5,7 +5,6 @@ public struct OnboardingWizardView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var viewModel = OnboardingViewModel()
-    @State private var isHoveringBack = false
     @State private var isTransitioning = false
 
     public var onComplete: (() -> Void)?
@@ -15,19 +14,12 @@ public struct OnboardingWizardView: View {
     }
 
     public var body: some View {
-        ZStack {
-            // Layer 0: System Material Background
-            Rectangle()
-                .fill(.ultraThickMaterial)
-                .ignoresSafeArea()
+        VStack(spacing: 0) {
+            // Header Bar (Balanced Stepper & Back Navigation)
+            headerBar
 
-            // Layer 1: Layout Content
-            VStack(spacing: 0) {
-                // Header Bar (Balanced Stepper & Back Navigation)
-                headerBar
-
-                // Center Stage Content Area
-                ZStack {
+            // Center Stage Content Area (Clipped for Zero-Overdraw GPU Performance)
+            ZStack {
                     switch viewModel.currentStep {
                     case 0:
                         WelcomeStepView()
@@ -45,16 +37,17 @@ public struct OnboardingWizardView: View {
                 }
                 .padding(.horizontal, KumaSpacing.xxl)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
 
-                // Footer Navigation (Centered Primary CTA Button)
-                footerCTA
-            }
+            // Footer Navigation (Centered Primary CTA Button)
+            footerCTA
         }
         .frame(width: 680, height: 500)
+        .background(KumaColors.canvasBackground)
         .clipShape(RoundedRectangle(cornerRadius: KumaRadius.xl, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: KumaRadius.xl, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                .stroke(KumaColors.borderSubtle, lineWidth: 0.5)
         )
         .onAppear {
             viewModel.currentStep = 0
@@ -86,19 +79,14 @@ public struct OnboardingWizardView: View {
                         }
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.primary.opacity(isHoveringBack ? 1.0 : 0.6))
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(Color.primary.opacity(isHoveringBack ? 0.1 : 0.0))
-                            )
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Previous Step")
                     .keyboardShortcut(.cancelAction)
                     .disabled(isTransitioning)
-                    .onHover { isHoveringBack = $0 }
                 }
             }
             .frame(width: 44, alignment: .leading)

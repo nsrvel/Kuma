@@ -12,20 +12,18 @@ public enum KumaFormSectionStyle {
 public struct KumaFormSection<Content: View>: View {
     public let icon: String?
     public let title: String?
-    public let subtitle: String?
     public let style: KumaFormSectionStyle
     @ViewBuilder public let content: Content
 
     public init(
         icon: String? = nil,
         title: String? = nil,
-        subtitle: String? = nil,
+        subtitle: String? = nil, // Kept optional for backward compatibility
         style: KumaFormSectionStyle = .standard,
         @ViewBuilder content: () -> Content
     ) {
         self.icon = icon
         self.title = title
-        self.subtitle = subtitle
         self.style = style
         self.content = content()
     }
@@ -33,23 +31,16 @@ public struct KumaFormSection<Content: View>: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: KumaSpacing.sm) {
             if icon != nil || !(title?.isEmpty ?? true) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: KumaSpacing.xs) {
-                        if let icon {
-                            Image(systemName: icon)
-                                .font(KumaFont.caption)
-                                .foregroundStyle(style == .danger ? Color.red : Color.secondary)
-                        }
-                        if let title {
-                            Text(title.uppercased())
-                                .font(KumaFont.captionBold)
-                                .foregroundStyle(style == .danger ? Color.red : Color.secondary)
-                        }
-                    }
-                    if let subtitle {
-                        Text(subtitle)
+                HStack(spacing: KumaSpacing.xs) {
+                    if let icon {
+                        Image(systemName: icon)
                             .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(style == .danger ? Color.red : Color.secondary)
+                    }
+                    if let title {
+                        Text(title.uppercased())
+                            .font(KumaFont.captionBold)
+                            .foregroundStyle(style == .danger ? Color.red : Color.secondary)
                     }
                 }
                 .padding(.horizontal, KumaSpacing.xs)
@@ -58,18 +49,7 @@ public struct KumaFormSection<Content: View>: View {
                 content
             }
             .padding(KumaSpacing.lg)
-            .background(
-                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.30))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .strokeBorder(
-                        Color(nsColor: .separatorColor).opacity(0.55),
-                        lineWidth: 0.5
-                    )
-            )
+            .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous))
         }
     }
 }

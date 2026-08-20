@@ -16,11 +16,18 @@ public struct KumaDivider: View {
     }
 
     public var body: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(opacity))
-            .frame(height: 1)
-            .padding(.vertical, verticalPadding)
-            .padding(.horizontal, horizontalPadding)
+        VStack(spacing: 0) {
+            if verticalPadding > 0 {
+                Spacer().frame(height: verticalPadding)
+            }
+            Rectangle()
+                .fill(Color.primary.opacity(opacity))
+                .frame(height: 1)
+                .padding(.horizontal, horizontalPadding)
+            if verticalPadding > 0 {
+                Spacer().frame(height: verticalPadding)
+            }
+        }
     }
 }
 

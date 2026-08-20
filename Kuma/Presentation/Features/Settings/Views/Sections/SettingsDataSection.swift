@@ -129,8 +129,23 @@ public struct SettingsDataSection: View {
         panel.nameFieldStringValue = "kuma-backup-\(DataPortService.backupDateString).json"
         panel.allowedContentTypes = [.json]
 
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
+            panel.begin { response in
+                if response == .OK, let url = panel.url {
+                    self.performExport(to: url)
+                }
+            }
+            return
+        }
 
+        panel.beginSheetModal(for: window) { response in
+            if response == .OK, let url = panel.url {
+                self.performExport(to: url)
+            }
+        }
+    }
+
+    private func performExport(to url: URL) {
         isProcessing = true
         Task {
             do {
@@ -155,8 +170,23 @@ public struct SettingsDataSection: View {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.json]
 
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
+            panel.begin { response in
+                if response == .OK, let url = panel.url {
+                    self.processImportUrl(url)
+                }
+            }
+            return
+        }
+
+        panel.beginSheetModal(for: window) { response in
+            if response == .OK, let url = panel.url {
+                self.processImportUrl(url)
+            }
+        }
+    }
+
+    private func processImportUrl(_ url: URL) {
         do {
             let data = try Data(contentsOf: url)
             let backup = try DataPortService.decodeBackup(from: data)
@@ -167,6 +197,7 @@ public struct SettingsDataSection: View {
             alertMessage = "Failed to read backup file: \(error.localizedDescription)"
         }
     }
+
 
     private func executeSelectiveImport(
         backup: DataPortService.KumaBackup,

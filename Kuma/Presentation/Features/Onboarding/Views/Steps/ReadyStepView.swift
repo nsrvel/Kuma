@@ -29,5 +29,5 @@ public struct ReadyStepView: View {
 #Preview {
     ReadyStepView()
         .frame(width: 680, height: 500)
-        .background(.ultraThickMaterial)
+        .background(KumaColors.canvasBackground)
 }

@@ -108,12 +108,11 @@ public nonisolated final class AppDatabase: Sendable {
                 t.column("updatedAt", .datetime).notNull()
             }
 
-            // 1b. Service Group Table
-            try db.create(table: "service_group") { t in
+            // 1.5 KubeConfig Table
+            try db.create(table: "kube_config") { t in
                 t.column("id", .text).primaryKey()
-                t.column("workspaceID", .text).notNull().references("workspace", onDelete: .cascade)
                 t.column("name", .text).notNull()
-                t.column("sortOrder", .integer).notNull().defaults(to: 0)
+                t.column("configContent", .text).notNull()
                 t.column("createdAt", .datetime).notNull()
                 t.column("updatedAt", .datetime).notNull()
             }
@@ -122,7 +121,6 @@ public nonisolated final class AppDatabase: Sendable {
             try db.create(table: "service") { t in
                 t.column("id", .text).primaryKey()
                 t.column("workspaceID", .text).notNull().references("workspace", onDelete: .cascade)
-                t.column("groupID", .text).references("service_group", onDelete: .setNull)
                 t.column("name", .text).notNull()
                 t.column("icon", .text)
                 t.column("colorHex", .text)

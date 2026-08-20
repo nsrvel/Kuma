@@ -4,20 +4,19 @@ import UniformTypeIdentifiers
 public struct ServicesDeckView: View {
     public let workspaceID: UUID
     public let isStarredOnly: Bool
-    public let filterGroupID: UUID?
 
     @State var viewModel: ServicesDeckViewModel
     @State private var pendingImportBackup: DataPortService.KumaBackup? = nil
     @State private var pendingImportFileName: String = ""
     @State private var alertMessage: String? = nil
+    @FocusState private var isSearchFocused: Bool
 
     @Environment(WorkspaceStore.self) private var workspaceStore
 
-    public init(workspaceID: UUID, isStarredOnly: Bool = false, filterGroupID: UUID? = nil) {
+    public init(workspaceID: UUID, isStarredOnly: Bool = false) {
         self.workspaceID = workspaceID
         self.isStarredOnly = isStarredOnly
-        self.filterGroupID = filterGroupID
-        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly, filterGroupID: filterGroupID))
+        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly))
     }
 
     public var body: some View {
@@ -26,7 +25,7 @@ public struct ServicesDeckView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(isStarredOnly ? "Starred Services" : "Services")
-        .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search services")
+        .searchable(text: $viewModel.searchText, isPresented: $isSearchFocused, placement: .toolbar, prompt: "Search services")
         .toolbar {
             toolbarContent()
         }
@@ -41,26 +40,30 @@ public struct ServicesDeckView: View {
                 viewModel.isStarredOnly = newStarred
             }
         }
-        .onChange(of: filterGroupID) { _, newGroupID in
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
-                viewModel.filterGroupID = newGroupID
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceCreated)) { _ in
+            viewModel.loadWorkspace(workspaceID: workspaceID)
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("kumaExportWorkspace"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .kumaFocusSearch)) { _ in
+            isSearchFocused = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaExportWorkspace)) { _ in
+
             exportCurrentWorkspace()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("kumaImportWorkspace"))) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .kumaImportWorkspace)) { _ in
             promptImportFile()
         }
         .sheet(item: $pendingImportBackup) { backup in
             let wsName = workspaceStore.workspaces.first(where: { $0.id == workspaceID })?.name ?? "Workspace"
+            let existingNames = Set(viewModel.snapshots.map { $0.name.lowercased() })
             WorkspaceImportPreviewSheet(
                 backup: backup,
                 fileName: pendingImportFileName,
                 targetWorkspaceName: wsName,
                 targetWorkspaceID: workspaceID,
-                onConfirmImport: { selectedServiceIDs in
-                    executeImport(backup: backup, selectedServiceIDs: selectedServiceIDs)
+                existingServiceNames: existingNames,
+                onConfirmImport: { selectedServiceIDs, resolvedNames in
+                    executeImport(backup: backup, selectedServiceIDs: selectedServiceIDs, resolvedNames: resolvedNames)
                 }
             )
         }
@@ -107,15 +110,29 @@ public struct ServicesDeckView: View {
         panel.nameFieldStringValue = "\(sanitizedName)-services-\(DataPortService.backupDateString).json"
         panel.allowedContentTypes = [.json]
 
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
+            panel.begin { response in
+                if response == .OK, let url = panel.url {
+                    self.performWorkspaceExport(to: url)
+                }
+            }
+            return
+        }
 
+        panel.beginSheetModal(for: window) { response in
+            if response == .OK, let url = panel.url {
+                self.performWorkspaceExport(to: url)
+            }
+        }
+    }
+
+    private func performWorkspaceExport(to url: URL) {
         Task {
             do {
                 let dataPort = DataPortRepository()
                 let backup = try await dataPort.exportWorkspace(id: workspaceID)
                 let data = try DataPortService.encodeBackup(backup)
                 try data.write(to: url)
-                alertMessage = "Workspace successfully exported to \(url.lastPathComponent)."
             } catch {
                 alertMessage = "Failed to export workspace: \(error.localizedDescription)"
             }
@@ -130,8 +147,23 @@ public struct ServicesDeckView: View {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.json]
 
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
+            panel.begin { response in
+                if response == .OK, let url = panel.url {
+                    self.processWorkspaceImportUrl(url)
+                }
+            }
+            return
+        }
 
+        panel.beginSheetModal(for: window) { response in
+            if response == .OK, let url = panel.url {
+                self.processWorkspaceImportUrl(url)
+            }
+        }
+    }
+
+    private func processWorkspaceImportUrl(_ url: URL) {
         do {
             let data = try Data(contentsOf: url)
             let backup = try DataPortService.decodeBackup(from: data)
@@ -142,23 +174,25 @@ public struct ServicesDeckView: View {
         }
     }
 
-    private func executeImport(backup: DataPortService.KumaBackup, selectedServiceIDs: Set<UUID>) {
+    private func executeImport(backup: DataPortService.KumaBackup, selectedServiceIDs: Set<UUID>, resolvedNames: [UUID: String]) {
         Task {
             do {
                 let dataPort = DataPortRepository()
                 try await dataPort.importIntoWorkspace(
                     targetWorkspaceID: workspaceID,
                     backup: backup,
-                    selectedServiceIDs: selectedServiceIDs
+                    selectedServiceIDs: selectedServiceIDs,
+                    resolvedNames: resolvedNames
                 )
                 viewModel.loadWorkspace(workspaceID: workspaceID)
                 workspaceStore.loadFromDatabase()
-                alertMessage = "Successfully imported \(selectedServiceIDs.count) services into this workspace!"
             } catch {
                 alertMessage = "Failed to import services: \(error.localizedDescription)"
             }
         }
     }
+
+
 
     // MARK: - Content Body (Empty State / Cards / Table)
 
@@ -175,19 +209,15 @@ public struct ServicesDeckView: View {
                     title: "No Starred Services",
                     description: "Star your most frequently used services from the context menu to access them quickly from here."
                 )
-            } else if filterGroupID != nil {
-                KumaEmptyStateView(
-                    iconName: "folder.badge.minus",
-                    title: "No Services in this Group",
-                    description: "Assign services to this group from the service details inspector."
-                )
             } else if viewModel.snapshots.isEmpty {
                 KumaEmptyStateView(
                     iconName: "square.stack.3d.up.slash",
                     title: "No Services Yet",
                     description: "Create a service to start port-forwarding, container, or shell runs.",
                     actionButtonTitle: "Create Service",
-                    action: {}
+                    action: {
+                        NotificationCenter.default.post(name: .kumaCreateServiceRequested, object: nil)
+                    }
                 )
             } else {
                 KumaEmptyStateView(

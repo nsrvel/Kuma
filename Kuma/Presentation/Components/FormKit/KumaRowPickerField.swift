@@ -39,6 +39,9 @@ public struct KumaRowPickerField<Option: Hashable>: View {
             Spacer(minLength: KumaSpacing.md)
 
             Picker("", selection: $selection) {
+                if !options.contains(selection) {
+                    Text(titleResolver(selection)).tag(selection)
+                }
                 ForEach(options, id: \.self) { opt in
                     Text(titleResolver(opt)).tag(opt)
                 }

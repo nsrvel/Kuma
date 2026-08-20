@@ -248,11 +248,3 @@ public final class SettingsViewModel {
     }
 }
 
-extension NSApplication {
-    static var sharedIfRunning: NSApplication? {
-        if NSApp != nil {
-            return NSApp
-        }
-        return nil
-    }
-}

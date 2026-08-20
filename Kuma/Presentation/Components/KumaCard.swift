@@ -2,57 +2,35 @@ import SwiftUI
 
 public struct KumaCard<Content: View>: View {
     private let padding: CGFloat
-    private let isInteractive: Bool
     private let content: Content
-
-    @State private var isHovered: Bool = false
 
     public init(
         padding: CGFloat = KumaSpacing.md,
-        isInteractive: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.padding = padding
-        self.isInteractive = isInteractive
         self.content = content()
     }
 
     public var body: some View {
         content
             .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(isHovered && isInteractive ? 0.45 : 0.30))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .strokeBorder(
-                        isHovered && isInteractive ? Color.accentColor.opacity(0.6) : Color(nsColor: .separatorColor).opacity(0.55),
-                        lineWidth: isHovered && isInteractive ? 1.0 : 0.5
-                    )
-            )
-            .onHover { hovering in
-                guard isInteractive else { return }
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isHovered = hovering
-                }
-            }
+            .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous))
     }
 }
 
 #Preview {
     VStack(spacing: KumaSpacing.md) {
-        KumaCard(isInteractive: true) {
+        KumaCard {
             HStack {
-                Text("Interactive Card")
+                Text("Card Item")
                     .font(KumaFont.heading)
                 Spacer()
                 Image(systemName: "chevron.right")
             }
         }
 
-        KumaCard(isInteractive: false) {
+        KumaCard {
             Text("Static Card Container")
                 .font(KumaFont.body)
         }

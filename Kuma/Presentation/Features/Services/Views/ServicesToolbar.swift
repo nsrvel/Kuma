@@ -6,7 +6,7 @@ extension ServicesDeckView {
         // 1. Add Service Button (+)
         ToolbarItem {
             Button {
-                NotificationCenter.default.post(name: NSNotification.Name("kumaCreateServiceRequested"), object: nil)
+                NotificationCenter.default.post(name: .kumaCreateServiceRequested, object: nil)
             } label: {
                 Image(systemName: "plus")
             }
@@ -94,7 +94,7 @@ extension ServicesDeckView {
         ToolbarItem {
             Menu {
                 Button {
-                    NotificationCenter.default.post(name: NSNotification.Name("kumaCreateServiceRequested"), object: nil)
+                    NotificationCenter.default.post(name: .kumaCreateServiceRequested, object: nil)
                 } label: {
                     Label("Add New Service", systemImage: "plus")
                 }
@@ -118,13 +118,13 @@ extension ServicesDeckView {
                 Divider()
 
                 Button {
-                    NotificationCenter.default.post(name: NSNotification.Name("kumaImportWorkspace"), object: nil)
+                    NotificationCenter.default.post(name: .kumaImportWorkspace, object: nil)
                 } label: {
                     Label("Import", systemImage: "square.and.arrow.down")
                 }
 
                 Button {
-                    NotificationCenter.default.post(name: NSNotification.Name("kumaExportWorkspace"), object: nil)
+                    NotificationCenter.default.post(name: .kumaExportWorkspace, object: nil)
                 } label: {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }

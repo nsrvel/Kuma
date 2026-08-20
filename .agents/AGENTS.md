@@ -1,84 +1,99 @@
-# Kuma — Engineering Rules
+# Kuma — Engineering Rules & Architecture Standard
 
-> **Kuma** is a native macOS SwiftUI app for managing local dev services (K8s, Docker, SSH, Shell, etc). Target: macOS 14+, Swift 6 Strict Concurrency.
+> **Kuma** is a native macOS SwiftUI app for managing local dev services (K8s, Docker, Podman, SSH, Shell, Tunnels, Health Checks).  
+> Target: **macOS 14+**, **Swift 6 Strict Concurrency**, Apple Human Interface Guidelines (HIG).
 
 ---
 
-## 1. Architecture Boundaries
+## 1. Directory Structure & Layer Boundaries
 
 ```
-App/              → @main entry, AppDelegate
-Domain/           → Pure Swift models, enums, protocols (ZERO dependencies)
-  ├── Models/
-  ├── Enums/
-  ├── Protocols/
-  └── Repositories/
-Data/             → GRDB SQLite persistence
-  ├── Database/
-  ├── Migrations/
-  ├── Entities/
-  ├── Repositories/
-  └── Security/
-Core/             → Backend engines (non-UI)
-  ├── Process/
-  ├── Streams/
-  ├── Environment/
-  ├── Network/
-  └── ...
-Stores/           → @Observable state bridge
-Presentation/     → SwiftUI views
-  ├── Navigation/
-  ├── Theme/
-  └── Features/
-Lib/              → Shared utilities & extensions
-Resources/        → Assets, sounds, seed data
+Kuma/
+├── App/                  → @main entry, AppDelegate, AppCoordinator, KumaCommands
+├── Domain/               → Pure Swift models, enums (ZERO UI / DB dependencies)
+│   ├── Enums/            → Domain categories, options, and polymorphic types
+│   └── Models/           → Pure entities (Service, Provider, ServicePortMapping, etc.)
+├── Core/                 → Non-UI business engines & persistence layer
+│   ├── Audio/            → System audio feedback & sound manager
+│   ├── Database/         → GRDB SQLite persistence
+│   │   ├── Records/      → SQLite Table Record definitions (GRDB models)
+│   │   └── Repositories/ → DB Repositories & Protocols (co-located)
+│   ├── DataPort/         → Export/Import engine & backup encoders
+│   ├── Environment/      → Path resolvers & system binary execution paths
+│   ├── Notifications/    → System notifications & AlertService payload bus
+│   └── Security/         → CryptoVault (AES-256-GCM encryption)
+├── Stores/               → @Observable state bridge across views (e.g. WorkspaceStore)
+├── Lib/                  → Shared utilities & Foundation/AppKit extensions
+└── Presentation/         → SwiftUI views & visual components
+    ├── Components/       → Global reusable components & FormKit (Cross-feature)
+    │   └── FormKit/      → KumaTextField, KumaSecureField, KumaFilePickerField, etc.
+    ├── Theme/            → Colors, fonts, radius, spacing design system tokens
+    └── Features/         → Topic-specific feature modules
+        └── [FeatureName]/
+            ├── Models/          → (Optional) Feature-specific presentation models
+            ├── ViewModels/      → (Optional) Feature @Observable view models
+            └── Views/           → Main screens, sheets, or popovers
+                ├── Components/  → Subviews & micro widgets local to this feature
+                └── [Sections|Forms|Steps|Inspector]/ → Contextual sub-containers
 ```
 
-- **Layer flow**: `Presentation/` → `Stores/` → `Core/` & `Data/`
-- **No flat file dumping** — every layer uses topic-specific sub-folders.
+### Layer Rules:
+- **Dependency Flow**: `Presentation/` → `Stores/` → `Core/` → `Domain/`. Lower layers NEVER import higher layers.
+- **No Flat File Dumping**: Every layer and subfolder MUST use topic-specific subdirectories.
+- **Components Containment**:
+  - Reusable across multiple features → Place in `Presentation/Components/` (or `Presentation/Components/FormKit/`).
+  - Specific to one feature → Place in `Presentation/Features/[FeatureName]/Views/Components/`.
 
 ---
 
-## 2. Swift 6 & Concurrency
+## 2. Swift 6, Concurrency & State
 
-- Swift 6 **Strict Concurrency** enabled. All `@Sendable` boundaries respected.
-- State driven by **`ServiceExecutionState` enum** (`.stopped`, `.starting`, `.running`, `.stopping`, `.failed`). Multi-boolean flags forbidden.
-- **`ServiceAggregate`** root model bundles Service + Providers + Ports + Secrets. No scattered multi-dictionary state.
-- Domain models use **Enums with Associated Values** for polymorphic data. Fat optional structs forbidden.
-
----
-
-## 3. Process Safety
-
-- Subprocesses MUST `setpgid(0, 0)` & register in `ProcessRegistry`.
-- Orphan killer: `SIGINT` → `SIGTERM` → `SIGKILL`.
-- All `Pipe()` / `FileHandle` use explicit `defer` close.
-- Log streams via `AsyncStream<String>` + `LogCoalescer` (max 5 flushes/sec, 100-entry FIFO RingBuffer).
+- **Strict Concurrency**: Swift 6 Strict Concurrency is enabled. All `@Sendable` boundaries and actor isolations (`@MainActor`, `actor`) must be strictly respected.
+- **Enums Over Multi-Booleans**: Service and UI states MUST be driven by discrete Enums with associated values (e.g., `ServiceExecutionState`), never scattered multi-boolean flags (`isLoading`, `isStarting`, `isError`, etc.).
+- **URL Path Modernization**: Never use `.path` on `URL` in macOS 14+. Always use `.path(percentEncoded: false)`.
+- **Atomic Operations**: File writes for backups and exports must use atomic writing.
 
 ---
 
-## 4. Logging & Security
+## 3. SwiftUI & View Architecture
 
-- Use `os.Logger` only. **`print()` is forbidden** in production code.
-- Secrets encrypted via **AES-256-GCM** in `vault_secrets` table. No plain-text secrets in JSON.
-- File access uses **Security-Scoped Bookmarks** persisted in SQLite.
+- **View Size Limit**: Views MUST NOT exceed **~150 lines**. Any complex layout or card MUST be decomposed into `Views/Components/`.
+- **Form Architecture**: Multi-step forms (e.g. `CreateServiceSheet`) must separate step views and general settings into separate modular components.
+- **Stores & Observation**:
+  - Global app stores are injected and observed via `@Environment(WorkspaceStore.self)` or `@Bindable`.
+  - Feature ViewModels use `@Observable` and `@MainActor`.
+- **No ViewModels for Simple Views**: Simple display views or sheets should consume Stores or Snapshot models directly without redundant intermediate ViewModels.
+- **Lists & Performance**:
+  - Large scrollable lists or grids must use `LazyVStack` or `LazyVGrid`.
+  - Heavy tree navigation algorithms (e.g. flattening node hierarchies) belong in the ViewModel, not inside the SwiftUI `body`.
+- **Previews**: All views must include `#Preview` with clean mock data (zero active DB queries or process executions during preview).
+- **Accessibility & HIG**:
+  - Icon-only buttons must provide an `.accessibilityLabel(...)`.
+  - Animated transitions must respect spring physics (`response: 0.2-0.35`, `dampingFraction: 0.7-0.88`).
 
 ---
 
-## 5. SwiftUI & UI
+## 4. Database & Persistence (GRDB)
 
-- Stores observed via `@Environment`. **No ViewModels** (unless multi-step wizard).
-- Views max **~150 lines**. Decompose into `Components/`.
-- Scrollable lists use `LazyVStack` / `LazyVGrid`.
-- Images downsampled via `CGImageSourceCreateThumbnailAtIndex`, cached with `NSCache`.
-- All views include `#Preview` with mock data (zero DB/Process in previews).
-- Respect `accessibilityReduceMotion` & provide `accessibilityLabel` on icon-only buttons.
+- **Record Separation**: GRDB `FetchableRecord` & `PersistableRecord` structs belong in `Core/Database/Records/`.
+- **Protocol Co-location**: DB repository protocols (e.g. `ServiceRepositoryProtocol`) remain co-located alongside their implementation in `Core/Database/Repositories/`.
+- **Security & Vault**: Plaintext passwords, tokens, and private SSH keys must be encrypted using `CryptoVault.shared.encrypt(plainText:)` before persisting to SQLite.
 
 ---
 
-## 6. Workflow
+## 5. Process Safety & Subprocesses
 
-- **One task at a time**. Plan → Code → Verify → Approve → Next.
-- Reference **KumaV3** for UI/UX design matching.
-- Reference **KumaV4** for architecture & process patterns.
-- No code written without user direction.
+- Subprocesses MUST call `setpgid(0, 0)` and register in `ProcessRegistry`.
+- Orphan killer escalation: `SIGINT` → `SIGTERM` → `SIGKILL`.
+- All `Pipe()` and `FileHandle` instances must use explicit `defer { try? handle.close() }`.
+- Production code MUST use `os.Logger`. **`print()` is forbidden in production code.**
+
+---
+
+## 6. Workflow & Development Protocol
+
+1. **Step-by-Step Approval**: No large refactoring or multi-file creation without user review of the audit and implementation plan.
+2. **Standard Verifications**: Always run `xcodebuild -scheme Kuma -destination 'platform=macOS' test` to verify 100% test suite pass after any architectural change.
+3. **Reference Targets**:
+   - UI/UX aesthetics & visual fidelity → Match **KumaV3** references.
+   - Core architecture, safety & concurrency → Match **KumaV4** patterns.

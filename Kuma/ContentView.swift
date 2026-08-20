@@ -9,18 +9,70 @@ struct ContentView: View {
     @Environment(\.dismissWindow) private var dismissWindow
 
     @State private var settingsViewModel = SettingsViewModel()
+    @State private var showCreateServiceSheet: Bool = false
+    @State private var droppedBackup: DataPortService.KumaBackup? = nil
+    @State private var droppedFileName: String = ""
+    @State private var isDragTargetActive: Bool = false
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(viewModel: sidebarViewModel, workspaceStore: workspaceStore)
-        } detail: {
-            detailView(for: sidebarViewModel.selectedID)
+        ZStack {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
+                SidebarView(viewModel: sidebarViewModel, workspaceStore: workspaceStore)
+            } detail: {
+                detailView(for: sidebarViewModel.selectedID)
+            }
+            .navigationSplitViewStyle(.prominentDetail)
+
+            // Finder Drop Target Overlay (Instant Zero-Delay Full Window Coverage)
+            if isDragTargetActive {
+                FinderDropTargetOverlay()
+            }
         }
-        .navigationSplitViewStyle(.prominentDetail)
+        .animation(.easeInOut(duration: 0.15), value: isDragTargetActive)
+
+
+
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let fileURL = urls.first, fileURL.pathExtension.lowercased() == "json" else {
+                return false
+            }
+            do {
+                let data = try Data(contentsOf: fileURL)
+                let backup = try DataPortService.decodeBackup(from: data)
+                self.droppedBackup = backup
+                self.droppedFileName = fileURL.lastPathComponent
+                return true
+            } catch {
+                return false
+            }
+        } isTargeted: { targeted in
+            isDragTargetActive = targeted
+        }
+        .sheet(item: $droppedBackup) { backup in
+            ImportPreviewSheet(
+                backup: backup,
+                fileName: droppedFileName,
+                existingWorkspaceIDs: Set(workspaceStore.workspaces.map(\.id)),
+                onConfirmImport: { selectedWorkspaces, selectedServices in
+                    Task {
+                        let dataPort = DataPortRepository()
+                        try? await dataPort.importSelective(from: backup, selectedWorkspaceIDs: selectedWorkspaces, selectedServiceIDs: selectedServices)
+                        workspaceStore.loadFromDatabase()
+                    }
+                }
+            )
+        }
+
         .onReceive(NotificationCenter.default.publisher(for: .kumaOpenSettings)) { _ in
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 sidebarViewModel.selectedID = .stable("settings")
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaCreateServiceRequested)) { _ in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+                sidebarViewModel.selectedID = .stable("all-services")
+            }
+            showCreateServiceSheet = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaOpenOnboarding)) { _ in
             openWindow(id: "onboarding")
@@ -30,6 +82,13 @@ struct ContentView: View {
             if coordinator.currentPhase == .onboarding {
                 openWindow(id: "onboarding")
                 dismissWindow(id: "main-workspace")
+            }
+        }
+        .sheet(isPresented: $showCreateServiceSheet) {
+            if let activeWorkspace = workspaceStore.activeWorkspace {
+                CreateServiceSheet(workspaceID: activeWorkspace.id) {
+                    NotificationCenter.default.post(name: .kumaServiceCreated, object: nil)
+                }
             }
         }
         .sheet(isPresented: Bindable(workspaceStore).showCreateSheet) {
@@ -43,6 +102,7 @@ struct ContentView: View {
         }
         .withKumaAlerts()
     }
+
 
     @ViewBuilder
     private func detailView(for selectedID: UUID?) -> some View {
@@ -63,17 +123,10 @@ struct ContentView: View {
             )
             .navigationTitle("Live Logs")
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
-            // Main Dashboard Workspace Stage with Deck View (All Services, Starred Filter, or Group Filter)
+            // Main Dashboard Workspace Stage with Deck View (All Services or Starred Filter)
             let isStarred = (selectedID == .stable("starred-services"))
-            let isStaticSection = (selectedID == .stable("all-services") || selectedID == .stable("starred-services") || selectedID == .stable("groups"))
-            let targetGroupID: UUID? = isStaticSection ? nil : selectedID
-
-            ServicesDeckView(
-                workspaceID: activeWorkspace.id,
-                isStarredOnly: isStarred,
-                filterGroupID: targetGroupID
-            )
-            .id(activeWorkspace.id)
+            ServicesDeckView(workspaceID: activeWorkspace.id, isStarredOnly: isStarred)
+                .id(activeWorkspace.id)
         } else {
             KumaEmptyStateView(
                 iconName: "square.stack.3d.up.slash",
@@ -86,4 +139,7 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environment(AppCoordinator(initialPhase: .mainWorkspace))
+        .environment(WorkspaceStore())
 }
+

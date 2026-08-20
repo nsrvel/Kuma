@@ -54,9 +54,6 @@ public struct PublicTunnelingStepView: View {
             .disabled(viewModel.isScanning)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .task {
-            await viewModel.scanDependenciesIfNeeded()
-        }
     }
 }
 

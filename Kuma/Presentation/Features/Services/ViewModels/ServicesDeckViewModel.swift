@@ -18,7 +18,6 @@ public final class ServicesDeckViewModel {
     public var isInspectorPresented: Bool = false
     public var selectedServiceID: UUID? = nil
     public var isStarredOnly: Bool = false
-    public var filterGroupID: UUID? = nil
     public var hasInitialLoaded: Bool = false
 
     // Tier 1: Static Snapshots (~64B per item)
@@ -31,12 +30,10 @@ public final class ServicesDeckViewModel {
 
     public init(
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
-        isStarredOnly: Bool = false,
-        filterGroupID: UUID? = nil
+        isStarredOnly: Bool = false
     ) {
         self.serviceRepository = serviceRepository
         self.isStarredOnly = isStarredOnly
-        self.filterGroupID = filterGroupID
     }
 
     // MARK: - Filtered & Sorted Projections (Ultra-Fast Zero Allocation)
@@ -47,14 +44,10 @@ public final class ServicesDeckViewModel {
         let hasStatusFilter = !selectedStatuses.isEmpty
         let hasProviderFilter = !selectedProviders.isEmpty
         let starredOnly = isStarredOnly
-        let groupFilter = filterGroupID
 
         // 1. Single-Pass High-Speed Token Matching
         var result = snapshots.filter { snapshot in
             if starredOnly && !snapshot.isStarred {
-                return false
-            }
-            if let targetGroup = groupFilter, snapshot.groupID != targetGroup {
                 return false
             }
             if hasSearch {
@@ -107,10 +100,13 @@ public final class ServicesDeckViewModel {
         return result
     }
 
+    private var loadTask: Task<Void, Never>? = nil
+
     // MARK: - Actions
 
     public func loadWorkspace(workspaceID: UUID) {
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
             await loadWorkspaceAsync(workspaceID: workspaceID)
         }
     }
@@ -118,6 +114,7 @@ public final class ServicesDeckViewModel {
     public func loadWorkspaceAsync(workspaceID: UUID) async {
         do {
             let loaded = try await serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
+            guard !Task.isCancelled else { return }
             self.snapshots = loaded
             self.hasInitialLoaded = true
 
@@ -128,6 +125,7 @@ public final class ServicesDeckViewModel {
                 }
             }
         } catch {
+            guard !Task.isCancelled else { return }
             self.snapshots = []
             self.hasInitialLoaded = true
         }

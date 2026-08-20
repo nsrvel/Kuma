@@ -10,17 +10,12 @@ public final class SidebarViewModel {
     public private(set) var entries: [SidebarEntry]
     public var selectedID: UUID?
     public var expandedIDs: Set<UUID>
-    public var editingGroupID: UUID? = nil
-
-    private let serviceRepository: any ServiceRepositoryProtocol
 
     public init(
         entries: [SidebarEntry] = [],
         selectedID: UUID? = nil,
-        expandedIDs: Set<UUID> = [],
-        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
+        expandedIDs: Set<UUID> = []
     ) {
-        self.serviceRepository = serviceRepository
         let finalEntries = entries.isEmpty ? Self.defaultEntries : entries
         self.entries = finalEntries
         self.selectedID = selectedID ?? .stable("all-services")
@@ -34,99 +29,6 @@ public final class SidebarViewModel {
             }
         }
         self.expandedIDs = initialExpanded
-    }
-
-    // MARK: - Group Sync & Management
-
-    public func loadGroups(forWorkspace workspaceID: UUID) {
-        Task {
-            do {
-                let groups = try await serviceRepository.fetchGroups(forWorkspace: workspaceID)
-                self.syncGroupsToEntries(groups: groups, workspaceID: workspaceID)
-            } catch {
-                Self.logger.error("Failed to load groups: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func syncGroupsToEntries(groups: [ServiceGroup], workspaceID: UUID) {
-        let groupEntries = groups.map { g in
-            SidebarEntry.item(
-                SidebarNode(
-                    id: g.id,
-                    title: g.name,
-                    icon: .system("folder.fill"),
-                    children: nil
-                )
-            )
-        }
-
-        var newEntries: [SidebarEntry] = []
-        for entry in self.entries {
-            switch entry {
-            case .item(var node):
-                if node.id == .stable("groups") {
-                    node.children = groupEntries
-                    node.actions = [
-                        SidebarAction(icon: "plus", tooltip: "New Group") { [weak self] in
-                            Task { @MainActor [weak self] in
-                                self?.createNewGroup(workspaceID: workspaceID)
-                            }
-                        }
-                    ]
-                    newEntries.append(.item(node))
-                } else {
-                    newEntries.append(entry)
-                }
-            case .divider:
-                newEntries.append(entry)
-            }
-        }
-        self.entries = newEntries
-    }
-
-    public func createNewGroup(workspaceID: UUID) {
-        Task {
-            do {
-                let defaultName = "New Group"
-                let newGroup = try await serviceRepository.createGroup(workspaceID: workspaceID, name: defaultName)
-                self.loadGroups(forWorkspace: workspaceID)
-                self.expandedIDs.insert(.stable("groups"))
-                self.editingGroupID = newGroup.id
-                self.selectedID = newGroup.id
-            } catch {
-                Self.logger.error("Failed to create group: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func commitGroupName(id: UUID, newName: String, workspaceID: UUID) {
-        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalName = trimmed.isEmpty ? "Untitled Group" : trimmed
-        self.editingGroupID = nil
-
-        Task {
-            do {
-                try await serviceRepository.renameGroup(id: id, newName: finalName)
-                self.loadGroups(forWorkspace: workspaceID)
-            } catch {
-                Self.logger.error("Failed to rename group: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func deleteGroup(id: UUID, workspaceID: UUID) {
-        if selectedID == id {
-            selectedID = .stable("all-services")
-        }
-        Task {
-            do {
-                try await serviceRepository.deleteGroup(id: id)
-                self.loadGroups(forWorkspace: workspaceID)
-            } catch {
-                Self.logger.error("Failed to delete group: \(error.localizedDescription)")
-            }
-        }
     }
 
     // MARK: - Expand / Collapse
@@ -157,7 +59,7 @@ public final class SidebarViewModel {
                 icon: .system("star"),
                 children: nil
             )),
-            .divider(),
+//            .divider(),
             .item(SidebarNode(
                 id: .stable("port-registry"),
                 title: "Port Registry",
@@ -170,7 +72,7 @@ public final class SidebarViewModel {
                 icon: .system("terminal"),
                 children: nil
             )),
-            .divider(),
+//            .divider(),
             .item(SidebarNode(
                 id: .stable("groups"),
                 title: "Groups",
@@ -178,13 +80,164 @@ public final class SidebarViewModel {
                 children: [],
                 actions: [
                     SidebarAction(icon: "plus", tooltip: "New Group") {
-                        NotificationCenter.default.post(name: NSNotification.Name("kumaCreateGroupRequested"), object: nil)
+                        // TODO: Add new group action
                     }
                 ],
                 isSpecialHeader: true,
                 isExpandedByDefault: true
             ))
         ]
+    }
+
+    // MARK: - Flattened Hierarchy for Native List
+
+    public struct FlattenedRow: Identifiable {
+
+        public let id: UUID
+        public let entry: SidebarEntry
+        public let indentLevel: Int
+        public let isPlaceholder: Bool
+        public let hasDividerAfter: Bool
+
+        public var isNavigable: Bool {
+            switch entry {
+            case .item: return !isPlaceholder
+            case .divider: return false
+            }
+        }
+    }
+
+    public var flattenedRows: [FlattenedRow] {
+        var result: [FlattenedRow] = []
+
+        func appendEntry(_ entry: SidebarEntry, indentLevel: Int) {
+            if case .divider = entry {
+                result.append(
+                    FlattenedRow(
+                        id: entry.id,
+                        entry: entry,
+                        indentLevel: indentLevel,
+                        isPlaceholder: false,
+                        hasDividerAfter: false
+                    )
+                )
+                return
+            }
+
+            result.append(
+                FlattenedRow(
+                    id: entry.id,
+                    entry: entry,
+                    indentLevel: indentLevel,
+                    isPlaceholder: false,
+                    hasDividerAfter: false
+                )
+            )
+
+            if case .item(let node) = entry, let children = node.children, isExpanded(node.id) {
+                if children.isEmpty {
+                    let placeholderId = UUID.stable(node.id.uuidString + ".empty-placeholder")
+                    let placeholderNode = SidebarNode(
+                        id: placeholderId,
+                        title: emptyPlaceholderText(for: node),
+                        icon: .system("")
+                    )
+                    result.append(
+                        FlattenedRow(
+                            id: placeholderId,
+                            entry: .item(placeholderNode),
+                            indentLevel: indentLevel + 1,
+                            isPlaceholder: true,
+                            hasDividerAfter: false
+                        )
+                    )
+                } else {
+                    for child in children {
+                        appendEntry(child, indentLevel: indentLevel + 1)
+                    }
+                }
+            }
+        }
+
+        for (index, entry) in entries.enumerated() {
+            if case .divider = entry {
+                continue
+            }
+
+            let startCount = result.count
+            appendEntry(entry, indentLevel: 0)
+
+            let nextIndex = index + 1
+            if nextIndex < entries.count, case .divider = entries[nextIndex] {
+                if result.count > startCount, let lastIndex = result.indices.last {
+                    result[lastIndex] = FlattenedRow(
+                        id: result[lastIndex].id,
+                        entry: result[lastIndex].entry,
+                        indentLevel: result[lastIndex].indentLevel,
+                        isPlaceholder: result[lastIndex].isPlaceholder,
+                        hasDividerAfter: true
+                    )
+                }
+            }
+        }
+
+        return result
+    }
+
+    private func emptyPlaceholderText(for node: SidebarNode) -> String {
+        if node.title == "Starred" {
+            return "No starred items"
+        } else if node.title == "All Services" {
+            return "No services"
+        } else {
+            return "No \(node.title.lowercased()) services"
+        }
+    }
+
+    public func handleMove(_ direction: MoveCommandDirection) {
+        let navigableRows = flattenedRows.filter { $0.isNavigable }
+        guard !navigableRows.isEmpty else { return }
+
+        let currentIndex = navigableRows.firstIndex(where: { $0.id == selectedID })
+
+        switch direction {
+        case .down:
+            if let index = currentIndex {
+                let nextIndex = index + 1
+                if nextIndex < navigableRows.count {
+                    selectedID = navigableRows[nextIndex].id
+                }
+            } else {
+                selectedID = navigableRows.first?.id
+            }
+        case .up:
+            if let index = currentIndex {
+                let prevIndex = index - 1
+                if prevIndex >= 0 {
+                    selectedID = navigableRows[prevIndex].id
+                }
+            } else {
+                selectedID = navigableRows.last?.id
+            }
+        case .left:
+            if let selectedID,
+               let row = navigableRows.first(where: { $0.id == selectedID }),
+               case .item(let node) = row.entry,
+               node.children != nil,
+               isExpanded(selectedID) {
+                _ = expandedIDs.remove(selectedID)
+            }
+        case .right:
+            if let selectedID,
+               let row = navigableRows.first(where: { $0.id == selectedID }),
+               case .item(let node) = row.entry,
+               node.children != nil,
+               !isExpanded(selectedID) {
+                _ = expandedIDs.insert(selectedID)
+            }
+        default:
+            break
+        }
     }
 }
 
@@ -198,3 +251,4 @@ extension SidebarViewModel {
         )
     }
 }
+

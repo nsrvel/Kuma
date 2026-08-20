@@ -48,5 +48,5 @@ public struct WelcomeStepView: View {
 #Preview {
     WelcomeStepView()
         .frame(width: 680, height: 500)
-        .background(.ultraThickMaterial)
+        .background(KumaColors.canvasBackground)
 }

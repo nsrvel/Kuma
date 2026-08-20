@@ -49,7 +49,7 @@ public struct SettingsTunnelingToolsSection: View {
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        statusBadge(isInstalled: isCloudflaredAvailable)
+                        BinaryStatusBadge(isInstalled: isCloudflaredAvailable)
                     }
                     KumaFilePickerField(
                         label: "",
@@ -71,7 +71,7 @@ public struct SettingsTunnelingToolsSection: View {
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        statusBadge(isInstalled: isNgrokAvailable)
+                        BinaryStatusBadge(isInstalled: isNgrokAvailable)
                     }
                     KumaFilePickerField(
                         label: "",
@@ -90,18 +90,6 @@ public struct SettingsTunnelingToolsSection: View {
         }
     }
 
-    @ViewBuilder
-    private func statusBadge(isInstalled: Bool) -> some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(isInstalled ? Color.green : Color.red.opacity(0.8))
-                .frame(width: 6, height: 6)
-            Text(isInstalled ? "Available" : "Not Found")
-                .font(KumaFont.caption)
-                .foregroundStyle(isInstalled ? Color.secondary : Color.red.opacity(0.8))
-        }
-    }
-
     private func refreshTunnelPaths() async {
         let resolver = EnvironmentPathResolver.shared
         let cf = await resolver.resolveExecutablePath(for: "cloudflared")
@@ -112,3 +100,4 @@ public struct SettingsTunnelingToolsSection: View {
         }
     }
 }
+

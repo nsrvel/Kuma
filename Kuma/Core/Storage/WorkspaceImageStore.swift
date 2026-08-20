@@ -32,12 +32,13 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
                 create: true
             )
             let dirURL = appSupportURL.appendingPathComponent("Kuma/Workspaces/Images", isDirectory: true)
-            if !fm.fileExists(atPath: dirURL.path) {
+            let dirPath = dirURL.path(percentEncoded: false)
+            if !fm.fileExists(atPath: dirPath) {
                 try fm.createDirectory(at: dirURL, withIntermediateDirectories: true, attributes: nil)
             }
             return dirURL
         } catch {
-            self.logger.error("Failed to create workspace images directory: \(error)")
+            self.logger.error("Failed to create workspace images directory: \(error.localizedDescription)")
             return FileManager.default.temporaryDirectory
         }
     }
@@ -49,15 +50,17 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
     public nonisolated func saveWorkspaceImage(from sourceURL: URL, workspaceID: UUID) -> String? {
         let destFileName = "\(workspaceID.uuidString).png"
         let destURL = imagesDirectoryURL().appendingPathComponent(destFileName)
+        let destPath = destURL.path(percentEncoded: false)
+        let sourcePath = sourceURL.path(percentEncoded: false)
         let fm = FileManager.default
 
         do {
-            if fm.fileExists(atPath: destURL.path) {
+            if fm.fileExists(atPath: destPath) {
                 try fm.removeItem(at: destURL)
             }
 
             guard let imageSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil) else {
-                self.logger.error("Failed to read image source at \(sourceURL.path)")
+                self.logger.error("Failed to read image source at \(sourcePath)")
                 return nil
             }
 
@@ -69,7 +72,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
             ]
 
             guard let thumbnailRef = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
-                self.logger.error("Failed to generate thumbnail for save from \(sourceURL.path)")
+                self.logger.error("Failed to generate thumbnail for save from \(sourcePath)")
                 return nil
             }
 
@@ -81,10 +84,10 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
 
             try pngData.write(to: destURL, options: .atomic)
             cache.removeObject(forKey: destFileName as NSString)
-            self.logger.info("Saved workspace image for \(workspaceID) to \(destURL.path)")
+            self.logger.info("Saved workspace image for \(workspaceID) to \(destPath)")
             return destFileName
         } catch {
-            self.logger.error("Failed to save workspace image: \(error)")
+            self.logger.error("Failed to save workspace image: \(error.localizedDescription)")
             return nil
         }
     }
@@ -100,7 +103,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
             cache.removeObject(forKey: destFileName as NSString)
             return destFileName
         } catch {
-            self.logger.error("Failed to write base64 image to disk: \(error)")
+            self.logger.error("Failed to write base64 image to disk: \(error.localizedDescription)")
             return nil
         }
     }
@@ -108,7 +111,8 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
     /// Loads the raw base64 string representation for export backups
     public nonisolated func loadBase64Image(for fileNameOrPath: String) -> String? {
         let fileURL = resolveURL(for: fileNameOrPath)
-        guard FileManager.default.fileExists(atPath: fileURL.path),
+        let filePath = fileURL.path(percentEncoded: false)
+        guard FileManager.default.fileExists(atPath: filePath),
               let data = try? Data(contentsOf: fileURL) else {
             return nil
         }
@@ -120,13 +124,14 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
     /// Loads and downsamples a workspace avatar image to target size using ImageIO & NSCache.
     public nonisolated func thumbnail(for fileNameOrPath: String, maxDimension: CGFloat = 128) -> NSImage? {
         let fileURL = resolveURL(for: fileNameOrPath)
-        let cacheKey = "\(fileURL.path)-\(Int(maxDimension))" as NSString
+        let filePath = fileURL.path(percentEncoded: false)
+        let cacheKey = "\(filePath)-\(Int(maxDimension))" as NSString
 
         if let cached = cache.object(forKey: cacheKey) {
             return cached
         }
 
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
+        guard FileManager.default.fileExists(atPath: filePath) else {
             return nil
         }
 
@@ -149,6 +154,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
         cache.setObject(thumbnail, forKey: cacheKey)
         return thumbnail
     }
+
 
     /// Resolves filename or legacy absolute path to a valid URL
     public nonisolated func resolveURL(for fileNameOrPath: String) -> URL {

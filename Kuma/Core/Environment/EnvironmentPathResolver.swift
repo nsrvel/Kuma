@@ -118,7 +118,7 @@ public actor EnvironmentPathResolver {
         let stderrPipe = Pipe()
 
         process.executableURL = executableURL
-        process.arguments = isFish ? ["-c", "echo $PATH"] : ["-lic", "echo $PATH"]
+        process.arguments = isFish ? ["-c", "echo $PATH"] : ["-lc", "echo $PATH"]
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 

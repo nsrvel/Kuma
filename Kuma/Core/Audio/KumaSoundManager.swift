@@ -3,7 +3,8 @@ import AVFoundation
 import AppKit
 import os
 
-public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate, @unchecked Sendable {
+@MainActor
+public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "KumaSoundManager")
     public static let shared = KumaSoundManager()
 
@@ -26,38 +27,41 @@ public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate, @unchecked
         let userSoundsDirectory = homeDirectory.appendingPathComponent("Library/Sounds", isDirectory: true)
         let destinationURL = userSoundsDirectory.appendingPathComponent("kuma-alert.caf")
 
+        let userSoundsPath = userSoundsDirectory.path(percentEncoded: false)
+        let destinationPath = destinationURL.path(percentEncoded: false)
+
         do {
-            if !fileManager.fileExists(atPath: userSoundsDirectory.path) {
+            if !fileManager.fileExists(atPath: userSoundsPath) {
                 try fileManager.createDirectory(at: userSoundsDirectory, withIntermediateDirectories: true)
             }
 
-            if fileManager.fileExists(atPath: destinationURL.path) {
+            if fileManager.fileExists(atPath: destinationPath) {
                 return // Sound is already installed, skip redundant disk I/O on startup
             }
 
             try fileManager.copyItem(at: bundleSoundURL, to: destinationURL)
         } catch {
-            Self.logger.error("Could not sync sound to ~/Library/Sounds: \(error)")
+            Self.logger.error("Could not sync sound to ~/Library/Sounds: \(error.localizedDescription)")
         }
     }
 
     /// Plays the custom notification sound (`kuma-alert.caf`).
     public func playNotificationSound() {
         guard let soundURL = Bundle.main.url(forResource: "kuma-alert", withExtension: "caf") else {
-            // Fallback to NSSound if file not in bundle
-            NSSound(named: "Funk")?.play()
+            NSSound.beep()
             return
         }
 
         do {
-            audioPlayer = try AVAudioPlayer(contentsOf: soundURL)
-            audioPlayer?.volume = 0.45 // Standardized preview volume (~45%) for comfortable listening
-            audioPlayer?.delegate = self
-            audioPlayer?.prepareToPlay()
-            audioPlayer?.play()
+            let player = try AVAudioPlayer(contentsOf: soundURL)
+            player.volume = 0.45 // Standardized preview volume (~45%) for comfortable listening
+            player.delegate = self
+            player.prepareToPlay()
+            player.play()
+            self.audioPlayer = player
         } catch {
-            Self.logger.error("Failed to play notification sound: \(error)")
-            NSSound(named: "Funk")?.play()
+            Self.logger.error("Failed to play notification sound: \(error.localizedDescription)")
+            NSSound.beep()
         }
     }
 
@@ -69,3 +73,4 @@ public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate, @unchecked
         }
     }
 }
+

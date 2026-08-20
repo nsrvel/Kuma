@@ -78,7 +78,7 @@ public struct SettingsCLIToolsSection: View {
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        statusBadge(isInstalled: isKubectlAvailable)
+                        BinaryStatusBadge(isInstalled: isKubectlAvailable)
                     }
                     KumaFilePickerField(
                         label: "",
@@ -100,7 +100,7 @@ public struct SettingsCLIToolsSection: View {
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        statusBadge(isInstalled: isKubeconfigAvailable)
+                        BinaryStatusBadge(isInstalled: isKubeconfigAvailable)
                     }
                     KumaFilePickerField(
                         label: "",
@@ -121,7 +121,7 @@ public struct SettingsCLIToolsSection: View {
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        statusBadge(isInstalled: isDockerAvailable)
+                        BinaryStatusBadge(isInstalled: isDockerAvailable)
                     }
                     KumaFilePickerField(
                         label: "",
@@ -143,7 +143,7 @@ public struct SettingsCLIToolsSection: View {
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        statusBadge(isInstalled: isPodmanAvailable)
+                        BinaryStatusBadge(isInstalled: isPodmanAvailable)
                     }
                     KumaFilePickerField(
                         label: "",
@@ -173,18 +173,6 @@ public struct SettingsCLIToolsSection: View {
         }
     }
 
-    @ViewBuilder
-    private func statusBadge(isInstalled: Bool) -> some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(isInstalled ? Color.green : Color.red.opacity(0.8))
-                .frame(width: 6, height: 6)
-            Text(isInstalled ? "Available" : "Not Found")
-                .font(KumaFont.caption)
-                .foregroundStyle(isInstalled ? Color.secondary : Color.red.opacity(0.8))
-        }
-    }
-
     private func refreshDefaultPaths() async {
         let resolver = EnvironmentPathResolver.shared
         let docker = await resolver.resolveExecutablePath(for: "docker")
@@ -197,3 +185,4 @@ public struct SettingsCLIToolsSection: View {
         }
     }
 }
+

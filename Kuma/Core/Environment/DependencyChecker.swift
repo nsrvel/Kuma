@@ -125,12 +125,43 @@ public enum DependencyChecker {
         if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
             homePath = String(cString: dir)
         } else {
-            homePath = fm.homeDirectoryForCurrentUser.path
+            homePath = fm.homeDirectoryForCurrentUser.path(percentEncoded: false)
         }
-        
+
         let kubeconfigPath = (homePath as NSString).appendingPathComponent(".kube/config")
         return fm.fileExists(atPath: kubeconfigPath)
     }
+
+    /// Resolves the absolute path to the active kubeconfig file if it exists.
+    public static func resolvedKubeconfigPath(customPath: String? = nil) -> String? {
+        let fm = FileManager.default
+        if let customPath, !customPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let nsPath = NSString(string: customPath).expandingTildeInPath
+            if fm.fileExists(atPath: nsPath) { return nsPath }
+        }
+
+        if let envKube = ProcessInfo.processInfo.environment["KUBECONFIG"], !envKube.isEmpty {
+            let paths = envKube.split(separator: ":").map(String.init)
+            for p in paths {
+                let expanded = NSString(string: p).expandingTildeInPath
+                if fm.fileExists(atPath: expanded) { return expanded }
+            }
+        }
+
+        let homePath: String
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            homePath = String(cString: dir)
+        } else {
+            homePath = fm.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        }
+        let defaultPath = (homePath as NSString).appendingPathComponent(".kube/config")
+        if fm.fileExists(atPath: defaultPath) {
+            return defaultPath
+        }
+
+        return nil
+    }
+
 
     /// Asynchronously runs scan on all core service engines & tunneling tools.
     public static func checkAll(

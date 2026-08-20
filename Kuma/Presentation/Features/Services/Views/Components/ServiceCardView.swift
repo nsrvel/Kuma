@@ -7,7 +7,6 @@ public struct ServiceCardView: View {
 
     public var onToggle: () -> Void
     public var onSelect: () -> Void
-
     public let onToggleStar: () -> Void
 
     public init(
@@ -36,11 +35,11 @@ public struct ServiceCardView: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(
                                 snapshot.isDisabled
-                                ? Color.secondary.opacity(0.18).gradient
-                                : snapshot.providerCategory.color.gradient
+                                ? LinearGradient(colors: [Color.secondary.opacity(0.18), Color.secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                : snapshot.providerCategory.gradient
                             )
                             .frame(width: 34, height: 34)
-                            .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.04), radius: 1, y: 0.5)
+                            .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.16), radius: 2, y: 1)
 
                         Image(systemName: snapshot.providerCategory.icon)
                             .font(.system(size: 15, weight: .medium))
@@ -102,8 +101,7 @@ public struct ServiceCardView: View {
                 if !snapshot.portDisplays.isEmpty {
                     PortChipsView(ports: snapshot.portDisplays, limit: 3)
                 } else {
-                    // Contextual Badge for services without port bindings
-                    nonPortBadge
+                    ServiceNonPortBadge(category: snapshot.providerCategory)
                 }
 
                 Spacer(minLength: 4)
@@ -114,20 +112,15 @@ public struct ServiceCardView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        // Adaptive translucent surface that harmonizes with window material
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(snapshot.isDisabled ? 0.35 : 0.40))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(
-                    isSelected ? Color.accentColor : Color(nsColor: .separatorColor).opacity(snapshot.isDisabled ? 0.35 : 0.55),
-                    lineWidth: isSelected ? 1.5 : 0.5
+                    isSelected ? Color.accentColor : KumaColors.borderSubtle,
+                    lineWidth: isSelected ? 2.0 : 0.5
                 )
         }
-        .opacity(snapshot.isDisabled ? 0.75 : 1.0)
+        .opacity(snapshot.isDisabled ? 0.65 : 1.0)
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onTapGesture {
             onSelect()
@@ -142,51 +135,6 @@ public struct ServiceCardView: View {
             )
         }
     }
-
-    // MARK: - Contextual Non-Port Badge
-
-    @ViewBuilder
-    private var nonPortBadge: some View {
-        let (icon, label) = nonPortMetadata
-
-        HStack(spacing: 3.5) {
-            Image(systemName: icon)
-                .font(.system(size: 8.5))
-                .foregroundStyle(.tertiary)
-            Text(label)
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 5.5)
-        .padding(.vertical, 2)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-        }
-    }
-
-    private var nonPortMetadata: (icon: String, label: String) {
-        switch snapshot.providerCategory {
-        case .httpCheck:
-            return ("waveform.path.ecg", "Health Check")
-        case .shell:
-            return ("terminal", "Shell Script")
-        case .processMonitor:
-            return ("cpu", "Process")
-        case .docker, .podman:
-            return ("arrow.triangle.2.circlepath", "Worker")
-        case .ssh:
-            return ("server.rack", "SSH Session")
-        case .tunnel:
-            return ("cloud", "Tunnel")
-        case .kubernetes:
-            return ("network", "Cluster Pod")
-        }
-    }
-
-    // MARK: - Contextual Subtitle
 
     private var targetSubtitle: String {
         if !snapshot.subtitle.isEmpty {

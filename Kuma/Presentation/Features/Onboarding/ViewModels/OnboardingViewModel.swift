@@ -21,24 +21,30 @@ public final class OnboardingViewModel {
         await runScan(isManualRescan: force)
     }
 
-    /// Executes system scan across all CLI engines and tunneling tools.
+    /// Executes system scan across all CLI engines and tunneling tools in a single unified pass.
     public func runScan(isManualRescan: Bool = false) async {
         guard !isScanning else { return }
         isScanning = true
 
-        let status = await DependencyChecker.checkAll()
+        let customKubectl = UserDefaults.standard.string(forKey: "kuma.custom_kubectl_path")
+        let customKubeconfig = UserDefaults.standard.string(forKey: "kuma.custom_kubeconfig_path")
+        let customDocker = UserDefaults.standard.string(forKey: "kuma.custom_docker_path")
+        let customPodman = UserDefaults.standard.string(forKey: "kuma.custom_podman_path")
+        let customCloudflared = UserDefaults.standard.string(forKey: "kuma.custom_cloudflared_path")
+        let customNgrok = UserDefaults.standard.string(forKey: "kuma.custom_ngrok_path")
 
-        async let kubectlPath = DependencyChecker.resolvedPath(for: "kubectl")
-        async let dockerPath = DependencyChecker.resolvedPath(for: "docker")
-        async let podmanPath = DependencyChecker.resolvedPath(for: "podman")
-        async let cloudflaredPath = DependencyChecker.resolvedPath(for: "cloudflared")
-        async let ngrokPath = DependencyChecker.resolvedPath(for: "ngrok")
+        async let kubectlPath = DependencyChecker.resolvedPath(for: "kubectl", customPath: customKubectl)
+        async let dockerPath = DependencyChecker.resolvedPath(for: "docker", customPath: customDocker)
+        async let podmanPath = DependencyChecker.resolvedPath(for: "podman", customPath: customPodman)
+        async let cloudflaredPath = DependencyChecker.resolvedPath(for: "cloudflared", customPath: customCloudflared)
+        async let ngrokPath = DependencyChecker.resolvedPath(for: "ngrok", customPath: customNgrok)
+        let isKubeconfigPresent = DependencyChecker.isKubeconfigPresent(customPath: customKubeconfig)
 
         let paths = await (kubectlPath, dockerPath, podmanPath, cloudflaredPath, ngrokPath)
 
         if isManualRescan {
-            // Subtle 300ms throttle for visual tactile feedback on button click
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            // Subtle 200ms throttle for visual tactile feedback on button click
+            try? await Task.sleep(nanoseconds: 200_000_000)
         }
 
         self.engineDependencies = [
@@ -46,40 +52,40 @@ public final class OnboardingViewModel {
                 id: "kubectl",
                 name: "Kubernetes CLI (kubectl)",
                 iconName: "network",
-                isInstalled: status.kubectlInstalled,
+                isInstalled: paths.0 != nil,
                 path: paths.0,
                 category: .engine,
-                description: "Enables Kubernetes Port-Forward provider",
+                description: "Enables Kubernetes provider",
                 settingsKey: "kuma.custom_kubectl_path"
             ),
             SystemDependency(
                 id: "kubeconfig",
                 name: "Kubeconfig File",
                 iconName: "doc.text.fill",
-                isInstalled: status.kubeconfigExists,
-                path: status.kubeconfigExists ? "~/.kube/config" : nil,
+                isInstalled: isKubeconfigPresent,
+                path: isKubeconfigPresent ? (customKubeconfig ?? "~/.kube/config") : nil,
                 category: .engine,
                 description: "Cluster configuration for Kubernetes",
                 settingsKey: "kuma.custom_kubeconfig_path"
             ),
             SystemDependency(
                 id: "docker",
-                name: "Docker Engine & Compose",
+                name: "Docker Engine",
                 iconName: "shippingbox.fill",
-                isInstalled: status.dockerInstalled,
+                isInstalled: paths.1 != nil,
                 path: paths.1,
                 category: .engine,
-                description: "Enables Docker Compose provider",
+                description: "Enables Docker provider",
                 settingsKey: "kuma.custom_docker_path"
             ),
             SystemDependency(
                 id: "podman",
                 name: "Podman Engine",
                 iconName: "cylinder.split.1x2.fill",
-                isInstalled: status.podmanInstalled,
+                isInstalled: paths.2 != nil,
                 path: paths.2,
                 category: .engine,
-                description: "Enables Podman Compose provider",
+                description: "Enables Podman provider",
                 settingsKey: "kuma.custom_podman_path"
             )
         ]
@@ -89,20 +95,20 @@ public final class OnboardingViewModel {
                 id: "cloudflared",
                 name: "Cloudflare Tunnel (cloudflared)",
                 iconName: "cloud.bolt.fill",
-                isInstalled: status.cloudflaredInstalled,
+                isInstalled: paths.3 != nil,
                 path: paths.3,
                 category: .tunneling,
-                description: "Enables Public Tunnel via Cloudflare",
+                description: "Enables Tunnel via Cloudflare",
                 settingsKey: "kuma.custom_cloudflared_path"
             ),
             SystemDependency(
                 id: "ngrok",
                 name: "ngrok Tunnel",
                 iconName: "globe",
-                isInstalled: status.ngrokInstalled,
+                isInstalled: paths.4 != nil,
                 path: paths.4,
                 category: .tunneling,
-                description: "Enables Public Tunnel via ngrok",
+                description: "Enables Tunnel via ngrok",
                 settingsKey: "kuma.custom_ngrok_path"
             )
         ]

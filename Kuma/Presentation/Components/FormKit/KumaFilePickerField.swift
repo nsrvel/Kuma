@@ -45,18 +45,24 @@ public struct KumaFilePickerField: View {
             }
 
             HStack(spacing: KumaSpacing.sm) {
-                TextField(placeholder, text: $path)
-                    .textFieldStyle(.plain)
-                    .focused($isFocused)
+                ZStack(alignment: .leading) {
+                    if path.isEmpty {
+                        Text(placeholder)
+                            .font(KumaFont.body)
+                            .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                            .allowsHitTesting(false)
+                    }
+
+                    TextField("", text: $path)
+                        .textFieldStyle(.plain)
+                        .focused($isFocused)
+                }
                     .padding(KumaSpacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
-                            .fill(Color(NSColor.controlBackgroundColor).opacity(0.45))
-                    )
+                    .background(KumaColors.inputBackground, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                             .stroke(
-                                isFocused ? Color.accentColor : Color.primary.opacity(0.12),
+                                isFocused ? Color.accentColor : KumaColors.inputBorder,
                                 lineWidth: isFocused ? 1.5 : 0.5
                             )
                     )
@@ -83,10 +89,11 @@ public struct KumaFilePickerField: View {
 
                     if panel.runModal() == .OK {
                         if let selectedURL = panel.url {
-                            path = selectedURL.path
+                            path = selectedURL.path(percentEncoded: false)
                         }
                     }
                 }
+
                 .buttonStyle(.bordered)
             }
 

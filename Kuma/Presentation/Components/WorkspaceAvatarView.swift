@@ -6,8 +6,6 @@ public struct WorkspaceAvatarView: View {
     public let imagePath: String?
     public let size: CGFloat
 
-    private static let imageCache = NSCache<NSString, NSImage>()
-
     public init(name: String, imagePath: String? = nil, size: CGFloat = 24) {
         self.name = name
         self.imagePath = imagePath
