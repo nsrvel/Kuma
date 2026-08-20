@@ -14,7 +14,7 @@ public struct ServiceStatusObserver: View {
     public var body: some View {
         if isDisabled {
             StatusPillView(
-                text: "disabled",
+                text: "Disabled",
                 color: Color.secondary.opacity(0.8),
                 showDot: true,
                 isGlowing: false,
@@ -22,12 +22,13 @@ public struct ServiceStatusObserver: View {
             )
         } else {
             StatusPillView(
-                text: state.status.title.lowercased(),
+                text: state.status.title,
                 color: state.status.color,
                 showDot: true,
-                isGlowing: false,
+                isGlowing: state.status == .running,
                 isLoading: state.isLoading || state.status == .starting || state.status == .stopping
             )
         }
     }
+
 }

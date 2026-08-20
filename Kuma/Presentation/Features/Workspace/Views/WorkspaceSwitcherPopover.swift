@@ -94,36 +94,25 @@ public struct WorkspaceSwitcherPopover: View {
 
             Spacer()
 
-            // Muted checkmark transitioning to settings gear button on hover
-            ZStack {
-                if isHoveringActiveRow {
-                    Button {
-                        isPresented = false
-                        DispatchQueue.main.async {
-                            store.workspaceToEdit = activeWS
-                        }
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color.primary.opacity(isHoveringActiveSettings ? 1.0 : 0.5))
-                            .frame(width: 24, height: 24)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { isHoveringActiveSettings = $0 }
-                    .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                    .help("Workspace Settings")
-                } else {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Color.secondary)
-                        .frame(width: 24, height: 24)
-                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            // Settings gear button
+            Button {
+                isPresented = false
+                DispatchQueue.main.async {
+                    store.workspaceToEdit = activeWS
                 }
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.primary.opacity(isHoveringActiveSettings ? 1.0 : 0.5))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
             }
-            .animation(.snappy(duration: 0.16, extraBounce: 0), value: isHoveringActiveRow)
+            .buttonStyle(.plain)
+            .onHover { isHoveringActiveSettings = $0 }
+            .help("Workspace Settings")
         }
         .padding(8)
+
         .background(Color.primary.opacity(isHoveringActiveRow ? 0.05 : 0.03))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(

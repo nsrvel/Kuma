@@ -97,3 +97,12 @@ Kuma/
 3. **Reference Targets**:
    - UI/UX aesthetics & visual fidelity → Match **KumaV3** references.
    - Core architecture, safety & concurrency → Match **KumaV4** patterns.
+
+---
+
+## 7. Critical Thinking & Architectural Evaluation
+
+- **Never Blindly Comply**: Do not blindly follow instructions without first critically evaluating architectural, performance, and UI/UX implications.
+- **Provide Better Alternatives**: If a requested change degrades performance (e.g., unnecessary `LazyVStack` on small forms, heavy GPU blurs, synchronous main-thread I/O), explain the trade-offs clearly and propose the technically superior solution before writing code.
+- **Performance & Polish First**: Always prioritize 120fps smooth animations, battery/CPU efficiency, and macOS HIG principles over quick hacks.
+

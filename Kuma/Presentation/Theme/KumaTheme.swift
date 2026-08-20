@@ -113,10 +113,11 @@ public enum KumaTheme {
     }
 
     public enum Inspector {
-        public static let widthMin: CGFloat = 320
-        public static let widthIdeal: CGFloat = 380
-        public static let widthMax: CGFloat = 520
+        public static let widthMin: CGFloat = 335
+        public static let widthIdeal: CGFloat = 450
+        public static let widthMax: CGFloat = 565
     }
+
 
     public enum Sidebar {
         public static let widthMin: CGFloat = 200

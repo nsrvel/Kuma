@@ -9,7 +9,7 @@ public struct ServicesDeckView: View {
     @State private var pendingImportBackup: DataPortService.KumaBackup? = nil
     @State private var pendingImportFileName: String = ""
     @State private var alertMessage: String? = nil
-    @FocusState private var isSearchFocused: Bool
+    @State private var isSearching: Bool = false
 
     @Environment(WorkspaceStore.self) private var workspaceStore
 
@@ -25,7 +25,7 @@ public struct ServicesDeckView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(isStarredOnly ? "Starred Services" : "Services")
-        .searchable(text: $viewModel.searchText, isPresented: $isSearchFocused, placement: .toolbar, prompt: "Search services")
+        .searchable(text: $viewModel.searchText, isPresented: $isSearching, placement: .toolbar, prompt: "Search services")
         .toolbar {
             toolbarContent()
         }
@@ -44,8 +44,9 @@ public struct ServicesDeckView: View {
             viewModel.loadWorkspace(workspaceID: workspaceID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaFocusSearch)) { _ in
-            isSearchFocused = true
+            isSearching = true
         }
+
         .onReceive(NotificationCenter.default.publisher(for: .kumaExportWorkspace)) { _ in
 
             exportCurrentWorkspace()
@@ -239,10 +240,11 @@ public struct ServicesDeckView: View {
     private var cardsGrid: some View {
         ScrollView {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 260, maximum: 380), spacing: 16)],
-                spacing: 16
+                columns: [GridItem(.adaptive(minimum: 300, maximum: 380), spacing: 18)],
+                spacing: 18
             ) {
                 ForEach(viewModel.filteredSnapshots) { snapshot in
+
                     ServiceCardView(
                         snapshot: snapshot,
                         runtime: viewModel.runtimeStates[snapshot.id] ?? ServiceRuntimeState(),

@@ -42,9 +42,10 @@ public struct CreateServiceSheet: View {
     // SSH Remote Provider Settings
     @State private var sshHost: String = ""
     @State private var sshPort: String = "22"
-    @State private var sshUser: String = "ubuntu"
+    @State private var sshUser: String = ""
     @State private var sshAuthType: SSHAuthType = .key
     @State private var sshKeyPath: String = "~/.ssh/id_ed25519"
+
     @State private var sshPassword: String = ""
 
     // Health Check Provider Settings
@@ -125,21 +126,33 @@ public struct CreateServiceSheet: View {
             case .selectProvider:
                 CreateServiceProviderStepView(
                     selectedProvider: $selectedProvider,
-                    onContinue: { withAnimation { currentStep = .fillDetails } },
+                    onContinue: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            currentStep = .fillDetails
+                        }
+                    },
                     onCancel: { dismiss() }
                 )
-                .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
             case .fillDetails:
                 fillDetailsStepView
-                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
             }
         }
-        .animation(.spring(response: 0.36, dampingFraction: 0.86), value: currentStep)
+        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: currentStep)
         .frame(
             width: currentStep == .selectProvider ? 520 : 500,
             height: currentStep == .selectProvider ? 440 : 580
         )
     }
+
+
 
     // MARK: - Fill Details Step View
 
@@ -210,9 +223,9 @@ public struct CreateServiceSheet: View {
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .background(Color(nsColor: .windowBackgroundColor))
         }
     }
+
 
     // MARK: - Provider Specific Subview
 
@@ -241,9 +254,7 @@ public struct CreateServiceSheet: View {
                     kubeContext = first
                 }
             }
-            .onChange(of: kubeContext) { _, newContext in
-                kubeConfigVM.triggerBackgroundValidation(context: newContext)
-            }
+
 
             KumaFormSection(icon: "scope", title: "Target Resource") {
                 KubeTargetSettingsView(
@@ -268,6 +279,8 @@ public struct CreateServiceSheet: View {
             KumaFormSection(icon: "terminal.fill", title: "Initial Script") {
                 InitialScriptSettingsView(initialScript: $podmanInitialScript)
             }
+
+
 
         case .shell:
             KumaFormSection(icon: "terminal.fill", title: "Shell Command") {

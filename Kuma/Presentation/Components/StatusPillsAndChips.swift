@@ -45,6 +45,7 @@ public struct StatusPillView: View {
                 .lineLimit(1)
         }
         .fixedSize()
+
     }
 }
 
@@ -62,29 +63,29 @@ public struct PortChipsView: View {
         let visible = Array(ports.prefix(limit))
         let overflow = ports.count - visible.count
 
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             Image(systemName: "arrow.left.arrow.right")
-                .font(.system(size: 8.5))
+                .font(.system(size: 9))
                 .foregroundStyle(.tertiary)
 
             HStack(spacing: 4) {
                 ForEach(visible, id: \.self) { port in
                     Text("\(port)")
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
                         }
                         .fixedSize()
                 }
                 if overflow > 0 {
                     Text("+\(overflow)")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 3)
                         .fixedSize()
@@ -93,3 +94,4 @@ public struct PortChipsView: View {
         }
     }
 }
+

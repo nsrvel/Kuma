@@ -8,9 +8,14 @@ public protocol ServiceRepositoryProtocol: Sendable {
     func fetchPortMappings(forService serviceID: UUID) async throws -> [ServicePortMapping]
     func insertService(_ service: Service, defaultProvider: Provider?, portMappings: [ServicePortMapping]) async throws
     func updateService(_ service: Service) async throws
+    func insertProvider(_ provider: Provider) async throws
+    func updateProvider(_ provider: Provider) async throws
+    func deleteProvider(id: UUID) async throws
+    func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID) async throws
     func toggleStarred(serviceID: UUID) async throws -> Bool
     func deleteService(id: UUID) async throws
 }
+
 
 public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Sendable {
     private let dbWriter: any DatabaseWriter
@@ -164,9 +169,49 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
         }
     }
 
+    public func insertProvider(_ provider: Provider) async throws {
+        try await dbWriter.write { db in
+            try provider.insert(db)
+        }
+    }
+
+    public func updateProvider(_ provider: Provider) async throws {
+        try await dbWriter.write { db in
+            try provider.update(db)
+        }
+    }
+
+    public func deleteProvider(id: UUID) async throws {
+        try await dbWriter.write { db in
+            _ = try Provider.deleteOne(db, key: id.uuidString)
+        }
+    }
+
+    public func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID) async throws {
+        try await dbWriter.write { db in
+            // Delete old port mappings for this service
+            try db.execute(sql: "DELETE FROM portMapping WHERE serviceID = ?", arguments: [serviceID.uuidString])
+
+            // Insert new mappings
+            for mapping in portMappings {
+                try db.execute(
+                    sql: "INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType) VALUES (?, ?, ?, ?, ?)",
+                    arguments: [
+                        mapping.id.uuidString,
+                        serviceID.uuidString,
+                        mapping.localPort,
+                        mapping.remotePort,
+                        mapping.protocolType
+                    ]
+                )
+            }
+        }
+    }
+
     public func deleteService(id: UUID) async throws {
         try await dbWriter.write { db in
             _ = try Service.deleteOne(db, key: id.uuidString)
         }
     }
 }
+

@@ -11,17 +11,16 @@ public struct DockerComposeSettingsView: View {
     }
 
     public var body: some View {
-        KumaCollapsibleCodeField(
+        KumaTextArea(
             label: "Compose File (docker-compose.yml)",
             value: $yamlConfig,
             placeholder: "version: '3.8'\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"80:80\"",
-            height: 150,
-            configureActionTitle: "Configure Compose YAML",
-            revealActionTitle: "Reveal Compose YAML",
-            iconName: "shippingbox.fill"
+            minHeight: 140,
+            isMonospaced: true
         )
     }
 }
+
 
 #Preview {
     struct PreviewWrapper: View {

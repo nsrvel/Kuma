@@ -35,7 +35,15 @@ struct KumaApp: App {
         .windowResizability(.contentSize)
         .windowBackgroundDragBehavior(.enabled)
         .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
+        // ─── Scene 3: macOS MenuBar Extra ────────────────────────────
+        // Compact Status Item in macOS Menu Bar with quick service controls
+        MenuBarExtra("Kuma", systemImage: "bolt.horizontal.fill") {
+            MenuBarPopupView()
+                .environment(coordinator)
+                .environment(workspaceStore)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
+
 

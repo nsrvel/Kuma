@@ -29,7 +29,7 @@ public struct KubeConnectionSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             KumaRowPickerField(
                 label: "Context",
-                description: "Target Kubernetes context from selected config.",
+                description: "Target cluster context.",
                 options: contextOptions,
                 selection: $kubeContext,
                 titleResolver: { opt in
@@ -40,6 +40,7 @@ public struct KubeConnectionSettingsView: View {
                 }
             )
             .disabled(availableContexts.isEmpty)
+
 
             Divider().opacity(0.3)
 

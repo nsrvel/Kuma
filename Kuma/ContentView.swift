@@ -109,20 +109,11 @@ struct ContentView: View {
         if selectedID == .stable("settings") {
             SettingsView(viewModel: settingsViewModel, workspaceStore: workspaceStore)
         } else if selectedID == .stable("port-registry") {
-            KumaEmptyStateView(
-                iconName: "point.3.filled.connected.trianglepath.dotted",
-                title: "Port Registry",
-                description: "Monitor active localhost ports and detect port conflicts across your system."
-            )
-            .navigationTitle("Port Registry")
+            PortRegistryView()
         } else if selectedID == .stable("live-logs") {
-            KumaEmptyStateView(
-                iconName: "terminal",
-                title: "Live Logs",
-                description: "Real-time aggregated stream of all stdout/stderr logs from running services."
-            )
-            .navigationTitle("Live Logs")
+            LiveLogsView()
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
+
             // Main Dashboard Workspace Stage with Deck View (All Services or Starred Filter)
             let isStarred = (selectedID == .stable("starred-services"))
             ServicesDeckView(workspaceID: activeWorkspace.id, isStarredOnly: isStarred)

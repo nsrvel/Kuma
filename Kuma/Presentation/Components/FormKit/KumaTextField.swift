@@ -47,20 +47,22 @@ public struct KumaTextField: View {
 
                 TextField("", text: $value)
                     .textFieldStyle(.plain)
+                    .foregroundStyle(Color.primary)
                     .focused($isFocused)
                     .onSubmit {
                         onSubmit?()
                     }
             }
                 .padding(KumaSpacing.sm)
-                .background(KumaColors.inputBackground, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+                .background(KumaColors.inputBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                         .stroke(
-                            isFocused ? Color.accentColor : KumaColors.inputBorder,
+                            isFocused ? Color.accentColor : KumaColors.inputBorder.opacity(0.6),
                             lineWidth: isFocused ? 1.5 : 0.5
                         )
                 )
+
                 .onAppear {
                     if autoFocus {
                         isFocused = true

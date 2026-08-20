@@ -11,6 +11,7 @@ public struct KumaTextArea: View {
     public var placeholder: String
     public var minHeight: CGFloat
     public var maxHeight: CGFloat?
+    public var isMonospaced: Bool
     public var error: String?
 
     @FocusState private var isFocused: Bool
@@ -21,6 +22,7 @@ public struct KumaTextArea: View {
         placeholder: String = "",
         minHeight: CGFloat = 64,
         maxHeight: CGFloat? = nil,
+        isMonospaced: Bool = false,
         error: String? = nil
     ) {
         self.label = label
@@ -28,6 +30,7 @@ public struct KumaTextArea: View {
         self.placeholder = placeholder
         self.minHeight = minHeight
         self.maxHeight = maxHeight
+        self.isMonospaced = isMonospaced
         self.error = error
     }
 
@@ -42,12 +45,13 @@ public struct KumaTextArea: View {
             ZStack(alignment: .topLeading) {
                 // Transparent Multi-line Text Area
                 TextEditor(text: $value)
-                    .font(KumaFont.body)
+                    .font(isMonospaced ? .system(size: 11.5, weight: .regular, design: .monospaced) : KumaFont.body)
                     .focused($isFocused)
                     .scrollContentBackground(.hidden)
                     .scrollIndicators(.hidden)
                     .background(Color.clear)
                     .frame(minHeight: minHeight, maxHeight: maxHeight)
+
                     .onKeyPress(.tab) {
                         NSApp.keyWindow?.selectNextKeyView(nil)
                         return .handled

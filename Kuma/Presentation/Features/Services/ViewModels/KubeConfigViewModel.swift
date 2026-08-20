@@ -45,7 +45,7 @@ public final class KubeConfigViewModel {
     }
 
     public func loadConfigs() {
-        Task {
+        Task.detached(priority: .utility) { [repo] in
             var list: [KubeConfig] = []
 
             // 1. Resolve default system Kubeconfig (~/.kube/config or custom setting)
@@ -54,10 +54,11 @@ public final class KubeConfigViewModel {
                 let content = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
                 let defaultConfig = KubeConfig(
                     id: KubeConfig.defaultID,
-                    name: "Default (~/.kube/config)",
+                    name: "Default",
                     configContent: content,
                     isDefault: true
                 )
+
                 list.append(defaultConfig)
             }
 
@@ -74,14 +75,17 @@ public final class KubeConfigViewModel {
                 list.append(contentsOf: decryptedList)
             }
 
-            self.availableKubeConfigs = list
-            if selectedKubeConfigID == nil, let first = list.first {
-                self.selectedKubeConfigID = first.id
+            let finalizedList = list
+            await MainActor.run {
+                self.availableKubeConfigs = finalizedList
+                if self.selectedKubeConfigID == nil, let first = finalizedList.first {
+                    self.selectedKubeConfigID = first.id
+                }
+                self.refreshContextsForCurrentConfig()
             }
-            refreshContextsForCurrentConfig()
-            triggerBackgroundValidation()
         }
     }
+
 
     /// Extract context names from the currently selected kubeconfig YAML content
     public func refreshContextsForCurrentConfig() {

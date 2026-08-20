@@ -11,17 +11,16 @@ public struct InitialScriptSettingsView: View {
     }
 
     public var body: some View {
-        KumaCollapsibleCodeField(
+        KumaTextArea(
             label: "Startup Script (sh / bash)",
             value: $initialScript,
             placeholder: "#!/bin/sh\necho 'Preparing database migrations...'\n# Add any pre-startup commands here",
-            height: 110,
-            configureActionTitle: "Configure Startup Script",
-            revealActionTitle: "Reveal Startup Script",
-            iconName: "terminal.fill"
+            minHeight: 90,
+            isMonospaced: true
         )
     }
 }
+
 
 #Preview {
     struct PreviewWrapper: View {

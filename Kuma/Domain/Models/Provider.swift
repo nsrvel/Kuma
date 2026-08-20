@@ -116,57 +116,62 @@ public struct Provider: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// Computes the exact contextual target string for the card UI (e.g. image name, kube target, command, url).
     public nonisolated var resolvedTarget: String {
         switch type {
-        case .docker, .podman:
+        case .docker:
             if let yaml = yamlConfig, let image = extractComposeImage(from: yaml) {
-                return image
+                return "Docker: \(image)"
             }
             if let label, !label.isEmpty {
-                return label
+                return "Docker: \(label)"
             }
-            return type.sidebarLabel
+            return "Docker"
+
+        case .podman:
+            if let yaml = yamlConfig, let image = extractComposeImage(from: yaml) {
+                return "Podman: \(image)"
+            }
+            if let label, !label.isEmpty {
+                return "Podman: \(label)"
+            }
+            return "Podman"
 
         case .kubernetes:
-            let target = targetName?.trimmingCharacters(in: .whitespaces) ?? ""
-            if !target.isEmpty {
-                return target
+            if let target = targetName?.trimmingCharacters(in: .whitespaces), !target.isEmpty {
+                return "k8s: \(target)"
             }
-            return type.sidebarLabel
+            return "Kubernetes"
+
 
         case .shell:
             if let cmd = runCommand, !cmd.trimmingCharacters(in: .whitespaces).isEmpty {
                 return cmd.trimmingCharacters(in: .whitespaces)
             }
-            return type.sidebarLabel
+            return "Shell script"
 
         case .ssh:
-            if let label, !label.trimmingCharacters(in: .whitespaces).isEmpty {
-                return label.trimmingCharacters(in: .whitespaces)
-            }
-            let host = sshHost?.trimmingCharacters(in: .whitespaces) ?? ""
-            if !host.isEmpty {
-                return host
-            }
-            return type.sidebarLabel
+            let user = sshUser ?? "root"
+            let host = sshHost ?? "localhost"
+            let port = sshPort ?? 22
+            return "SSH: \(user)@\(host):\(port)"
 
         case .httpCheck:
             if let url = httpCheckUrl, !url.trimmingCharacters(in: .whitespaces).isEmpty {
-                return url.trimmingCharacters(in: .whitespaces)
+                return "HTTP: \(url.trimmingCharacters(in: .whitespaces))"
             }
-            return type.sidebarLabel
+            return "HTTP Check"
 
         case .tunnel:
-            if let target = tunnelTargetUrl, !target.trimmingCharacters(in: .whitespaces).isEmpty {
-                return target.trimmingCharacters(in: .whitespaces)
-            }
-            return type.sidebarLabel
+            let engine = (tunnelType ?? "cloudflare").capitalized
+            let target = tunnelTargetUrl ?? "8080"
+            return "\(engine) Tunnel -> \(target)"
 
         case .processMonitor:
             if let proc = monitorProcessName, !proc.trimmingCharacters(in: .whitespaces).isEmpty {
-                return proc.trimmingCharacters(in: .whitespaces)
+                return "Monitor: \(proc)"
             }
-            return type.sidebarLabel
+            return "Process Monitor"
         }
     }
+
 
     /// Fast single-pass scanner to extract `image: ...` from Docker/Podman compose YAML and normalize to short image:tag
     private nonisolated func extractComposeImage(from yaml: String) -> String? {

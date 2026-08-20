@@ -5,150 +5,189 @@ import SwiftUI
 public struct InspectorStatusHeader: View {
     public let snapshot: ServiceCardSnapshot
     public let runtime: ServiceRuntimeState
+    public let isEditMode: Bool
+    public let hasChanges: Bool
+    public let isSaving: Bool
     public let onToggle: () -> Void
     public let onToggleStar: () -> Void
-    public let onEdit: () -> Void
+    public let onBackToOverview: () -> Void
+    public let onSave: () -> Void
+    public let onCancel: () -> Void
+
+    @State private var isStarHovered: Bool = false
 
     public init(
         snapshot: ServiceCardSnapshot,
         runtime: ServiceRuntimeState,
+        isEditMode: Bool = false,
+        hasChanges: Bool = false,
+        isSaving: Bool = false,
         onToggle: @escaping () -> Void,
-        onToggleStar: @escaping () -> Void,
-        onEdit: @escaping () -> Void
+        onToggleStar: @escaping () -> Void = {},
+        onBackToOverview: @escaping () -> Void = {},
+        onSave: @escaping () -> Void = {},
+        onCancel: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.runtime = runtime
+        self.isEditMode = isEditMode
+        self.hasChanges = hasChanges
+        self.isSaving = isSaving
         self.onToggle = onToggle
         self.onToggleStar = onToggleStar
-        self.onEdit = onEdit
+        self.onBackToOverview = onBackToOverview
+        self.onSave = onSave
+        self.onCancel = onCancel
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // MARK: Identity Row
             HStack(spacing: 10) {
-                // Provider gradient icon (matches card style)
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(snapshot.isDisabled
-                              ? LinearGradient(colors: [.secondary.opacity(0.18), .secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                              : snapshot.providerCategory.gradient)
-                        .frame(width: 32, height: 32)
-                        .shadow(color: .black.opacity(snapshot.isDisabled ? 0 : 0.14), radius: 2, y: 1)
+                if isEditMode {
+                    Button {
+                        onBackToOverview()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Back to Overview")
+                } else {
+                    // Provider gradient icon with Star Overlay Badge (matches card style)
+                    ZStack(alignment: .topTrailing) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(snapshot.isDisabled
+                                      ? LinearGradient(colors: [.secondary.opacity(0.18), .secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                      : snapshot.providerCategory.gradient)
+                                .frame(width: 32, height: 32)
+                                .shadow(color: .black.opacity(snapshot.isDisabled ? 0 : 0.14), radius: 2, y: 1)
 
-                    Image(systemName: snapshot.providerCategory.icon)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
+                            Image(systemName: snapshot.providerCategory.icon)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
+                        }
+
+                        if snapshot.isStarred {
+                            ZStack {
+                                Circle()
+                                    .fill(Color(nsColor: .windowBackgroundColor))
+                                    .frame(width: 13, height: 13)
+
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 7.5, weight: .bold))
+                                    .foregroundStyle(Color.yellow)
+                            }
+                            .offset(x: 3.5, y: -3.5)
+                            .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
+                        }
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(snapshot.name)
+                    Text(isEditMode ? "Edit Configuration" : snapshot.name)
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
                         .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
 
-                    HStack(spacing: 6) {
+                    if isEditMode {
+                        Text(snapshot.name)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
                         Text(snapshot.providerCategory.sidebarLabel)
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundStyle(snapshot.providerCategory.color.opacity(0.9))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1.5)
-                            .background(snapshot.providerCategory.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
-
-                        ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
 
+
+
+
+
                 Spacer(minLength: 8)
 
-                // Native toggle switch
-                if snapshot.isDisabled {
+                if hasChanges {
+                    // Dynamic Save & Cancel Buttons when modifications are made
+                    HStack(spacing: 6) {
+                        Button("Cancel") {
+                            onCancel()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(isSaving)
+
+                        Button {
+                            onSave()
+                        } label: {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            } else {
+                                Text("Save")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(isSaving)
+                    }
+                    .padding(.trailing, 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                } else if isEditMode {
+                    // Clean empty trailing side when no changes in edit mode
+                    EmptyView()
+                } else if snapshot.isDisabled {
                     Image(systemName: "lock.circle.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(.tertiary)
+                        .padding(.trailing, 8)
                 } else {
-                    Toggle("", isOn: Binding<Bool>(
-                        get: { runtime.status == .running || runtime.status == .starting },
-                        set: { _ in onToggle() }
-                    ))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
+                    // Native macOS Rounded Tinted Action Button (Pure Text: "Start" / "Stop")
+                    let isRunning = runtime.status.isOperational
+                    let tintColor: Color = isRunning ? .red : .green
+
+                    Button {
+                        onToggle()
+                    } label: {
+                        HStack(spacing: 5) {
+                            if runtime.isLoading || runtime.status == .starting || runtime.status == .stopping {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            }
+                            Text(isRunning ? "Stop" : "Start")
+                                .font(.system(size: 12.5, weight: .semibold))
+                        }
+                        .foregroundStyle(tintColor)
+                        .frame(minWidth: 56)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6.5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(tintColor.opacity(0.13))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(tintColor.opacity(0.35), lineWidth: 0.8)
+                        )
+                    }
+                    .buttonStyle(.plain)
                     .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
+                    .padding(.trailing, 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
-            .padding(.horizontal, KumaSpacing.lg)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: hasChanges)
+
+
+            .padding(.leading, KumaSpacing.lg)
+            .padding(.trailing, KumaSpacing.lg)
             .padding(.vertical, KumaSpacing.md)
-
-            Divider().padding(.horizontal, KumaSpacing.lg)
-
-            // MARK: Action Toolbar Strip (thin, borderless icons)
-            HStack(spacing: 0) {
-                // Start / Stop
-                actionButton(
-                    icon: runtime.status.isOperational ? "stop.fill" : "play.fill",
-                    label: runtime.status.isOperational ? "Stop" : "Start",
-                    tint: runtime.status.isOperational ? .red : .accentColor,
-                    disabled: snapshot.isDisabled || runtime.isLoading
-                ) { onToggle() }
-
-                // Edit
-                actionButton(icon: "pencil", label: "Edit") { onEdit() }
-
-                // Star
-                actionButton(
-                    icon: snapshot.isStarred ? "star.fill" : "star",
-                    label: snapshot.isStarred ? "Unstar" : "Star",
-                    tint: snapshot.isStarred ? .yellow : nil
-                ) { onToggleStar() }
-
-                Spacer()
-
-                // Overflow Menu
-                Menu {
-                    ServiceActionContextMenu(
-                        snapshot: snapshot,
-                        runtime: runtime,
-                        onToggle: onToggle,
-                        onToggleStar: onToggleStar,
-                        onSelect: {}
-                    )
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .medium))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .frame(width: 28)
-                .help("More actions")
-            }
-            .padding(.horizontal, KumaSpacing.md)
-            .padding(.vertical, KumaSpacing.xs)
         }
-    }
-
-    // MARK: - Borderless Action Button
-
-    @ViewBuilder
-    private func actionButton(
-        icon: String,
-        label: String,
-        tint: Color? = nil,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            action()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(tint ?? .secondary)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled)
-        .help(label)
     }
 }

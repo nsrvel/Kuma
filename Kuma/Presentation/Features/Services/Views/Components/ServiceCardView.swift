@@ -26,7 +26,7 @@ public struct ServiceCardView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             // Header Row: Provider Icon + Name/Target Subtitle + Native Toggle
             HStack(spacing: 12) {
                 // Service Provider Icon with Star Overlay Badge
@@ -64,14 +64,14 @@ public struct ServiceCardView: View {
                 .animation(.spring(response: 0.26, dampingFraction: 0.65), value: snapshot.isStarred)
 
                 // Name & Contextual Target Subtitle (Image/Namespace/Target)
-                VStack(alignment: .leading, spacing: 1.5) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(snapshot.name)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
                         .lineLimit(1)
 
                     Text(targetSubtitle)
-                        .font(.system(size: 11, design: isMonospacedTarget ? .monospaced : .default))
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -113,6 +113,7 @@ public struct ServiceCardView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
         .overlay {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(

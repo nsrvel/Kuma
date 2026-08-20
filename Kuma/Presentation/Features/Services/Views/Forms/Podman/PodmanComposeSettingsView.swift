@@ -11,17 +11,16 @@ public struct PodmanComposeSettingsView: View {
     }
 
     public var body: some View {
-        KumaCollapsibleCodeField(
+        KumaTextArea(
             label: "Compose File (podman-compose.yml)",
             value: $yamlConfig,
             placeholder: "version: '3.8'\nservices:\n  app:\n    image: quay.io/podman/hello\n    ports:\n      - \"8080:8080\"",
-            height: 150,
-            configureActionTitle: "Configure Compose YAML",
-            revealActionTitle: "Reveal Compose YAML",
-            iconName: "shippingbox.fill"
+            minHeight: 140,
+            isMonospaced: true
         )
     }
 }
+
 
 #Preview {
     struct PreviewWrapper: View {

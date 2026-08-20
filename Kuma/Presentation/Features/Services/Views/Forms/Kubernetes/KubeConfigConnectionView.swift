@@ -58,71 +58,99 @@ public struct KubeConfigConnectionView: View {
                             let isSelected = viewModel.selectedKubeConfigID == config.id
                             let isHovered = hoveredConfigID == config.id
 
-                            HStack(spacing: 12) {
-                                Circle()
-                                    .fill(isSelected ? Color.accentColor : Color.primary.opacity(0.12))
-                                    .frame(width: 6, height: 6)
+                            HStack(spacing: 10) {
+                                // Doc Icon
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 18)
 
-                                Text(config.name)
-                                    .font(.system(size: 12))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(config.name)
+                                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                                        .foregroundStyle(Color.primary)
+                                        .lineLimit(1)
+
+                                    if isSelected {
+                                        Text(config.isDefault ? "Active Config · ~/.kube/config" : "Active Config")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(Color.secondary)
+                                            .lineLimit(1)
+                                    } else if config.isDefault {
+                                        Text("~/.kube/config")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(Color.secondary)
+                                            .lineLimit(1)
+                                    } else {
+                                        Text("Custom Config")
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(Color.secondary)
+                                            .lineLimit(1)
+                                    }
+                                }
 
                                 Spacer()
 
                                 if isSelected {
-                                    if isLocked {
-                                        Image(systemName: "lock.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.secondary)
-                                    } else if viewModel.isLoadingNamespaces {
-                                        ProgressView()
-                                            .controlSize(.small)
-                                            .scaleEffect(0.6)
-                                    } else if viewModel.connectionSuccess {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(.green)
-                                    } else if viewModel.connectionError != nil {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(.orange)
+                                    Group {
+                                        if isLocked {
+                                            Image(systemName: "lock.fill")
+                                                .font(.system(size: 10))
+                                                .foregroundStyle(.secondary)
+                                        } else if viewModel.isLoadingNamespaces {
+                                            HStack(spacing: 5) {
+                                                ProgressView()
+                                                    .controlSize(.mini)
+                                                Text("Connecting…")
+                                                    .font(.system(size: 10, weight: .medium))
+                                                    .foregroundStyle(.secondary)
+                                            }
+
+                                        } else if viewModel.connectionError != nil {
+                                            Text("Unreachable")
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundStyle(Color.orange)
+                                        } else {
+                                            Text("Connected")
+                                                .font(.system(size: 10, weight: .medium))
+                                                .foregroundStyle(Color.green)
+                                        }
                                     }
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                                 }
                             }
+                            .animation(.easeInOut(duration: 0.2), value: isSelected)
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.isLoadingNamespaces)
+                            .animation(.easeInOut(duration: 0.2), value: viewModel.connectionError != nil)
+
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
+                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
                             )
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .strokeBorder(
-                                        isSelected ? Color.accentColor.opacity(0.4) : Color.clear,
+                                        isSelected ? Color.accentColor.opacity(0.35) : Color.clear,
                                         lineWidth: 0.75
                                     )
                             }
                             .contentShape(Rectangle())
+
                             .contextMenu {
-                                Button {
-                                    viewModel.newKubeConfigName = config.name
-                                    viewModel.newKubeConfigContent = config.configContent
-                                    viewModel.editingKubeConfigID = config.id
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        viewModel.showInlineNewConfigForm = true
-                                    }
-                                } label: {
-                                    Label(config.isDefault ? "View / Edit" : "Edit", systemImage: "pencil")
-                                }
-
-                                Button {
-                                    viewModel.selectedKubeConfigID = config.id
-                                    viewModel.testConnection(context: contextToTest)
-                                    onConfigChanged()
-                                } label: {
-                                    Label("Refresh", systemImage: "arrow.clockwise")
-                                }
-
                                 if !config.isDefault {
+                                    Button {
+                                        viewModel.newKubeConfigName = config.name
+                                        viewModel.newKubeConfigContent = config.configContent
+                                        viewModel.editingKubeConfigID = config.id
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                            viewModel.showInlineNewConfigForm = true
+                                        }
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
                                     Divider()
 
                                     Button(role: .destructive) {
@@ -130,6 +158,14 @@ public struct KubeConfigConnectionView: View {
                                         viewModel.showDeleteConfirmation = true
                                     } label: {
                                         Label("Delete", systemImage: "trash")
+                                    }
+                                } else {
+                                    Button {
+                                        viewModel.selectedKubeConfigID = config.id
+                                        viewModel.testConnection(context: contextToTest)
+                                        onConfigChanged()
+                                    } label: {
+                                        Label("Refresh", systemImage: "arrow.clockwise")
                                     }
                                 }
                             }
@@ -140,16 +176,8 @@ public struct KubeConfigConnectionView: View {
                                 viewModel.testConnection(context: contextToTest)
                                 onConfigChanged()
                             }
-                            .onHover { hovering in
-                                withAnimation(.easeOut(duration: 0.15)) {
-                                    if hovering {
-                                        hoveredConfigID = config.id
-                                    } else if hoveredConfigID == config.id {
-                                        hoveredConfigID = nil
-                                    }
-                                }
-                            }
                         }
+
                     }
                     .frame(maxWidth: .infinity)
                     .background(Color.primary.opacity(0.01))
