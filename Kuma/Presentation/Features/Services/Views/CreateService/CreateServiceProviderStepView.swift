@@ -91,12 +91,12 @@ public struct CreateServiceProviderStepView: View {
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.03))
+                    .fill(isSelected ? Color.accentColor.opacity(0.08) : KumaColors.surfaceBackground)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
-                        isSelected ? Color.accentColor : Color.primary.opacity(0.06),
+                        isSelected ? Color.accentColor : KumaColors.borderSubtle,
                         lineWidth: isSelected ? 1.5 : 0.5
                     )
             }

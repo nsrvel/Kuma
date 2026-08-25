@@ -2,15 +2,18 @@ import SwiftUI
 
 public struct InspectorOptionsSection: View {
     @Binding public var isDisabled: Bool
+    public let isRunning: Bool
     public let isEditing: Bool
     public let onDelete: () -> Void
 
     public init(
         isDisabled: Binding<Bool>,
+        isRunning: Bool = false,
         isEditing: Bool = true,
         onDelete: @escaping () -> Void
     ) {
         self._isDisabled = isDisabled
+        self.isRunning = isRunning
         self.isEditing = isEditing
         self.onDelete = onDelete
     }
@@ -26,7 +29,7 @@ public struct InspectorOptionsSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Disable Service")
                             .font(KumaFont.body)
-                        Text("When disabled, this service is locked and excluded from bulk operations.")
+                        Text(isRunning ? "Stop the service before disabling." : "When disabled, this service is locked and excluded from bulk operations.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -37,9 +40,8 @@ public struct InspectorOptionsSection: View {
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .labelsHidden()
+                        .disabled(isRunning)
                 }
-
-
 
                 Divider().opacity(0.4)
 
@@ -49,7 +51,7 @@ public struct InspectorOptionsSection: View {
                         Text("Delete Service")
                             .font(KumaFont.body)
                             .foregroundStyle(.red)
-                        Text("Permanently remove this service.")
+                        Text(isRunning ? "Stop the service before deleting." : "Permanently remove this service.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -62,12 +64,13 @@ public struct InspectorOptionsSection: View {
                     .buttonStyle(.bordered)
                     .tint(.red)
                     .controlSize(.small)
+                    .disabled(isRunning)
                 }
-
             }
         }
     }
 }
+
 
 
 

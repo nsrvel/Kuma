@@ -6,12 +6,12 @@ public struct ServicesDeckView: View {
     public let isStarredOnly: Bool
 
     @State var viewModel: ServicesDeckViewModel
-    @State private var pendingImportBackup: DataPortService.KumaBackup? = nil
-    @State private var pendingImportFileName: String = ""
-    @State private var alertMessage: String? = nil
+    @State var pendingImportBackup: DataPortService.KumaBackup? = nil
+    @State var pendingImportFileName: String = ""
+    @State var alertMessage: String? = nil
     @State private var isSearching: Bool = false
 
-    @Environment(WorkspaceStore.self) private var workspaceStore
+    @Environment(WorkspaceStore.self) var workspaceStore
 
     public init(workspaceID: UUID, isStarredOnly: Bool = false) {
         self.workspaceID = workspaceID
@@ -46,9 +46,7 @@ public struct ServicesDeckView: View {
         .onReceive(NotificationCenter.default.publisher(for: .kumaFocusSearch)) { _ in
             isSearching = true
         }
-
         .onReceive(NotificationCenter.default.publisher(for: .kumaExportWorkspace)) { _ in
-
             exportCurrentWorkspace()
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaImportWorkspace)) { _ in
@@ -83,6 +81,7 @@ public struct ServicesDeckView: View {
                     workspaceID: workspaceID,
                     viewModel: viewModel
                 )
+                .id(selectedID)
                 .inspectorColumnWidth(
                     min: KumaTheme.Inspector.widthMin,
                     ideal: KumaTheme.Inspector.widthIdeal,
@@ -92,7 +91,7 @@ public struct ServicesDeckView: View {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
                     title: "No Selection",
-                    description: "Select a service to view configuration details and live logs."
+                    description: "Select a service to view configuration details."
                 )
                 .inspectorColumnWidth(
                     min: KumaTheme.Inspector.widthMin,
@@ -103,104 +102,11 @@ public struct ServicesDeckView: View {
         }
     }
 
-    private func exportCurrentWorkspace() {
-        let wsName = workspaceStore.workspaces.first(where: { $0.id == workspaceID })?.name ?? "workspace"
-        let sanitizedName = wsName.lowercased().replacingOccurrences(of: " ", with: "-")
-        let panel = NSSavePanel()
-        panel.title = "Export Workspace (\(wsName))"
-        panel.nameFieldStringValue = "\(sanitizedName)-services-\(DataPortService.backupDateString).json"
-        panel.allowedContentTypes = [.json]
-
-        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
-            panel.begin { response in
-                if response == .OK, let url = panel.url {
-                    self.performWorkspaceExport(to: url)
-                }
-            }
-            return
-        }
-
-        panel.beginSheetModal(for: window) { response in
-            if response == .OK, let url = panel.url {
-                self.performWorkspaceExport(to: url)
-            }
-        }
-    }
-
-    private func performWorkspaceExport(to url: URL) {
-        Task {
-            do {
-                let dataPort = DataPortRepository()
-                let backup = try await dataPort.exportWorkspace(id: workspaceID)
-                let data = try DataPortService.encodeBackup(backup)
-                try data.write(to: url)
-            } catch {
-                alertMessage = "Failed to export workspace: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    private func promptImportFile() {
-        let panel = NSOpenPanel()
-        panel.title = "Import Services into Workspace"
-        panel.allowsMultipleSelection = false
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.json]
-
-        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
-            panel.begin { response in
-                if response == .OK, let url = panel.url {
-                    self.processWorkspaceImportUrl(url)
-                }
-            }
-            return
-        }
-
-        panel.beginSheetModal(for: window) { response in
-            if response == .OK, let url = panel.url {
-                self.processWorkspaceImportUrl(url)
-            }
-        }
-    }
-
-    private func processWorkspaceImportUrl(_ url: URL) {
-        do {
-            let data = try Data(contentsOf: url)
-            let backup = try DataPortService.decodeBackup(from: data)
-            self.pendingImportBackup = backup
-            self.pendingImportFileName = url.lastPathComponent
-        } catch {
-            alertMessage = "Failed to read backup file: \(error.localizedDescription)"
-        }
-    }
-
-    private func executeImport(backup: DataPortService.KumaBackup, selectedServiceIDs: Set<UUID>, resolvedNames: [UUID: String]) {
-        Task {
-            do {
-                let dataPort = DataPortRepository()
-                try await dataPort.importIntoWorkspace(
-                    targetWorkspaceID: workspaceID,
-                    backup: backup,
-                    selectedServiceIDs: selectedServiceIDs,
-                    resolvedNames: resolvedNames
-                )
-                viewModel.loadWorkspace(workspaceID: workspaceID)
-                workspaceStore.loadFromDatabase()
-            } catch {
-                alertMessage = "Failed to import services: \(error.localizedDescription)"
-            }
-        }
-    }
-
-
-
     // MARK: - Content Body (Empty State / Cards / Table)
 
     @ViewBuilder
     private var contentBody: some View {
         if !viewModel.hasInitialLoaded {
-            // Clean zero-flicker background while database reads (typically < 2ms)
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if viewModel.filteredSnapshots.isEmpty {
@@ -244,7 +150,6 @@ public struct ServicesDeckView: View {
                 spacing: 18
             ) {
                 ForEach(viewModel.filteredSnapshots) { snapshot in
-
                     ServiceCardView(
                         snapshot: snapshot,
                         runtime: viewModel.runtimeStates[snapshot.id] ?? ServiceRuntimeState(),

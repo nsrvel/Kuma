@@ -5,12 +5,10 @@ import SwiftUI
 public struct InspectorStatusHeader: View {
     public let snapshot: ServiceCardSnapshot
     public let runtime: ServiceRuntimeState
-    public let isEditMode: Bool
     public let hasChanges: Bool
     public let isSaving: Bool
     public let onToggle: () -> Void
     public let onToggleStar: () -> Void
-    public let onBackToOverview: () -> Void
     public let onSave: () -> Void
     public let onCancel: () -> Void
 
@@ -19,23 +17,19 @@ public struct InspectorStatusHeader: View {
     public init(
         snapshot: ServiceCardSnapshot,
         runtime: ServiceRuntimeState,
-        isEditMode: Bool = false,
         hasChanges: Bool = false,
         isSaving: Bool = false,
         onToggle: @escaping () -> Void,
         onToggleStar: @escaping () -> Void = {},
-        onBackToOverview: @escaping () -> Void = {},
         onSave: @escaping () -> Void = {},
         onCancel: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.runtime = runtime
-        self.isEditMode = isEditMode
         self.hasChanges = hasChanges
         self.isSaving = isSaving
         self.onToggle = onToggle
         self.onToggleStar = onToggleStar
-        self.onBackToOverview = onBackToOverview
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -44,72 +38,47 @@ public struct InspectorStatusHeader: View {
         VStack(spacing: 0) {
             // MARK: Identity Row
             HStack(spacing: 10) {
-                if isEditMode {
-                    Button {
-                        onBackToOverview()
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
-                            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                // Provider gradient icon with Star Overlay Badge (matches card style)
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(snapshot.isDisabled
+                                  ? LinearGradient(colors: [.secondary.opacity(0.18), .secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                  : snapshot.providerCategory.gradient)
+                            .frame(width: 32, height: 32)
+                            .shadow(color: .black.opacity(snapshot.isDisabled ? 0 : 0.14), radius: 2, y: 1)
+
+                        Image(systemName: snapshot.providerCategory.icon)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
                     }
-                    .buttonStyle(.plain)
-                    .help("Back to Overview")
-                } else {
-                    // Provider gradient icon with Star Overlay Badge (matches card style)
-                    ZStack(alignment: .topTrailing) {
+
+                    if snapshot.isStarred {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(snapshot.isDisabled
-                                      ? LinearGradient(colors: [.secondary.opacity(0.18), .secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                      : snapshot.providerCategory.gradient)
-                                .frame(width: 32, height: 32)
-                                .shadow(color: .black.opacity(snapshot.isDisabled ? 0 : 0.14), radius: 2, y: 1)
+                            Circle()
+                                .fill(Color(nsColor: .windowBackgroundColor))
+                                .frame(width: 13, height: 13)
 
-                            Image(systemName: snapshot.providerCategory.icon)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 7.5, weight: .bold))
+                                .foregroundStyle(Color.yellow)
                         }
-
-                        if snapshot.isStarred {
-                            ZStack {
-                                Circle()
-                                    .fill(Color(nsColor: .windowBackgroundColor))
-                                    .frame(width: 13, height: 13)
-
-                                Image(systemName: "star.fill")
-                                    .font(.system(size: 7.5, weight: .bold))
-                                    .foregroundStyle(Color.yellow)
-                            }
-                            .offset(x: 3.5, y: -3.5)
-                            .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
-                        }
+                        .offset(x: 3.5, y: -3.5)
+                        .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(isEditMode ? "Edit Configuration" : snapshot.name)
+                    Text(snapshot.name)
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
                         .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
 
-                    if isEditMode {
-                        Text(snapshot.name)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        Text(snapshot.providerCategory.sidebarLabel)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    Text(snapshot.providerCategory.sidebarLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-
-
-
-
 
                 Spacer(minLength: 8)
 
@@ -139,9 +108,6 @@ public struct InspectorStatusHeader: View {
                     }
                     .padding(.trailing, 8)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                } else if isEditMode {
-                    // Clean empty trailing side when no changes in edit mode
-                    EmptyView()
                 } else if snapshot.isDisabled {
                     Image(systemName: "lock.circle.fill")
                         .font(.system(size: 18))
@@ -183,11 +149,11 @@ public struct InspectorStatusHeader: View {
                 }
             }
             .animation(.spring(response: 0.28, dampingFraction: 0.85), value: hasChanges)
-
-
-            .padding(.leading, KumaSpacing.lg)
-            .padding(.trailing, KumaSpacing.lg)
-            .padding(.vertical, KumaSpacing.md)
         }
+        .padding(.leading, KumaSpacing.lg)
+        .padding(.trailing, KumaSpacing.lg)
+        .padding(.vertical, KumaSpacing.md)
     }
 }
+
+

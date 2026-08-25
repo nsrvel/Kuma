@@ -41,11 +41,31 @@ public final class KubeConfigViewModel {
 
     public init(repo: any KubeConfigRepositoryProtocol = KubeConfigRepository()) {
         self.repo = repo
-        self.loadConfigs()
+
+        // Synchronously resolve default kubeconfig (~/.kube/config) to guarantee immediate display (0ms frame 1)
+        let customPath = UserDefaults.standard.string(forKey: "kuma.custom_kubeconfig_path")
+        if let defaultPath = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) {
+            let content = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
+            let defaultConfig = KubeConfig(
+                id: KubeConfig.defaultID,
+                name: "Default",
+                configContent: content,
+                isDefault: true
+            )
+            self.availableKubeConfigs = [defaultConfig]
+            self.selectedKubeConfigID = KubeConfig.defaultID
+            self.availableContexts = Self.parseContexts(fromYaml: content)
+            self.activeContextName = Self.parseCurrentContext(fromYaml: content)
+        }
+
+        Task {
+            await self.loadConfigs()
+        }
     }
 
-    public func loadConfigs() {
-        Task.detached(priority: .utility) { [repo] in
+    public func loadConfigs() async {
+        let repo = self.repo
+        let finalizedList = await Task.detached(priority: .utility) { () -> [KubeConfig] in
             var list: [KubeConfig] = []
 
             // 1. Resolve default system Kubeconfig (~/.kube/config or custom setting)
@@ -58,34 +78,37 @@ public final class KubeConfigViewModel {
                     configContent: content,
                     isDefault: true
                 )
-
                 list.append(defaultConfig)
             }
 
             // 2. Fetch custom registered configs from DB and decrypt contents
-            if let customConfigs = try? await repo.fetchAll() {
+            do {
+                let customConfigs = try await repo.fetchAll()
                 var decryptedList: [KubeConfig] = []
                 for config in customConfigs {
                     var decrypted = config
-                    if let plain = try? await CryptoVault.shared.decrypt(cipherText: config.configContent) {
+                    do {
+                        let plain = try await CryptoVault.shared.decrypt(cipherText: config.configContent)
                         decrypted.configContent = plain
+                    } catch {
+                        Self.logger.error("Failed to decrypt config '\(config.name)': \(error.localizedDescription)")
                     }
                     decryptedList.append(decrypted)
                 }
                 list.append(contentsOf: decryptedList)
+            } catch {
+                Self.logger.error("Failed to fetch KubeConfigs from database: \(error.localizedDescription)")
             }
 
-            let finalizedList = list
-            await MainActor.run {
-                self.availableKubeConfigs = finalizedList
-                if self.selectedKubeConfigID == nil, let first = finalizedList.first {
-                    self.selectedKubeConfigID = first.id
-                }
-                self.refreshContextsForCurrentConfig()
-            }
+            return list
+        }.value
+
+        self.availableKubeConfigs = finalizedList
+        if self.selectedKubeConfigID == nil, let first = finalizedList.first {
+            self.selectedKubeConfigID = first.id
         }
+        self.refreshContextsForCurrentConfig()
     }
-
 
     /// Extract context names from the currently selected kubeconfig YAML content
     public func refreshContextsForCurrentConfig() {
@@ -100,12 +123,12 @@ public final class KubeConfigViewModel {
     }
 
     /// Parses the `current-context: ...` value from YAML
-    public static func parseCurrentContext(fromYaml yaml: String) -> String? {
+    public nonisolated static func parseCurrentContext(fromYaml yaml: String) -> String? {
         let lines = yaml.components(separatedBy: .newlines)
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.starts(with: "current-context:") {
-                let parts = trimmed.components(separatedBy: "current-context:")
+                let parts = trimmed.components(separatedBy: ":")
                 if parts.count >= 2 {
                     let ctx = parts[1].trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "'", with: "")
                     return ctx.isEmpty ? nil : ctx
@@ -116,7 +139,7 @@ public final class KubeConfigViewModel {
     }
 
     /// High performance line-based parser to extract `- name: ...` under `contexts:` in kubeconfig
-    public static func parseContexts(fromYaml yaml: String) -> [String] {
+    public nonisolated static func parseContexts(fromYaml yaml: String) -> [String] {
         var contexts: [String] = []
         var inContextsBlock = false
 
@@ -155,6 +178,7 @@ public final class KubeConfigViewModel {
             // Encrypt content using AES-256-GCM MasterKey before writing to database
             let encryptedContent = try await CryptoVault.shared.encrypt(plainText: plainContent)
 
+            let savedID: UUID
             if let editID = editingKubeConfigID {
                 let updated = KubeConfig(
                     id: editID,
@@ -164,6 +188,7 @@ public final class KubeConfigViewModel {
                     updatedAt: Date()
                 )
                 try await repo.update(updated)
+                savedID = editID
             } else {
                 let newID = UUID()
                 let newConfig = KubeConfig(
@@ -174,9 +199,13 @@ public final class KubeConfigViewModel {
                     updatedAt: Date()
                 )
                 try await repo.insert(newConfig)
-                selectedKubeConfigID = newID
+                savedID = newID
             }
-            loadConfigs()
+
+            self.selectedKubeConfigID = savedID
+            await loadConfigs()
+            triggerBackgroundValidation(forceRefresh: true)
+
             showInlineNewConfigForm = false
             newKubeConfigName = ""
             newKubeConfigContent = ""
@@ -188,9 +217,13 @@ public final class KubeConfigViewModel {
 
     public func deleteConfig() async {
         guard let id = selectedKubeConfigID, id != KubeConfig.defaultID else { return }
-        try? await repo.delete(id: id)
-        selectedKubeConfigID = availableKubeConfigs.first?.id
-        loadConfigs()
+        do {
+            try await repo.delete(id: id)
+            selectedKubeConfigID = availableKubeConfigs.first?.id
+            await loadConfigs()
+        } catch {
+            Self.logger.error("Failed to delete KubeConfig \(id): \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Non-blocking Background Validation & Caching
@@ -220,15 +253,13 @@ public final class KubeConfigViewModel {
 
             guard !Task.isCancelled else { return }
 
-            await MainActor.run {
-                self.isLoadingNamespaces = false
-                if result.isReachable {
-                    self.connectionSuccess = true
-                    self.connectionError = nil
-                } else {
-                    self.connectionSuccess = false
-                    self.connectionError = result.errorMessage ?? "Unable to reach cluster"
-                }
+            self.isLoadingNamespaces = false
+            if result.isReachable {
+                self.connectionSuccess = true
+                self.connectionError = nil
+            } else {
+                self.connectionSuccess = false
+                self.connectionError = result.errorMessage ?? "Unable to reach cluster"
             }
         }
     }

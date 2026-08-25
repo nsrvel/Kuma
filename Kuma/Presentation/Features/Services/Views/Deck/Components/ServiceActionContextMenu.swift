@@ -23,7 +23,7 @@ public struct ServiceActionContextMenu: View {
 
     public var body: some View {
         Group {
-            // 1. Start / Stop
+            // 1. Start / Stop Service
             if snapshot.isDisabled {
                 Button {} label: {
                     Label("Start", systemImage: "play.fill")
@@ -43,33 +43,16 @@ public struct ServiceActionContextMenu: View {
                 }
             }
 
-            // 2. Restart
-            Button {
-                // UI Action: Restart
-            } label: {
-                Label("Restart", systemImage: "arrow.clockwise")
-            }
-            .disabled(snapshot.isDisabled || runtime.status != .running)
-
             Divider()
 
-            // 3. Open Details
+            // 2. Open Inspector Details
             Button {
                 onSelect()
             } label: {
                 Label("Open Details", systemImage: "sidebar.right")
             }
 
-            // 4. Switch Provider (Only shown if available)
-            Menu {
-                Button {} label: {
-                    Label(snapshot.providerCategory.sidebarLabel, systemImage: "checkmark")
-                }
-            } label: {
-                Label("Switch Provider", systemImage: "arrow.triangle.swap")
-            }
-
-            // 5. Star / Unstar
+            // 3. Star / Unstar
             Button {
                 onToggleStar()
             } label: {
@@ -78,46 +61,6 @@ public struct ServiceActionContextMenu: View {
                 } else {
                     Label("Star", systemImage: "star")
                 }
-            }
-
-            Divider()
-
-            // 6. Duplicate
-            Button {
-                // UI Action: Duplicate service
-            } label: {
-                Label("Duplicate", systemImage: "plus.square.on.square")
-            }
-
-            // 7. Copy Config
-            Button {
-                // UI Action: Copy configuration
-            } label: {
-                Label("Copy Config", systemImage: "doc.on.doc")
-            }
-
-            Divider()
-
-            // 8. Disable / Enable
-            if snapshot.isDisabled {
-                Button {
-                    // UI Action: Enable
-                } label: {
-                    Label("Enable", systemImage: "lock.open.fill")
-                }
-            } else {
-                Button {
-                    // UI Action: Disable
-                } label: {
-                    Label("Disable", systemImage: "lock.slash.fill")
-                }
-            }
-
-            // 9. Delete
-            Button(role: .destructive) {
-                // UI Action: Delete
-            } label: {
-                Label("Delete", systemImage: "trash")
             }
         }
     }

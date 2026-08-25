@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - KubeConfigConnectionView (100% V3 Match)
-
 public struct KubeConfigConnectionView: View {
     @Bindable var viewModel: KubeConfigViewModel
     @FocusState private var isInlineYamlFocused: Bool
@@ -105,7 +103,6 @@ public struct KubeConfigConnectionView: View {
                                                     .font(.system(size: 10, weight: .medium))
                                                     .foregroundStyle(.secondary)
                                             }
-
                                         } else if viewModel.connectionError != nil {
                                             Text("Unreachable")
                                                 .font(.system(size: 10, weight: .medium))
@@ -122,7 +119,6 @@ public struct KubeConfigConnectionView: View {
                             .animation(.easeInOut(duration: 0.2), value: isSelected)
                             .animation(.easeInOut(duration: 0.2), value: viewModel.isLoadingNamespaces)
                             .animation(.easeInOut(duration: 0.2), value: viewModel.connectionError != nil)
-
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(
@@ -137,7 +133,6 @@ public struct KubeConfigConnectionView: View {
                                     )
                             }
                             .contentShape(Rectangle())
-
                             .contextMenu {
                                 if !config.isDefault {
                                     Button {
@@ -177,7 +172,6 @@ public struct KubeConfigConnectionView: View {
                                 onConfigChanged()
                             }
                         }
-
                     }
                     .frame(maxWidth: .infinity)
                     .background(Color.primary.opacity(0.01))

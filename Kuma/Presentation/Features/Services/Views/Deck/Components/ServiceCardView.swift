@@ -43,7 +43,7 @@ public struct ServiceCardView: View {
 
                         Image(systemName: snapshot.providerCategory.icon)
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(snapshot.isDisabled ? Color.secondary : .white)
+                            .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
                     }
 
                     if snapshot.isStarred {
@@ -113,7 +113,6 @@ public struct ServiceCardView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-
         .overlay {
             RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .strokeBorder(
@@ -142,14 +141,5 @@ public struct ServiceCardView: View {
             return snapshot.subtitle
         }
         return snapshot.providerCategory.sidebarLabel
-    }
-
-    private var isMonospacedTarget: Bool {
-        switch snapshot.providerCategory {
-        case .docker, .podman, .kubernetes, .shell, .ssh:
-            return !snapshot.subtitle.isEmpty
-        default:
-            return false
-        }
     }
 }

@@ -7,11 +7,9 @@ public struct ServiceProvidersSectionView: View {
     public let isEditing: Bool
     public let isRunning: Bool
     public let onSelectProvider: (UUID) -> Void
-    public let onEditProviderDetails: (Provider) -> Void
     public let onSaveProvider: (Provider) -> Void
     public let onDeleteProvider: (Provider) -> Void
 
-    @State private var hoveredProviderID: UUID? = nil
     @State private var isAddHovered: Bool = false
     @State private var showInlineForm: Bool = false
     @State private var editingProviderID: UUID? = nil
@@ -29,7 +27,6 @@ public struct ServiceProvidersSectionView: View {
         isEditing: Bool = true,
         isRunning: Bool = false,
         onSelectProvider: @escaping (UUID) -> Void = { _ in },
-        onEditProviderDetails: @escaping (Provider) -> Void = { _ in },
         onSaveProvider: @escaping (Provider) -> Void = { _ in },
         onDeleteProvider: @escaping (Provider) -> Void = { _ in }
     ) {
@@ -39,7 +36,6 @@ public struct ServiceProvidersSectionView: View {
         self.isEditing = isEditing
         self.isRunning = isRunning
         self.onSelectProvider = onSelectProvider
-        self.onEditProviderDetails = onEditProviderDetails
         self.onSaveProvider = onSaveProvider
         self.onDeleteProvider = onDeleteProvider
     }
@@ -51,7 +47,19 @@ public struct ServiceProvidersSectionView: View {
             subtitle: "Select runner configuration"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                if providers.isEmpty && !showInlineForm {
+                if showInlineForm {
+                    ServiceProvidersInlineFormView(
+                        isEditing: editingProviderID != nil,
+                        formType: $formType,
+                        formLabel: $formLabel,
+                        onSave: { saveInlineForm() },
+                        onCancel: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                showInlineForm = false
+                            }
+                        }
+                    )
+                } else if providers.isEmpty {
                     VStack(alignment: .center, spacing: 8) {
                         Text("No providers configured yet.")
                             .font(.caption)
@@ -66,11 +74,10 @@ public struct ServiceProvidersSectionView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 12)
-                } else if !showInlineForm {
+                } else {
                     VStack(spacing: 6) {
                         ForEach(providers) { provider in
                             let isSelected = (activeProviderID == provider.id)
-                            let isHovered = (hoveredProviderID == provider.id)
 
                             HStack(spacing: 10) {
                                 // Category Icon
@@ -105,18 +112,11 @@ public struct ServiceProvidersSectionView: View {
 
                                 Spacer()
 
-                                // Native Navigation Chevron Button
-                                Button {
-                                    onEditProviderDetails(provider)
-                                } label: {
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundStyle(Color.secondary.opacity(0.45))
-                                        .frame(width: 20, height: 20)
-                                        .contentShape(Rectangle())
+                                if isSelected {
+                                    Circle()
+                                        .fill(Color.accentColor)
+                                        .frame(width: 6, height: 6)
                                 }
-                                .buttonStyle(.plain)
-                                .help("Edit \(provider.displayName) Configuration")
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -133,21 +133,22 @@ public struct ServiceProvidersSectionView: View {
                             }
                             .contentShape(Rectangle())
                             .contextMenu {
-                                Button {
-                                    onEditProviderDetails(provider)
-                                } label: {
-                                    Label("Edit", systemImage: "pencil")
-                                }
-
-
-                                if providers.count > 1 {
-                                    Divider()
-
-                                    Button(role: .destructive) {
-                                        providerToDelete = provider
-                                        showDeleteConfirmation = true
+                                if !isRunning {
+                                    Button {
+                                        openEditForm(provider)
                                     } label: {
-                                        Label("Delete", systemImage: "trash")
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+
+                                    if providers.count > 1 {
+                                        Divider()
+
+                                        Button(role: .destructive) {
+                                            providerToDelete = provider
+                                            showDeleteConfirmation = true
+                                        } label: {
+                                            Label("Delete", systemImage: "trash")
+                                        }
                                     }
                                 }
                             }
@@ -159,8 +160,6 @@ public struct ServiceProvidersSectionView: View {
                                     onSelectProvider(provider.id)
                                 }
                             }
-
-
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -170,84 +169,26 @@ public struct ServiceProvidersSectionView: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                     )
+                    .disabled(isRunning)
 
-                    HStack {
-                        Button {
-                            openAddForm()
-                        } label: {
-                            Text("Add new provider")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(isAddHovered ? Color.primary : Color.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { isAddHovered = $0 }
-                        .help("Add new provider")
-
-                        Spacer()
-                    }
-                    .padding(.top, 4)
-                    .padding(.horizontal, 4)
-                } else {
-                    // Inline Add / Edit Provider Form
-                    VStack(alignment: .leading, spacing: 12) {
+                    if !isRunning {
                         HStack {
-                            Label(
-                                editingProviderID == nil ? "New Provider" : "Edit Provider",
-                                systemImage: "square.stack.3d.down.right.fill"
-                            )
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-
-                            Spacer()
-
                             Button {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    showInlineForm = false
-                                }
+                                openAddForm()
                             } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                                Text("Add new provider")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(isAddHovered ? Color.primary : Color.secondary)
                             }
                             .buttonStyle(.plain)
-                        }
-                        .padding(.bottom, 2)
+                            .onHover { isAddHovered = $0 }
+                            .help("Add new provider")
 
-                        KumaRowPickerField(
-                            label: "Provider Type",
-                            description: "Select runtime engine.",
-                            options: ProviderCategory.allCases.map(\.rawValue),
-                            selection: Binding(
-                                get: { formType.rawValue },
-                                set: { if let cat = ProviderCategory(rawValue: $0) { formType = cat } }
-                            ),
-                            titleResolver: { (ProviderCategory(rawValue: $0) ?? .docker).sidebarLabel }
-                        )
-
-                        Divider().opacity(0.4)
-
-                        KumaTextField(
-                            label: "Custom Label (Optional)",
-                            value: $formLabel,
-                            placeholder: "Staging"
-                        )
-
-                        HStack {
                             Spacer()
-                            Button("Save") {
-                                saveInlineForm()
-                            }
-                            .buttonStyle(.borderedProminent)
                         }
-
-
+                        .padding(.top, 4)
+                        .padding(.horizontal, 4)
                     }
-                    .padding(12)
-                    .background(Color.primary.opacity(0.02))
-                    .cornerRadius(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-                    )
                 }
             }
             .confirmationDialog(
@@ -277,7 +218,7 @@ public struct ServiceProvidersSectionView: View {
     }
 
     private func openEditForm(_ provider: Provider) {
-        formLabel = provider.displayName
+        formLabel = provider.label ?? ""
         formType = provider.type
         editingProviderID = provider.id
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -310,7 +251,3 @@ public struct ServiceProvidersSectionView: View {
         }
     }
 }
-
-
-
-

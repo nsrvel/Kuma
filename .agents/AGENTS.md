@@ -29,12 +29,14 @@ Kuma/
     │   └── FormKit/      → KumaTextField, KumaSecureField, KumaFilePickerField, etc.
     ├── Theme/            → Colors, fonts, radius, spacing design system tokens
     └── Features/         → Topic-specific feature modules
-        └── [FeatureName]/
-            ├── Models/          → (Optional) Feature-specific presentation models
-            ├── ViewModels/      → (Optional) Feature @Observable view models
-            └── Views/           → Main screens, sheets, or popovers
-                ├── Components/  → Subviews & micro widgets local to this feature
-                └── [Sections|Forms|Steps|Inspector]/ → Contextual sub-containers
+        └── [FeatureName]/ (e.g. Services)
+            ├── Models/          → Presentation DTOs & form draft structs (e.g. ServiceInspectorDrafts)
+            ├── ViewModels/      → Domain @Observable @MainActor ViewModels
+            └── Views/           → Sub-containers & screens grouped by context:
+                ├── Deck/        → Main grid/list view canvas, toolbar, and deck components
+                ├── Inspector/   → Detail sidebar & single-scroll inspector sections
+                ├── CreateService/ → Multi-step creation sheet modals
+                └── Forms/       → Modular provider configuration sub-forms ([Provider]/)
 ```
 
 ### Layer Rules:
@@ -42,7 +44,8 @@ Kuma/
 - **No Flat File Dumping**: Every layer and subfolder MUST use topic-specific subdirectories.
 - **Components Containment**:
   - Reusable across multiple features → Place in `Presentation/Components/` (or `Presentation/Components/FormKit/`).
-  - Specific to one feature → Place in `Presentation/Features/[FeatureName]/Views/Components/`.
+  - Feature-level shared widgets → Place in `Presentation/Features/[FeatureName]/Views/[SubFolder]/Components/`.
+  - Feature-level reusable forms → Place in `Presentation/Features/[FeatureName]/Views/Forms/[SubCategory]/`.
 
 ---
 

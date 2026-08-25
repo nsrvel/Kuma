@@ -1,16 +1,13 @@
 import SwiftUI
 import Observation
+import os
 
 @MainActor
 @Observable
 public final class ServicesDeckViewModel {
-    public var debouncedSearchText: String = ""
-    public var searchText: String = "" {
-        didSet {
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            debouncedSearchText = query
-        }
-    }
+    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ServicesDeckViewModel")
+
+    public var searchText: String = ""
     public var selectedStatuses: Set<ServiceStatusFilterOption> = []
     public var selectedProviders: Set<ProviderCategory> = []
     public var sortBy: ServiceSortOption = .name
@@ -27,6 +24,7 @@ public final class ServicesDeckViewModel {
     public var runtimeStates: [UUID: ServiceRuntimeState] = [:]
 
     private let serviceRepository: any ServiceRepositoryProtocol
+    private var loadTask: Task<Void, Never>? = nil
 
     public init(
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
@@ -39,7 +37,7 @@ public final class ServicesDeckViewModel {
     // MARK: - Filtered & Sorted Projections (Ultra-Fast Zero Allocation)
 
     public var filteredSnapshots: [ServiceCardSnapshot] {
-        let query = debouncedSearchText
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let hasSearch = !query.isEmpty
         let hasStatusFilter = !selectedStatuses.isEmpty
         let hasProviderFilter = !selectedProviders.isEmpty
@@ -100,8 +98,6 @@ public final class ServicesDeckViewModel {
         return result
     }
 
-    private var loadTask: Task<Void, Never>? = nil
-
     // MARK: - Actions
 
     public func loadWorkspace(workspaceID: UUID) {
@@ -126,6 +122,7 @@ public final class ServicesDeckViewModel {
             }
         } catch {
             guard !Task.isCancelled else { return }
+            Self.logger.error("Failed to load snapshots for workspace \(workspaceID): \(error.localizedDescription)")
             self.snapshots = []
             self.hasInitialLoaded = true
         }
@@ -163,6 +160,7 @@ public final class ServicesDeckViewModel {
             do {
                 _ = try await serviceRepository.toggleStarred(serviceID: id)
             } catch {
+                Self.logger.error("Failed to persist toggleStarred for service \(id): \(error.localizedDescription)")
                 // Rollback on failure
                 await loadWorkspaceAsync(workspaceID: workspaceID)
             }
