@@ -136,19 +136,21 @@ public struct CreateServiceFillDetailsStepView: View {
             }
 
         case .docker:
-            KumaFormSection(icon: "shippingbox.fill", title: "Docker Compose") {
-                DockerComposeSettingsView(yamlConfig: $dockerDraft.yamlConfig)
-            }
-            KumaFormSection(icon: "terminal.fill", title: "Initial Script") {
-                InitialScriptSettingsView(initialScript: $dockerDraft.initialScript)
+            KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
+                VStack(alignment: .leading, spacing: 14) {
+                    DockerComposeSettingsView(yamlConfig: $dockerDraft.yamlConfig)
+                    KumaDivider(opacity: 0.06, verticalPadding: 2)
+                    InitialScriptSettingsView(initialScript: $dockerDraft.initialScript)
+                }
             }
 
         case .podman:
-            KumaFormSection(icon: "shippingbox.fill", title: "Podman Compose") {
-                PodmanComposeSettingsView(yamlConfig: $podmanDraft.yamlConfig)
-            }
-            KumaFormSection(icon: "terminal.fill", title: "Initial Script") {
-                InitialScriptSettingsView(initialScript: $podmanDraft.initialScript)
+            KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
+                VStack(alignment: .leading, spacing: 14) {
+                    PodmanComposeSettingsView(yamlConfig: $podmanDraft.yamlConfig)
+                    KumaDivider(opacity: 0.06, verticalPadding: 2)
+                    InitialScriptSettingsView(initialScript: $podmanDraft.initialScript)
+                }
             }
 
         case .shell:

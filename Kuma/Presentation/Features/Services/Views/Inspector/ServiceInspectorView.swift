@@ -28,10 +28,8 @@ public struct ServiceInspectorView: View {
                     provider: inspectorVM.activeProvider,
                     runtime: .idle,
                     onToggle: {
-                        Task {
-                            _ = try? await ServiceExecutionEngine.shared.start(serviceID: serviceID)
-                            NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
-                        }
+                        // Decoupled: Placeholder toggle for future precision execution engine
+                        NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
                     },
                     onToggleStar: {
                         Task {

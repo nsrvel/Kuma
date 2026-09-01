@@ -195,10 +195,15 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 .filter(Column("serviceID") == serviceID.uuidString)
                 .deleteAll(db)
 
-            // Insert new mappings using typed GRDB API
+            // Deduplicate IDs and insert/save new mappings
+            var seenIDs = Set<UUID>()
             for var mapping in portMappings {
                 mapping.serviceID = serviceID
-                try mapping.insert(db)
+                if seenIDs.contains(mapping.id) {
+                    mapping.id = UUID()
+                }
+                seenIDs.insert(mapping.id)
+                try mapping.save(db)
             }
         }
     }

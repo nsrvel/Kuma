@@ -10,13 +10,10 @@ public struct ServiceNonPortBadge: View {
     }
 
     public var body: some View {
-        let (icon, label) = metadata
-
-        HStack(spacing: 3.5) {
-            Image(systemName: icon)
-                .font(.system(size: 8.5))
+        HStack(spacing: 4.5) {
+            ProviderBrandIcon(category: category, size: 9.5)
                 .foregroundStyle(.tertiary)
-            Text(label)
+            Text(category.sidebarLabel)
                 .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

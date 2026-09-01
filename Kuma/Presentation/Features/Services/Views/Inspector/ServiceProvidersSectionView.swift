@@ -75,8 +75,7 @@ public struct ServiceProvidersSectionView: View {
                                         .fill(provider.type.gradient)
                                         .frame(width: 24, height: 24)
 
-                                    Image(systemName: provider.type.icon)
-                                        .font(.system(size: 11.5, weight: .medium))
+                                    ProviderBrandIcon(category: provider.type, tunnelType: provider.tunnelType, size: 12.5)
                                         .foregroundStyle(.white)
                                 }
 
@@ -86,7 +85,7 @@ public struct ServiceProvidersSectionView: View {
                                         .foregroundStyle(Color.primary)
                                         .lineLimit(1)
 
-                                    Text(isSelected ? "Active Provider" : provider.resolvedTarget)
+                                    Text(provider.resolvedTarget)
                                         .font(.system(size: 10))
                                         .foregroundStyle(Color.secondary)
                                         .lineLimit(1)
@@ -95,11 +94,13 @@ public struct ServiceProvidersSectionView: View {
                                 Spacer()
 
                                 if isSelected {
-                                    Circle()
-                                        .fill(Color.accentColor)
-                                        .frame(width: 6, height: 6)
+                                    Text("Active")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundStyle(Color.green)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
                                 }
                             }
+                            .animation(.easeInOut(duration: 0.2), value: isSelected)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(

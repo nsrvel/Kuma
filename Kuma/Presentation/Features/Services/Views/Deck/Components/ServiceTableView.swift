@@ -48,8 +48,7 @@ public struct ServiceTableView: View {
                             .frame(width: 24, height: 24)
                             .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.12), radius: 1, y: 0.5)
 
-                        Image(systemName: snapshot.providerCategory.icon)
-                            .font(.system(size: 11, weight: .medium))
+                        ProviderBrandIcon(category: snapshot.providerCategory, size: 12.5)
                             .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
                     }
 

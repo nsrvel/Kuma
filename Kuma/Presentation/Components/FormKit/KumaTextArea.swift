@@ -140,9 +140,14 @@ private struct KumaNativeTextView: NSViewRepresentable {
         textView.drawsBackground = false
         textView.backgroundColor = .clear
         textView.delegate = context.coordinator
+        textView.allowsUndo = true
 
         if isMonospaced {
             textView.font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
+            textView.isAutomaticQuoteSubstitutionEnabled = false
+            textView.isAutomaticDashSubstitutionEnabled = false
+            textView.isAutomaticTextReplacementEnabled = false
+            textView.isAutomaticSpellingCorrectionEnabled = false
         } else {
             textView.font = NSFont.systemFont(ofSize: 13, weight: .regular)
         }
@@ -156,7 +161,9 @@ private struct KumaNativeTextView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
         if textView.string != text {
+            let selectedRanges = textView.selectedRanges
             textView.string = text
+            textView.selectedRanges = selectedRanges
         }
     }
 

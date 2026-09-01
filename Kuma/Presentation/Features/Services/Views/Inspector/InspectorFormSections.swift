@@ -70,42 +70,50 @@ public struct InspectorFormSections: View {
                 }
 
             case .docker:
-                KumaFormSection(icon: "shippingbox.fill", title: "Docker Compose") {
-                    DockerComposeSettingsView(
-                        yamlConfig: Binding(
-                            get: { provider.yamlConfig ?? "" },
-                            set: { provider.yamlConfig = $0; onFieldChanged() }
+                KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        DockerComposeSettingsView(
+                            yamlConfig: Binding(
+                                get: { provider.yamlConfig ?? "" },
+                                set: { provider.yamlConfig = $0; onFieldChanged() }
+                            ),
+                            onSave: onFieldChanged
                         )
-                    )
-                    .disabled(isLocked)
-                }
-                KumaFormSection(icon: "terminal.fill", title: "Initial Script") {
-                    InitialScriptSettingsView(
-                        initialScript: Binding(
-                            get: { provider.initialScript ?? "" },
-                            set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
+
+                        KumaDivider(opacity: 0.06, verticalPadding: 2)
+
+                        InitialScriptSettingsView(
+                            initialScript: Binding(
+                                get: { provider.initialScript ?? "" },
+                                set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
+                            ),
+                            onSave: onFieldChanged
                         )
-                    )
+                    }
                     .disabled(isLocked)
                 }
 
             case .podman:
-                KumaFormSection(icon: "shippingbox.fill", title: "Podman Compose") {
-                    PodmanComposeSettingsView(
-                        yamlConfig: Binding(
-                            get: { provider.yamlConfig ?? "" },
-                            set: { provider.yamlConfig = $0; onFieldChanged() }
+                KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        PodmanComposeSettingsView(
+                            yamlConfig: Binding(
+                                get: { provider.yamlConfig ?? "" },
+                                set: { provider.yamlConfig = $0; onFieldChanged() }
+                            ),
+                            onSave: onFieldChanged
                         )
-                    )
-                    .disabled(isLocked)
-                }
-                KumaFormSection(icon: "terminal.fill", title: "Initial Script") {
-                    InitialScriptSettingsView(
-                        initialScript: Binding(
-                            get: { provider.initialScript ?? "" },
-                            set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
+
+                        KumaDivider(opacity: 0.06, verticalPadding: 2)
+
+                        InitialScriptSettingsView(
+                            initialScript: Binding(
+                                get: { provider.initialScript ?? "" },
+                                set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
+                            ),
+                            onSave: onFieldChanged
                         )
-                    )
+                    }
                     .disabled(isLocked)
                 }
 

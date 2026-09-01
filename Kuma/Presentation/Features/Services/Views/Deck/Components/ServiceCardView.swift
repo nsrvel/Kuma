@@ -47,8 +47,7 @@ public struct ServiceCardView: View, Equatable {
                             .frame(width: 34, height: 34)
                             .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.16), radius: 2, y: 1)
 
-                        Image(systemName: snapshot.providerCategory.icon)
-                            .font(.system(size: 15, weight: .medium))
+                        ProviderBrandIcon(category: snapshot.providerCategory, size: 16)
                             .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
                     }
 

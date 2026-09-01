@@ -31,15 +31,15 @@ public struct DependencyStatusRowView: View {
     public var body: some View {
         KumaCard(padding: KumaSpacing.md) {
             HStack(spacing: KumaSpacing.md) {
-                // Icon Container (Consistent styling)
-                Image(systemName: dependency.iconName)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle()
-                            .fill(Color.primary.opacity(0.1))
-                    )
+                // Icon Container (Consistent brand styling)
+                ZStack {
+                    Circle()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 28, height: 28)
+
+                    dependencyIconView
+                        .foregroundStyle(.primary)
+                }
 
                 // Info Column
                 VStack(alignment: .leading, spacing: 2) {
@@ -103,7 +103,30 @@ public struct DependencyStatusRowView: View {
                 onBrowse?(selectedURL.path(percentEncoded: false))
             }
         }
+    }
 
+    @ViewBuilder
+    private var dependencyIconView: some View {
+        switch dependency.id {
+        case "docker":
+            ProviderBrandIcon(category: .docker, size: 15)
+        case "kubectl":
+            ProviderBrandIcon(category: .kubernetes, size: 15)
+        case "kubeconfig":
+            Image(systemName: "doc.text.fill")
+                .font(.system(size: 13, weight: .medium))
+        case "podman":
+            ProviderBrandIcon(category: .podman, size: 15)
+        case "ngrok":
+            NgrokBrandVector()
+                .frame(width: 15, height: 15)
+        case "cloudflared":
+            Image(systemName: "cloud.bolt.fill")
+                .font(.system(size: 13, weight: .medium))
+        default:
+            Image(systemName: dependency.iconName)
+                .font(.system(size: 13, weight: .medium))
+        }
     }
 }
 

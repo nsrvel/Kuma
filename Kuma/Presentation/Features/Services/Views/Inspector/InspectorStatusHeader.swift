@@ -41,8 +41,7 @@ public struct InspectorStatusHeader: View {
                             .frame(width: 32, height: 32)
                             .shadow(color: .black.opacity(service.isDisabled ? 0 : 0.14), radius: 2, y: 1)
 
-                        Image(systemName: category.icon)
-                            .font(.system(size: 14, weight: .medium))
+                        ProviderBrandIcon(category: category, tunnelType: provider?.tunnelType, size: 16)
                             .foregroundStyle(service.isDisabled ? Color.secondary : Color.white)
                     }
 

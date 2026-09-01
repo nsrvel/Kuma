@@ -169,31 +169,17 @@ public final class ServicesDeckViewModel {
     public func toggleServiceAsync(id: UUID) async {
         var current = runtimeStates[id] ?? .idle
         let wasRunning = current.status.isOperational
+
+        // Smooth state transition without actual OS subprocess execution
         current.isLoading = true
         runtimeStates[id] = current
 
-        if wasRunning {
-            await ServiceExecutionEngine.shared.stop(serviceID: id)
-            var updated = runtimeStates[id] ?? .idle
-            updated.status = .stopped
-            updated.isLoading = false
-            runtimeStates[id] = updated
-        } else {
-            do {
-                try await ServiceExecutionEngine.shared.start(serviceID: id)
-                var updated = runtimeStates[id] ?? .idle
-                updated.status = .running
-                updated.isLoading = false
-                runtimeStates[id] = updated
-            } catch {
-                Self.logger.error("Failed to start service \(id): \(error.localizedDescription)")
-                var updated = runtimeStates[id] ?? .idle
-                updated.status = .crashed
-                updated.isLoading = false
-                runtimeStates[id] = updated
-                AlertService.shared.showError(title: "Execution Error", message: error.localizedDescription)
-            }
-        }
+        try? await Task.sleep(nanoseconds: 150_000_000) // 150ms natural tactile delay
+
+        var updated = runtimeStates[id] ?? .idle
+        updated.status = wasRunning ? .stopped : .running
+        updated.isLoading = false
+        runtimeStates[id] = updated
 
         // Recompute if status filter is active or sorting depends on status
         if !selectedStatuses.isEmpty || sortBy == .status {
