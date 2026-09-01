@@ -5,6 +5,7 @@ public struct CreateServiceSheet: View {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "CreateServiceSheet")
 
     public let workspaceID: UUID
+    private let serviceRepository: any ServiceRepositoryProtocol
     public var onServiceCreated: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
@@ -36,8 +37,13 @@ public struct CreateServiceSheet: View {
     @State private var temporaryPorts: [KumaPortMappingItem] = [KumaPortMappingItem()]
     @State private var isSaving: Bool = false
 
-    public init(workspaceID: UUID, onServiceCreated: (() -> Void)? = nil) {
+    public init(
+        workspaceID: UUID,
+        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
+        onServiceCreated: (() -> Void)? = nil
+    ) {
         self.workspaceID = workspaceID
+        self.serviceRepository = serviceRepository
         self.onServiceCreated = onServiceCreated
     }
 
@@ -115,7 +121,11 @@ public struct CreateServiceSheet: View {
                     temporaryPorts: $temporaryPorts,
                     isFormValid: isFormValid,
                     isSaving: isSaving,
-                    onBack: { withAnimation { currentStep = .selectProvider } },
+                    onBack: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            currentStep = .selectProvider
+                        }
+                    },
                     onCancel: { dismiss() },
                     onCreate: { createService() }
                 )
@@ -135,58 +145,50 @@ public struct CreateServiceSheet: View {
     // MARK: - Save Action
 
     private func createService() {
-        guard isFormValid, !isSaving else { return }
         isSaving = true
-
-        let serviceID = UUID()
-        let providerID = UUID()
-
-        let service = Service(
-            id: serviceID,
-            name: generalDraft.name.trimmingCharacters(in: .whitespacesAndNewlines),
-            description: generalDraft.description.isEmpty ? nil : generalDraft.description.trimmingCharacters(in: .whitespacesAndNewlines),
-            activeProviderID: providerID,
-            workspaceID: workspaceID,
-            isDisabled: generalDraft.isDisabled,
-            isStarred: false
-        )
-
+        let repo = self.serviceRepository
         Task {
             do {
-                var encryptedYaml: String? = nil
-                var encryptedScript: String? = nil
+                let serviceID = UUID()
+                let service = Service(
+                    id: serviceID,
+                    name: generalDraft.name.trimmingCharacters(in: .whitespacesAndNewlines),
+                    description: generalDraft.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : generalDraft.description.trimmingCharacters(in: .whitespacesAndNewlines),
+                    workspaceID: workspaceID,
+                    isDisabled: generalDraft.isDisabled
+                )
+
                 var encryptedPassword: String? = nil
                 var encryptedKeyPath: String? = nil
+                var encryptedYaml: String? = nil
+                var encryptedScript: String? = nil
 
-                if selectedProvider == .docker {
-                    let trimmedYaml = dockerDraft.yamlConfig.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedYaml.isEmpty { encryptedYaml = try await CryptoVault.shared.encrypt(plainText: trimmedYaml) }
-                    let trimmedScript = dockerDraft.initialScript.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedScript.isEmpty { encryptedScript = try await CryptoVault.shared.encrypt(plainText: trimmedScript) }
-                } else if selectedProvider == .podman {
-                    let trimmedYaml = podmanDraft.yamlConfig.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedYaml.isEmpty { encryptedYaml = try await CryptoVault.shared.encrypt(plainText: trimmedYaml) }
-                    let trimmedScript = podmanDraft.initialScript.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedScript.isEmpty { encryptedScript = try await CryptoVault.shared.encrypt(plainText: trimmedScript) }
-                } else if selectedProvider == .ssh {
-                    let trimmedPass = sshPassword.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedPass.isEmpty { encryptedPassword = try await CryptoVault.shared.encrypt(plainText: trimmedPass) }
-                    let trimmedKey = sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !trimmedKey.isEmpty { encryptedKeyPath = try await CryptoVault.shared.encrypt(plainText: trimmedKey) }
+                if selectedProvider == .ssh {
+                    if sshAuthType == .password && !sshPassword.isEmpty {
+                        encryptedPassword = try await CryptoVault.shared.encrypt(plainText: sshPassword.trimmingCharacters(in: .whitespacesAndNewlines))
+                    } else if sshAuthType == .key && !sshKeyPath.isEmpty {
+                        encryptedKeyPath = try await CryptoVault.shared.encrypt(plainText: sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines))
+                    }
                 } else if selectedProvider == .tunnel {
                     let trimmedToken = tunnelDraft.authToken.trimmingCharacters(in: .whitespacesAndNewlines)
                     if !trimmedToken.isEmpty { encryptedPassword = try await CryptoVault.shared.encrypt(plainText: trimmedToken) }
                 }
 
+                if selectedProvider == .docker {
+                    encryptedYaml = dockerDraft.yamlConfig.isEmpty ? nil : dockerDraft.yamlConfig
+                    encryptedScript = dockerDraft.initialScript.isEmpty ? nil : dockerDraft.initialScript
+                } else if selectedProvider == .podman {
+                    encryptedYaml = podmanDraft.yamlConfig.isEmpty ? nil : podmanDraft.yamlConfig
+                    encryptedScript = podmanDraft.initialScript.isEmpty ? nil : podmanDraft.initialScript
+                }
+
                 let provider = Provider(
-                    id: providerID,
                     serviceID: serviceID,
                     type: selectedProvider,
-                    label: selectedProvider.sidebarLabel,
                     kubeConfigID: selectedProvider == .kubernetes ? kubeConfigVM.selectedKubeConfigID : nil,
-                    kubeContext: kubeDraft.context.isEmpty ? nil : kubeDraft.context.trimmingCharacters(in: .whitespacesAndNewlines),
-                    kubeNamespace: kubeDraft.namespace.isEmpty ? nil : kubeDraft.namespace.trimmingCharacters(in: .whitespacesAndNewlines),
-                    targetName: kubeDraft.targetName.isEmpty ? nil : kubeDraft.targetName.trimmingCharacters(in: .whitespacesAndNewlines),
+                    kubeContext: selectedProvider == .kubernetes && !kubeDraft.context.isEmpty ? kubeDraft.context.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+                    kubeNamespace: selectedProvider == .kubernetes && !kubeDraft.namespace.isEmpty ? kubeDraft.namespace.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
+                    targetName: selectedProvider == .kubernetes && !kubeDraft.targetName.isEmpty ? kubeDraft.targetName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
                     kubeTargetType: kubeDraft.targetType.rawValue,
                     usePattern: kubeDraft.usePattern,
                     yamlConfig: encryptedYaml,
@@ -222,7 +224,6 @@ public struct CreateServiceSheet: View {
                     portMappings = []
                 }
 
-                let repo = ServiceRepository()
                 try await repo.insertService(service, defaultProvider: provider, portMappings: portMappings)
                 onServiceCreated?()
                 dismiss()

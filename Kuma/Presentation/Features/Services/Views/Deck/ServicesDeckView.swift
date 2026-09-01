@@ -29,28 +29,47 @@ public struct ServicesDeckView: View {
         .toolbar {
             toolbarContent()
         }
-        .onAppear {
+        .task(id: workspaceID) {
             viewModel.loadWorkspace(workspaceID: workspaceID)
-        }
-        .onChange(of: workspaceID) { _, newID in
-            viewModel.loadWorkspace(workspaceID: newID)
         }
         .onChange(of: isStarredOnly) { _, newStarred in
             withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
                 viewModel.isStarredOnly = newStarred
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceCreated)) { _ in
-            viewModel.loadWorkspace(workspaceID: workspaceID)
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaServiceCreated) {
+                viewModel.loadWorkspace(workspaceID: workspaceID)
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaFocusSearch)) { _ in
-            isSearching = true
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaServiceUpdated) {
+                viewModel.loadWorkspace(workspaceID: workspaceID)
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaExportWorkspace)) { _ in
-            exportCurrentWorkspace()
+        .task {
+            for await notif in NotificationCenter.default.notifications(named: .kumaServiceDeleted) {
+                viewModel.loadWorkspace(workspaceID: workspaceID)
+                if let deletedID = notif.object as? UUID, viewModel.selectedServiceID == deletedID {
+                    viewModel.selectedServiceID = nil
+                    viewModel.isInspectorPresented = false
+                }
+            }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaImportWorkspace)) { _ in
-            promptImportFile()
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaFocusSearch) {
+                isSearching = true
+            }
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaExportWorkspace) {
+                exportCurrentWorkspace()
+            }
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaImportWorkspace) {
+                promptImportFile()
+            }
         }
         .sheet(item: $pendingImportBackup) { backup in
             let wsName = workspaceStore.workspaces.first(where: { $0.id == workspaceID })?.name ?? "Workspace"
@@ -78,10 +97,8 @@ public struct ServicesDeckView: View {
             if let selectedID = viewModel.selectedServiceID {
                 ServiceInspectorView(
                     serviceID: selectedID,
-                    workspaceID: workspaceID,
-                    viewModel: viewModel
+                    workspaceID: workspaceID
                 )
-                .id(selectedID)
                 .inspectorColumnWidth(
                     min: KumaTheme.Inspector.widthMin,
                     ideal: KumaTheme.Inspector.widthIdeal,
@@ -146,23 +163,22 @@ public struct ServicesDeckView: View {
     private var cardsGrid: some View {
         ScrollView {
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 300, maximum: 380), spacing: 18)],
-                spacing: 18
+                 columns: [GridItem(.adaptive(minimum: 280, maximum: .infinity), spacing: 16)],
+                 spacing: 16
             ) {
                 ForEach(viewModel.filteredSnapshots) { snapshot in
                     ServiceCardView(
                         snapshot: snapshot,
-                        runtime: viewModel.runtimeStates[snapshot.id] ?? ServiceRuntimeState(),
+                        runtime: viewModel.runtimeStates[snapshot.id] ?? .idle,
                         isSelected: viewModel.selectedServiceID == snapshot.id,
-                        onToggle: { viewModel.toggleService(id: snapshot.id) },
-                        onToggleStar: { viewModel.toggleStarred(id: snapshot.id, workspaceID: workspaceID) },
-                        onSelect: { viewModel.selectService(snapshot.id) }
+                        viewModel: viewModel,
+                        workspaceID: workspaceID
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
-            .animation(.spring(response: 0.24, dampingFraction: 0.88), value: viewModel.filteredSnapshots)
-            .padding(20)
+            .animation(.spring(response: 0.24, dampingFraction: 0.88), value: viewModel.filterVersion)
+            .padding(16)
         }
     }
 

@@ -1,59 +1,52 @@
 import SwiftUI
 
-/// Fixed header zone for the Service Inspector.
-/// Displays provider identity, service status, toggle, and a thin action toolbar strip.
+/// Native macOS fixed header zone for the Service Inspector.
+/// Displays service identity, provider type, live status observer, and start/stop button.
 public struct InspectorStatusHeader: View {
-    public let snapshot: ServiceCardSnapshot
+    public let service: Service
+    public let provider: Provider?
     public let runtime: ServiceRuntimeState
-    public let hasChanges: Bool
-    public let isSaving: Bool
     public let onToggle: () -> Void
     public let onToggleStar: () -> Void
-    public let onSave: () -> Void
-    public let onCancel: () -> Void
-
-    @State private var isStarHovered: Bool = false
 
     public init(
-        snapshot: ServiceCardSnapshot,
+        service: Service,
+        provider: Provider?,
         runtime: ServiceRuntimeState,
-        hasChanges: Bool = false,
-        isSaving: Bool = false,
         onToggle: @escaping () -> Void,
-        onToggleStar: @escaping () -> Void = {},
-        onSave: @escaping () -> Void = {},
-        onCancel: @escaping () -> Void = {}
+        onToggleStar: @escaping () -> Void = {}
     ) {
-        self.snapshot = snapshot
+        self.service = service
+        self.provider = provider
         self.runtime = runtime
-        self.hasChanges = hasChanges
-        self.isSaving = isSaving
         self.onToggle = onToggle
         self.onToggleStar = onToggleStar
-        self.onSave = onSave
-        self.onCancel = onCancel
+    }
+
+    private var category: ProviderCategory {
+        provider?.type ?? .docker
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             // MARK: Identity Row
             HStack(spacing: 10) {
-                // Provider gradient icon with Star Overlay Badge (matches card style)
+                // Provider gradient icon with Star Overlay Badge
                 ZStack(alignment: .topTrailing) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(snapshot.isDisabled
+                            .fill(service.isDisabled
                                   ? LinearGradient(colors: [.secondary.opacity(0.18), .secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                  : snapshot.providerCategory.gradient)
+                                  : category.gradient)
                             .frame(width: 32, height: 32)
-                            .shadow(color: .black.opacity(snapshot.isDisabled ? 0 : 0.14), radius: 2, y: 1)
+                            .shadow(color: .black.opacity(service.isDisabled ? 0 : 0.14), radius: 2, y: 1)
 
-                        Image(systemName: snapshot.providerCategory.icon)
+                        Image(systemName: category.icon)
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
+                            .foregroundStyle(service.isDisabled ? Color.secondary : Color.white)
                     }
 
-                    if snapshot.isStarred {
+                    if service.isStarred {
                         ZStack {
                             Circle()
                                 .fill(Color(nsColor: .windowBackgroundColor))
@@ -69,12 +62,12 @@ public struct InspectorStatusHeader: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(snapshot.name)
+                    Text(service.name)
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
-                        .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
+                        .foregroundStyle(service.isDisabled ? .secondary : .primary)
 
-                    Text(snapshot.providerCategory.sidebarLabel)
+                    Text(category.sidebarLabel)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -82,33 +75,7 @@ public struct InspectorStatusHeader: View {
 
                 Spacer(minLength: 8)
 
-                if hasChanges {
-                    // Dynamic Save & Cancel Buttons when modifications are made
-                    HStack(spacing: 6) {
-                        Button("Cancel") {
-                            onCancel()
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .disabled(isSaving)
-
-                        Button {
-                            onSave()
-                        } label: {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            } else {
-                                Text("Save")
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .disabled(isSaving)
-                    }
-                    .padding(.trailing, 8)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                } else if snapshot.isDisabled {
+                if service.isDisabled {
                     Image(systemName: "lock.circle.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(.tertiary)
@@ -123,8 +90,7 @@ public struct InspectorStatusHeader: View {
                     } label: {
                         HStack(spacing: 5) {
                             if runtime.isLoading || runtime.status == .starting || runtime.status == .stopping {
-                                ProgressView()
-                                    .controlSize(.mini)
+                                KumaActivityIndicator(size: 11, color: tintColor, lineWidth: 1.5)
                             }
                             Text(isRunning ? "Stop" : "Start")
                                 .font(.system(size: 12.5, weight: .semibold))
@@ -145,13 +111,10 @@ public struct InspectorStatusHeader: View {
                     .buttonStyle(.plain)
                     .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
                     .padding(.trailing, 8)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
             }
-            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: hasChanges)
         }
-        .padding(.leading, KumaSpacing.lg)
-        .padding(.trailing, KumaSpacing.lg)
+        .padding(.horizontal, KumaSpacing.lg)
         .padding(.vertical, KumaSpacing.md)
     }
 }

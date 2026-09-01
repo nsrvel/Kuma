@@ -6,6 +6,7 @@ public protocol ServiceRepositoryProtocol: Sendable {
     func fetchService(id: UUID) async throws -> Service?
     func fetchProviders(forService serviceID: UUID) async throws -> [Provider]
     func fetchPortMappings(forService serviceID: UUID) async throws -> [ServicePortMapping]
+    func fetchAllPortMappings() async throws -> [ServicePortMapping]
     func insertService(_ service: Service, defaultProvider: Provider?, portMappings: [ServicePortMapping]) async throws
     func updateService(_ service: Service) async throws
     func insertProvider(_ provider: Provider) async throws
@@ -17,6 +18,8 @@ public protocol ServiceRepositoryProtocol: Sendable {
 }
 
 
+/// `@unchecked Sendable`: Thread safety is guaranteed by GRDB's underlying `DatabaseWriter` (DatabasePool / DatabaseQueue)
+/// which synchronizes access via serialized dispatch queues. Do not add mutable stored properties to this class.
 public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Sendable {
     private let dbWriter: any DatabaseWriter
 
@@ -142,23 +145,21 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
         }
     }
 
+    public func fetchAllPortMappings() async throws -> [ServicePortMapping] {
+        try await dbWriter.read { db in
+            try ServicePortMapping.fetchAll(db)
+        }
+    }
+
     public func insertService(_ service: Service, defaultProvider: Provider?, portMappings: [ServicePortMapping] = []) async throws {
         try await dbWriter.write { db in
             try service.insert(db)
             if let provider = defaultProvider {
                 try provider.insert(db)
             }
-            for mapping in portMappings {
-                try db.execute(
-                    sql: "INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType) VALUES (?, ?, ?, ?, ?)",
-                    arguments: [
-                        mapping.id.uuidString,
-                        service.id.uuidString,
-                        mapping.localPort,
-                        mapping.remotePort,
-                        mapping.protocolType
-                    ]
-                )
+            for var mapping in portMappings {
+                mapping.serviceID = service.id
+                try mapping.insert(db)
             }
         }
     }
@@ -190,20 +191,14 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
     public func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID) async throws {
         try await dbWriter.write { db in
             // Delete old port mappings for this service
-            try db.execute(sql: "DELETE FROM portMapping WHERE serviceID = ?", arguments: [serviceID.uuidString])
+            _ = try ServicePortMapping
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .deleteAll(db)
 
-            // Insert new mappings
-            for mapping in portMappings {
-                try db.execute(
-                    sql: "INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType) VALUES (?, ?, ?, ?, ?)",
-                    arguments: [
-                        mapping.id.uuidString,
-                        serviceID.uuidString,
-                        mapping.localPort,
-                        mapping.remotePort,
-                        mapping.protocolType
-                    ]
-                )
+            // Insert new mappings using typed GRDB API
+            for var mapping in portMappings {
+                mapping.serviceID = serviceID
+                try mapping.insert(db)
             }
         }
     }

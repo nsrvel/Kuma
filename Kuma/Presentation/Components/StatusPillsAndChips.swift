@@ -24,15 +24,14 @@ public struct StatusPillView: View {
     public var body: some View {
         HStack(spacing: 5) {
             if isLoading {
-                ProgressView()
-                    .controlSize(.mini)
+                KumaActivityIndicator(size: 10, color: color, lineWidth: 1.5)
             } else if showDot {
                 ZStack {
                     if isGlowing {
+                        // Zero-GPU glow — pre-composited opacity circle replaces .blur()
                         Circle()
-                            .fill(color)
-                            .frame(width: 4, height: 4)
-                            .blur(radius: 1.5)
+                            .fill(color.opacity(0.45))
+                            .frame(width: 8, height: 8)
                     }
                     Circle()
                         .fill(color)
@@ -49,6 +48,47 @@ public struct StatusPillView: View {
     }
 }
 
+/// Pure SwiftUI hardware-accelerated spinner.
+/// Avoids AppKit NSProgressIndicator wrapper scaling/constraint conflicts during SwiftUI animations.
+public struct KumaActivityIndicator: View {
+    public var size: CGFloat
+    public var color: Color
+    public var lineWidth: CGFloat
+
+    @State private var isAnimating: Bool = false
+
+    public init(
+        size: CGFloat = 12,
+        color: Color = .secondary,
+        lineWidth: CGFloat = 1.75
+    ) {
+        self.size = size
+        self.color = color
+        self.lineWidth = lineWidth
+    }
+
+    public var body: some View {
+        Circle()
+            .trim(from: 0.0, to: 0.72)
+            .stroke(
+                color,
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+            .frame(width: size, height: size)
+            .rotationEffect(Angle(degrees: isAnimating ? 360 : 0))
+            .animation(
+                .linear(duration: 0.85).repeatForever(autoreverses: false),
+                value: isAnimating
+            )
+            .onAppear {
+                isAnimating = true
+            }
+            .onDisappear {
+                isAnimating = false
+            }
+    }
+}
+
 public struct PortChipsView: View {
     public let ports: [Int]
     public var maxVisible: Int?
@@ -60,8 +100,7 @@ public struct PortChipsView: View {
 
     public var body: some View {
         let limit = maxVisible ?? ports.count
-        let visible = Array(ports.prefix(limit))
-        let overflow = ports.count - visible.count
+        let overflow = max(0, ports.count - limit)
 
         HStack(spacing: 6) {
             Image(systemName: "arrow.left.arrow.right")
@@ -69,7 +108,8 @@ public struct PortChipsView: View {
                 .foregroundStyle(.tertiary)
 
             HStack(spacing: 4) {
-                ForEach(visible, id: \.self) { port in
+                // Direct slice iteration — zero array allocation
+                ForEach(ports.prefix(limit), id: \.self) { port in
                     Text("\(port)")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)

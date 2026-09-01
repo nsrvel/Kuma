@@ -5,44 +5,65 @@ import SwiftUI
 public struct PortRegistryView: View {
     @Environment(WorkspaceStore.self) private var workspaceStore
     @State private var searchText: String = ""
-    @State private var filterStatus: String = "All"
+    @State private var portMappings: [ServicePortMapping] = []
+    @State private var serviceNames: [UUID: String] = [:]
+    @State private var isLoading: Bool = false
 
-    // Mock ports for placeholder demonstration
-    private let samplePorts: [(port: Int, service: String, provider: String, status: String, pid: String)] = [
-        (3000, "frontend-app", "Docker Compose", "In Use", "14920"),
-        (5432, "postgres-db", "Docker Compose", "In Use", "15002"),
-        (6379, "redis-cache", "Kubernetes", "In Use", "15040"),
-        (8080, "api-gateway", "Shell Script", "Conflict Detected", "16200"),
-        (8080, "legacy-service", "SSH Remote", "Conflict Detected", "16215"),
-        (9090, "prometheus", "Podman", "Idle", "-")
-    ]
+    private let serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
 
     public init() {}
+
+    private var conflictPortSet: Set<Int> {
+        let ports = portMappings.map(\.localPort)
+        var seen = Set<Int>()
+        var duplicates = Set<Int>()
+        for p in ports {
+            if seen.contains(p) {
+                duplicates.insert(p)
+            } else {
+                seen.insert(p)
+            }
+        }
+        return duplicates
+    }
+
+    private var filteredPorts: [ServicePortMapping] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if query.isEmpty {
+            return portMappings.sorted { $0.localPort < $1.localPort }
+        }
+        return portMappings.filter { mapping in
+            let portStr = "\(mapping.localPort)"
+            let srvName = mapping.serviceID.flatMap { serviceNames[$0] }?.lowercased() ?? ""
+            return portStr.contains(query) || srvName.contains(query)
+        }.sorted { $0.localPort < $1.localPort }
+    }
 
     public var body: some View {
         VStack(spacing: 0) {
             // Header Bar
             HStack(spacing: 12) {
-                KumaSearchField(text: $searchText, prompt: "Search port, service, or PID…")
+                KumaSearchField(text: $searchText, prompt: "Search port or service name…")
                     .frame(maxWidth: 280)
-
 
                 Spacer()
 
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color.orange)
-                        .frame(width: 7, height: 7)
-                    Text("1 Conflict Detected")
-                        .font(KumaFont.caption)
-                        .foregroundStyle(.orange)
+                if !conflictPortSet.isEmpty {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 7, height: 7)
+                        Text("\(conflictPortSet.count) Conflict\(conflictPortSet.count > 1 ? "s" : "") Detected")
+                            .font(KumaFont.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.1), in: Capsule())
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Color.orange.opacity(0.1), in: Capsule())
 
                 Button {
-                    // Refresh ports
+                    loadPorts()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11))
@@ -59,22 +80,60 @@ public struct PortRegistryView: View {
 
             // Ports Table / List
             ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(samplePorts, id: \.port) { item in
-                        PortRowCard(
-                            port: item.port,
-                            service: item.service,
-                            provider: item.provider,
-                            status: item.status,
-                            pid: item.pid
-                        )
+                if filteredPorts.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "network")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.secondary)
+                        Text("No ports configured")
+                            .font(KumaFont.body)
+                            .foregroundStyle(.secondary)
+                        Text("Add port mappings to your services to monitor them here.")
+                            .font(KumaFont.caption)
+                            .foregroundStyle(.tertiary)
                     }
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .padding(32)
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(filteredPorts) { item in
+                            let srvName = item.serviceID.flatMap { serviceNames[$0] } ?? "Service"
+                            let isConflict = conflictPortSet.contains(item.localPort)
+                            PortRowCard(
+                                port: item.localPort,
+                                service: srvName,
+                                provider: "\(item.protocolType) Forward",
+                                status: isConflict ? "Conflict Detected" : "Configured",
+                                pid: "-"
+                            )
+                        }
+                    }
+                    .padding(16)
                 }
-                .padding(16)
             }
+        }
+        .task {
+            loadPorts()
         }
         .navigationTitle("Port Registry")
         .background(KumaColors.canvasBackground)
+    }
+
+    private func loadPorts() {
+        Task {
+            do {
+                let mappings = try await serviceRepository.fetchAllPortMappings()
+                self.portMappings = mappings
+                for ws in workspaceStore.workspaces {
+                    let snapshots = try await serviceRepository.fetchSnapshots(forWorkspace: ws.id)
+                    for s in snapshots {
+                        serviceNames[s.id] = s.name
+                    }
+                }
+            } catch {
+                // handle gracefully
+            }
+        }
     }
 }
 

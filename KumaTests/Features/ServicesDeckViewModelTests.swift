@@ -61,7 +61,7 @@ struct ServicesDeckViewModelTests {
         let snapshot = vm.snapshots.first!
 
         let initialState = vm.runtimeStates[snapshot.id]?.status ?? .stopped
-        vm.toggleService(id: snapshot.id)
+        await vm.toggleServiceAsync(id: snapshot.id)
         let toggledState = vm.runtimeStates[snapshot.id]?.status ?? .stopped
 
         #expect(initialState != toggledState)
@@ -104,8 +104,9 @@ struct ServicesDeckViewModelTests {
 
     @Test("ServicesDeckViewModel filters and toggles starred services")
     func testStarredServices() async {
+        let db = AppDatabase(inMemory: true)
+        let repo = ServiceRepository(dbWriter: db.dbWriter)
         let (vm, _) = await createTestViewModelWithData()
-        let repo = ServiceRepository()
 
         #expect(vm.filteredSnapshots.count == 4)
 

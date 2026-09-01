@@ -97,8 +97,7 @@ public struct KubeConfigConnectionView: View {
                                                 .foregroundStyle(.secondary)
                                         } else if viewModel.isLoadingNamespaces {
                                             HStack(spacing: 5) {
-                                                ProgressView()
-                                                    .controlSize(.mini)
+                                                KumaActivityIndicator(size: 10, color: .secondary, lineWidth: 1.5)
                                                 Text("Connecting…")
                                                     .font(.system(size: 10, weight: .medium))
                                                     .foregroundStyle(.secondary)
@@ -123,7 +122,7 @@ public struct KubeConfigConnectionView: View {
                             .padding(.vertical, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
+                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
                             )
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -133,6 +132,9 @@ public struct KubeConfigConnectionView: View {
                                     )
                             }
                             .contentShape(Rectangle())
+                            .onHover { hovering in
+                                hoveredConfigID = hovering ? config.id : nil
+                            }
                             .contextMenu {
                                 if !config.isDefault {
                                     Button {

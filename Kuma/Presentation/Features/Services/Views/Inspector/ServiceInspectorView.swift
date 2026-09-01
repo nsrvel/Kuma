@@ -3,53 +3,42 @@ import SwiftUI
 public struct ServiceInspectorView: View {
     public let serviceID: UUID
     public let workspaceID: UUID
-    @Bindable var viewModel: ServicesDeckViewModel
     @State private var inspectorVM: ServiceInspectorViewModel
 
     public init(
         serviceID: UUID,
         workspaceID: UUID,
-        viewModel: ServicesDeckViewModel,
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
     ) {
         self.serviceID = serviceID
         self.workspaceID = workspaceID
-        self.viewModel = viewModel
-        let snap = viewModel.snapshots.first(where: { $0.id == serviceID })
         _inspectorVM = State(initialValue: ServiceInspectorViewModel(
             serviceID: serviceID,
             workspaceID: workspaceID,
-            initialCategory: snap?.providerCategory,
-            initialName: snap?.name ?? "",
             serviceRepository: serviceRepository
         ))
     }
 
-    private var snapshot: ServiceCardSnapshot? {
-        viewModel.snapshots.first(where: { $0.id == serviceID })
-    }
-
-    private var runtime: ServiceRuntimeState {
-        viewModel.runtimeStates[serviceID] ?? ServiceRuntimeState()
-    }
-
     public var body: some View {
         VStack(spacing: 0) {
-            if let snapshot {
-                // Zone 1: Status Header (Fixed Top)
+            if let service = inspectorVM.service {
+                // Zone 1: Native macOS Status Header
                 InspectorStatusHeader(
-                    snapshot: snapshot,
-                    runtime: runtime,
-                    hasChanges: inspectorVM.hasPendingChanges,
-                    isSaving: inspectorVM.isSaving,
-                    onToggle: { viewModel.toggleService(id: serviceID) },
-                    onToggleStar: { viewModel.toggleStarred(id: serviceID, workspaceID: workspaceID) },
-                    onSave: {
-                        inspectorVM.saveChanges {
-                            viewModel.loadWorkspace(workspaceID: workspaceID)
+                    service: service,
+                    provider: inspectorVM.activeProvider,
+                    runtime: .idle,
+                    onToggle: {
+                        Task {
+                            _ = try? await ServiceExecutionEngine.shared.start(serviceID: serviceID)
+                            NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
                         }
                     },
-                    onCancel: { inspectorVM.cancelChanges() }
+                    onToggleStar: {
+                        Task {
+                            _ = try? await ServiceRepository().toggleStarred(serviceID: serviceID)
+                            NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                        }
+                    }
                 )
 
                 Divider()
@@ -60,76 +49,78 @@ public struct ServiceInspectorView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         // 1. General Identification Form
                         ServiceGeneralSettingsView(
-                            name: $inspectorVM.generalDraft.name,
-                            serviceDescription: $inspectorVM.generalDraft.description,
+                            name: Binding(
+                                get: { inspectorVM.service?.name ?? "" },
+                                set: {
+                                    inspectorVM.service?.name = $0
+                                    inspectorVM.scheduleAutoSave()
+                                }
+                            ),
+                            serviceDescription: Binding(
+                                get: { inspectorVM.service?.description ?? "" },
+                                set: {
+                                    inspectorVM.service?.description = $0.isEmpty ? nil : $0
+                                    inspectorVM.scheduleAutoSave()
+                                }
+                            ),
                             placeholder: "Postgres DB",
-                            icon: runtime.status.isOperational ? "lock.fill" : "info.circle",
+                            icon: service.isDisabled ? "lock.fill" : "info.circle",
                             subtitle: "Service name and purpose"
                         )
-                        .disabled(runtime.status.isOperational)
+                        .disabled(service.isDisabled)
 
                         // 2. Providers Section (Selector + Inline Add/Edit)
                         ServiceProvidersSectionView(
                             serviceID: serviceID,
                             providers: inspectorVM.providers,
-                            activeProviderID: $inspectorVM.activeProviderID,
-                            isEditing: true,
-                            isRunning: runtime.status.isOperational,
+                            activeProviderID: inspectorVM.activeProviderID,
+                            isLocked: service.isDisabled,
                             onSelectProvider: { newID in
-                                inspectorVM.switchProvider(to: newID) {
-                                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                                }
+                                inspectorVM.switchProvider(to: newID)
                             },
-                            onSaveProvider: { provider in
-                                inspectorVM.saveProviderDirectly(provider) {
-                                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                                }
+                            onAddProvider: { newProvider in
+                                inspectorVM.addProvider(newProvider)
+                            },
+                            onUpdateProvider: { updatedProvider in
+                                inspectorVM.updateProviderDirectly(updatedProvider)
                             },
                             onDeleteProvider: { provider in
-                                inspectorVM.deleteProvider(provider) {
-                                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                                }
+                                inspectorVM.deleteProvider(provider)
                             }
                         )
 
-                        // 3. Active Provider Configuration Form (Directly Inline)
-                        InspectorFormSections(
-                            providerCategory: inspectorVM.activeCategory,
-                            isEditing: true,
-                            kubeConfigVM: inspectorVM.kubeConfigVM,
-                            kubeDraft: $inspectorVM.kubeDraft,
-                            dockerDraft: $inspectorVM.dockerDraft,
-                            podmanDraft: $inspectorVM.podmanDraft,
-                            shellDraft: $inspectorVM.shellDraft,
-                            sshDraft: $inspectorVM.sshDraft,
-                            healthCheckDraft: $inspectorVM.healthCheckDraft,
-                            tunnelDraft: $inspectorVM.tunnelDraft,
-                            monitorDraft: $inspectorVM.monitorDraft,
-                            ports: $inspectorVM.draftPorts
-                        )
-                        .disabled(runtime.status.isOperational)
+                        // 3. Active Provider Configuration Form
+                        if let activeIndex = inspectorVM.providers.firstIndex(where: { $0.id == inspectorVM.activeProviderID }) {
+                            InspectorFormSections(
+                                provider: $inspectorVM.providers[activeIndex],
+                                ports: $inspectorVM.draftPorts,
+                                kubeConfigVM: inspectorVM.kubeConfigVM,
+                                isLocked: service.isDisabled,
+                                onFieldChanged: {
+                                    inspectorVM.scheduleAutoSave()
+                                }
+                            )
+                            .disabled(service.isDisabled)
+                        }
 
                         // 4. Options Section (Disable, Delete Service)
                         InspectorOptionsSection(
                             isDisabled: Binding(
-                                get: { inspectorVM.generalDraft.isDisabled },
+                                get: { inspectorVM.service?.isDisabled ?? false },
                                 set: { newValue in
-                                    inspectorVM.generalDraft.isDisabled = newValue
-                                    inspectorVM.toggleDisableDirectly(newValue) {
-                                        viewModel.loadWorkspace(workspaceID: workspaceID)
-                                    }
+                                    inspectorVM.toggleDisabled(newValue)
                                 }
                             ),
-                            isRunning: runtime.status.isOperational,
+                            isRunning: false,
                             isEditing: true,
                             onDelete: {
                                 inspectorVM.showDeleteConfirmation = true
                             }
                         )
                     }
-                    .padding(KumaSpacing.lg)
+                .padding(KumaSpacing.lg)
                 }
-                .animation(.easeInOut(duration: 0.2), value: inspectorVM.activeCategory)
+                .animation(.easeInOut(duration: 0.15), value: inspectorVM.activeCategory)
             } else {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
@@ -139,10 +130,7 @@ public struct ServiceInspectorView: View {
             }
         }
         .task(id: serviceID) {
-            await inspectorVM.loadServiceDetails()
-        }
-        .onChange(of: inspectorVM.activeProviderID) { _, newActiveID in
-            inspectorVM.populateActiveProviderFields(for: newActiveID)
+            await inspectorVM.loadService(id: serviceID)
         }
         .confirmationDialog(
             "Delete Service?",
@@ -150,14 +138,11 @@ public struct ServiceInspectorView: View {
             titleVisibility: .visible
         ) {
             Button("Delete Service", role: .destructive) {
-                inspectorVM.deleteService {
-                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                    viewModel.selectedServiceID = nil
-                }
+                inspectorVM.deleteService()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This action cannot be undone. '\(inspectorVM.generalDraft.name)' and all associated runner configurations will be permanently deleted.")
+            Text("This action cannot be undone. '\(inspectorVM.service?.name ?? "Service")' and all associated runner configurations will be permanently deleted.")
         }
     }
 }

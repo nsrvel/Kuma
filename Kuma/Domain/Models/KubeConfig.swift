@@ -4,7 +4,7 @@ import Foundation
 
 public struct KubeConfig: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// Reserved static ID for the system default kubeconfig (~/.kube/config)
-    public static let defaultID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    public nonisolated static let defaultID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
     public var id: UUID
     public var name: String

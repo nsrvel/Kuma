@@ -10,16 +10,23 @@ extension ServicesDeckView {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Add Service")
+            .accessibilityHint("Opens creation sheet to add a new service")
             .help("Add new service")
         }
 
         // 2. View Mode Segmented Picker (Cards / Table)
         ToolbarItem {
             Picker("View Mode", selection: $viewModel.viewMode) {
-                Image(systemName: "square.grid.2x2").tag(DeckViewMode.card)
-                Image(systemName: "list.bullet").tag(DeckViewMode.table)
+                Image(systemName: "square.grid.2x2")
+                    .accessibilityLabel("Grid View")
+                    .tag(DeckViewMode.card)
+                Image(systemName: "list.bullet")
+                    .accessibilityLabel("Table View")
+                    .tag(DeckViewMode.table)
             }
             .pickerStyle(.segmented)
+            .accessibilityLabel("Deck View Mode")
             .help("Switch between card and table view")
         }
 
@@ -69,6 +76,8 @@ extension ServicesDeckView {
                 Image(systemName: (!viewModel.selectedStatuses.isEmpty || !viewModel.selectedProviders.isEmpty) ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
             }
             .menuIndicator(.hidden)
+            .accessibilityLabel("Filter Services")
+            .accessibilityHint("Filters services by status or provider type")
             .help("Filter services")
         }
 
@@ -87,6 +96,8 @@ extension ServicesDeckView {
                 Image(systemName: "arrow.up.arrow.down")
             }
             .menuIndicator(.hidden)
+            .accessibilityLabel("Sort Services")
+            .accessibilityHint("Sorts services by name, status, or date")
             .help("Sort services")
         }
 
@@ -132,6 +143,8 @@ extension ServicesDeckView {
                 Image(systemName: "ellipsis")
             }
             .menuIndicator(.hidden)
+            .accessibilityLabel("More Workspace Actions")
+            .accessibilityHint("Offers bulk actions, import and export options")
             .help("More actions")
         }
 

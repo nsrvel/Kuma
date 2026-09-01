@@ -3,40 +3,39 @@ import SwiftUI
 public struct ServiceProvidersSectionView: View {
     public let serviceID: UUID
     public let providers: [Provider]
-    @Binding public var activeProviderID: UUID?
-    public let isEditing: Bool
-    public let isRunning: Bool
+    public let activeProviderID: UUID?
+    public let isLocked: Bool
     public let onSelectProvider: (UUID) -> Void
-    public let onSaveProvider: (Provider) -> Void
+    public let onAddProvider: (Provider) -> Void
+    public let onUpdateProvider: (Provider) -> Void
     public let onDeleteProvider: (Provider) -> Void
 
-    @State private var isAddHovered: Bool = false
     @State private var showInlineForm: Bool = false
     @State private var editingProviderID: UUID? = nil
-
-    // Inline Form State
-    @State private var formLabel: String = ""
     @State private var formType: ProviderCategory = .docker
+    @State private var formLabel: String = ""
+    @State private var hoveredProviderID: UUID? = nil
+    @State private var isAddHovered: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var providerToDelete: Provider? = nil
 
     public init(
         serviceID: UUID,
         providers: [Provider],
-        activeProviderID: Binding<UUID?>,
-        isEditing: Bool = true,
-        isRunning: Bool = false,
-        onSelectProvider: @escaping (UUID) -> Void = { _ in },
-        onSaveProvider: @escaping (Provider) -> Void = { _ in },
-        onDeleteProvider: @escaping (Provider) -> Void = { _ in }
+        activeProviderID: UUID?,
+        isLocked: Bool = false,
+        onSelectProvider: @escaping (UUID) -> Void,
+        onAddProvider: @escaping (Provider) -> Void,
+        onUpdateProvider: @escaping (Provider) -> Void = { _ in },
+        onDeleteProvider: @escaping (Provider) -> Void
     ) {
         self.serviceID = serviceID
         self.providers = providers
-        self._activeProviderID = activeProviderID
-        self.isEditing = isEditing
-        self.isRunning = isRunning
+        self.activeProviderID = activeProviderID
+        self.isLocked = isLocked
         self.onSelectProvider = onSelectProvider
-        self.onSaveProvider = onSaveProvider
+        self.onAddProvider = onAddProvider
+        self.onUpdateProvider = onUpdateProvider
         self.onDeleteProvider = onDeleteProvider
     }
 
@@ -47,19 +46,7 @@ public struct ServiceProvidersSectionView: View {
             subtitle: "Select runner configuration"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                if showInlineForm {
-                    ServiceProvidersInlineFormView(
-                        isEditing: editingProviderID != nil,
-                        formType: $formType,
-                        formLabel: $formLabel,
-                        onSave: { saveInlineForm() },
-                        onCancel: {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                showInlineForm = false
-                            }
-                        }
-                    )
-                } else if providers.isEmpty {
+                if providers.isEmpty && !showInlineForm {
                     VStack(alignment: .center, spacing: 8) {
                         Text("No providers configured yet.")
                             .font(.caption)
@@ -71,13 +58,15 @@ public struct ServiceProvidersSectionView: View {
                             Label("Add First Provider", systemImage: "plus")
                         }
                         .buttonStyle(.bordered)
+                        .disabled(isLocked)
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 12)
-                } else {
+                } else if !showInlineForm {
                     VStack(spacing: 6) {
                         ForEach(providers) { provider in
                             let isSelected = (activeProviderID == provider.id)
+                            let isHovered = (hoveredProviderID == provider.id)
 
                             HStack(spacing: 10) {
                                 // Category Icon
@@ -97,17 +86,10 @@ public struct ServiceProvidersSectionView: View {
                                         .foregroundStyle(Color.primary)
                                         .lineLimit(1)
 
-                                    if isSelected {
-                                        Text("Active Provider")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(Color.secondary)
-                                            .lineLimit(1)
-                                    } else {
-                                        Text(provider.resolvedTarget)
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(Color.secondary)
-                                            .lineLimit(1)
-                                    }
+                                    Text(isSelected ? "Active Provider" : provider.resolvedTarget)
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(Color.secondary)
+                                        .lineLimit(1)
                                 }
 
                                 Spacer()
@@ -122,7 +104,7 @@ public struct ServiceProvidersSectionView: View {
                             .padding(.vertical, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
+                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
                             )
                             .overlay {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -132,8 +114,11 @@ public struct ServiceProvidersSectionView: View {
                                     )
                             }
                             .contentShape(Rectangle())
+                            .onHover { hovering in
+                                hoveredProviderID = hovering ? provider.id : nil
+                            }
                             .contextMenu {
-                                if !isRunning {
+                                if !isLocked {
                                     Button {
                                         openEditForm(provider)
                                     } label: {
@@ -153,11 +138,10 @@ public struct ServiceProvidersSectionView: View {
                                 }
                             }
                             .onTapGesture {
-                                if !isRunning {
+                                if !isLocked {
                                     withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
-                                        activeProviderID = provider.id
+                                        onSelectProvider(provider.id)
                                     }
-                                    onSelectProvider(provider.id)
                                 }
                             }
                         }
@@ -169,9 +153,8 @@ public struct ServiceProvidersSectionView: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                     )
-                    .disabled(isRunning)
 
-                    if !isRunning {
+                    if !isLocked {
                         HStack {
                             Button {
                                 openAddForm()
@@ -189,6 +172,18 @@ public struct ServiceProvidersSectionView: View {
                         .padding(.top, 4)
                         .padding(.horizontal, 4)
                     }
+                } else {
+                    ServiceProvidersInlineFormView(
+                        isEditing: editingProviderID != nil,
+                        formType: $formType,
+                        formLabel: $formLabel,
+                        onSave: { saveInlineForm() },
+                        onCancel: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                showInlineForm = false
+                            }
+                        }
+                    )
                 }
             }
             .confirmationDialog(
@@ -235,7 +230,7 @@ public struct ServiceProvidersSectionView: View {
             updated.label = label
             updated.type = formType
             updated.updatedAt = Date()
-            onSaveProvider(updated)
+            onUpdateProvider(updated)
         } else {
             let newProv = Provider(
                 id: UUID(),
@@ -243,7 +238,7 @@ public struct ServiceProvidersSectionView: View {
                 type: formType,
                 label: label
             )
-            onSaveProvider(newProv)
+            onAddProvider(newProv)
         }
 
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {

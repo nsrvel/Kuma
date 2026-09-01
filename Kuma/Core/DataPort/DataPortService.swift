@@ -317,10 +317,9 @@ public nonisolated enum DataPortService {
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)
         }
-        UserDefaults.standard.synchronize()
 
         // 2. Wipe SQLite DB
-        try? await AppDatabase.shared.wipeAndResetDatabase()
+        try? AppDatabase.shared.wipeAndResetDatabase()
 
         // 3. Clear Local Workspace Images
         WorkspaceImageStore.shared.clearCache()
@@ -350,7 +349,7 @@ public nonisolated enum DataPortService {
             let url = URL(fileURLWithPath: bundlePath)
             let config = NSWorkspace.OpenConfiguration()
             NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     NSApp.terminate(nil)
                 }
             }

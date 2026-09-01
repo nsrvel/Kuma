@@ -36,21 +36,17 @@ public struct WorkspaceSwitcherPopover: View {
                                 },
                                 onEdit: {
                                     isPresented = false
-                                    DispatchQueue.main.async {
-                                        store.workspaceToEdit = ws
-                                    }
+                                    store.workspaceToEdit = ws
                                 },
                                 onDelete: {
                                     isPresented = false
-                                    DispatchQueue.main.async {
-                                        AlertService.shared.confirmDelete(
-                                            title: "Delete Workspace?",
-                                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
-                                            onConfirm: {
-                                                store.deleteWorkspace(ws)
-                                            }
-                                        )
-                                    }
+                                    AlertService.shared.confirmDelete(
+                                        title: "Delete Workspace?",
+                                        message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
+                                        onConfirm: {
+                                            store.deleteWorkspace(ws)
+                                        }
+                                    )
                                 }
                             )
                         }
@@ -67,9 +63,7 @@ public struct WorkspaceSwitcherPopover: View {
             // "New Workspace…" plain action button at the bottom
             NewWorkspaceBottomButton {
                 isPresented = false
-                DispatchQueue.main.async {
-                    store.showCreateSheet = true
-                }
+                store.showCreateSheet = true
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
@@ -97,9 +91,7 @@ public struct WorkspaceSwitcherPopover: View {
             // Settings gear button
             Button {
                 isPresented = false
-                DispatchQueue.main.async {
-                    store.workspaceToEdit = activeWS
-                }
+                store.workspaceToEdit = activeWS
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
@@ -130,9 +122,7 @@ public struct WorkspaceSwitcherPopover: View {
         .contextMenu {
             Button {
                 isPresented = false
-                DispatchQueue.main.async {
-                    store.workspaceToEdit = activeWS
-                }
+                store.workspaceToEdit = activeWS
             } label: {
                 Label("Settings…", systemImage: "gearshape")
             }
@@ -142,15 +132,13 @@ public struct WorkspaceSwitcherPopover: View {
 
                 Button(role: .destructive) {
                     isPresented = false
-                    DispatchQueue.main.async {
-                        AlertService.shared.confirmDelete(
-                            title: "Delete Workspace?",
-                            message: "All services and configurations in “\(activeWS.name)” will be permanently deleted. This action cannot be undone.",
-                            onConfirm: {
-                                store.deleteWorkspace(activeWS)
-                            }
-                        )
-                    }
+                    AlertService.shared.confirmDelete(
+                        title: "Delete Workspace?",
+                        message: "All services and configurations in “\(activeWS.name)” will be permanently deleted. This action cannot be undone.",
+                        onConfirm: {
+                            store.deleteWorkspace(activeWS)
+                        }
+                    )
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }

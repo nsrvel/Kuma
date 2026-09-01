@@ -134,6 +134,7 @@ private struct KumaNativeTextView: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.lineFragmentPadding = 0
         textView.textContainerInset = NSSize(width: 4, height: 4)
 
         textView.drawsBackground = false

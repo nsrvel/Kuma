@@ -6,7 +6,7 @@ public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
     public let id: UUID
     public let name: String
     public let isDisabled: Bool
-    public let isStarred: Bool
+    public var isStarred: Bool
     public let subtitle: String
     public let providerCategory: ProviderCategory
     public let portDisplays: [Int]
@@ -32,5 +32,12 @@ public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
         self.portDisplays = portDisplays
         self.createdAt = createdAt
         self.searchKey = "\(name) \(subtitle)".lowercased()
+    }
+
+    /// Zero-allocation toggle — mutates only isStarred, preserves searchKey without recompute
+    public func toggling(starred: Bool) -> Self {
+        var copy = self
+        copy.isStarred = starred
+        return copy
     }
 }

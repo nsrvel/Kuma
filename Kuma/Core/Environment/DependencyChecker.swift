@@ -51,7 +51,7 @@ public enum BinaryValidationResult: Equatable, Sendable {
     }
 }
 
-public enum DependencyChecker {
+public nonisolated enum DependencyChecker {
     private static let resolver = EnvironmentPathResolver.shared
 
     /// Synchronously validates a custom binary path without spawning subprocesses (zero-latency).

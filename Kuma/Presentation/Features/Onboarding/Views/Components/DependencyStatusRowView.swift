@@ -76,6 +76,8 @@ public struct DependencyStatusRowView: View {
                 if isScanning {
                     ProgressView()
                         .controlSize(.small)
+                        .frame(width: 14, height: 14)
+                        .fixedSize()
                 } else if dependency.isInstalled {
                     StatusPillView(
                         text: "Available",

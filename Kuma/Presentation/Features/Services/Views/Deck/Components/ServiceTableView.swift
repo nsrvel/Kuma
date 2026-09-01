@@ -34,7 +34,7 @@ public struct ServiceTableView: View {
         Table(snapshots, selection: $selection) {
             // MARK: 1. Service Identity (Icon + Star + Name)
             TableColumn("Name") { snapshot in
-                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
+                let runtime = runtimeStates[snapshot.id] ?? .idle
 
                 HStack(spacing: 9) {
                     // Provider Gradient Icon (Exact match to Card & Inspector styling)
@@ -131,7 +131,7 @@ public struct ServiceTableView: View {
 
             // MARK: 5. Live Status
             TableColumn("Status") { snapshot in
-                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
+                let runtime = runtimeStates[snapshot.id] ?? .idle
                 ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(snapshot.id) }
@@ -140,7 +140,7 @@ public struct ServiceTableView: View {
 
             // MARK: 6. Actions (Menu Button with Context Menu)
             TableColumn("") { snapshot in
-                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
+                let runtime = runtimeStates[snapshot.id] ?? .idle
 
                 Menu {
                     ServiceActionContextMenu(
@@ -168,7 +168,7 @@ public struct ServiceTableView: View {
         .contextMenu(forSelectionType: UUID.self) { selectedIDs in
             if let firstID = selectedIDs.first,
                let snapshot = snapshots.first(where: { $0.id == firstID }) {
-                let runtime = runtimeStates[snapshot.id] ?? ServiceRuntimeState()
+                let runtime = runtimeStates[snapshot.id] ?? .idle
                 ServiceActionContextMenu(
                     snapshot: snapshot,
                     runtime: runtime,

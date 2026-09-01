@@ -7,6 +7,8 @@ public protocol DataPortRepositoryProtocol: Sendable {
     func importAll(from backup: DataPortService.KumaBackup) async throws
 }
 
+/// `@unchecked Sendable`: Thread safety is guaranteed by GRDB's underlying `DatabaseWriter` (DatabasePool / DatabaseQueue)
+/// which synchronizes access via serialized dispatch queues. Do not add mutable stored properties to this class.
 public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Sendable {
     private let logger = Logger(subsystem: "lokastudio.kuma", category: "DataPortRepository")
     private let dbWriter: any DatabaseWriter

@@ -35,7 +35,6 @@ public final class AppCoordinator {
         } else if phase == .onboarding {
             UserDefaults.standard.set(false, forKey: Self.completedOnboardingKey)
         }
-        UserDefaults.standard.synchronize()
     }
 
     /// Triggers onboarding from menu bar / help menu / factory reset.

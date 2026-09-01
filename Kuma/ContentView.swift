@@ -43,6 +43,10 @@ struct ContentView: View {
                 self.droppedFileName = fileURL.lastPathComponent
                 return true
             } catch {
+                AlertService.shared.showError(
+                    title: "Invalid Backup File",
+                    message: "Failed to read '\(fileURL.lastPathComponent)': \(error.localizedDescription)"
+                )
                 return false
             }
         } isTargeted: { targeted in

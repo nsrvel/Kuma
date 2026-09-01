@@ -7,20 +7,48 @@ import os
 public final class ServicesDeckViewModel {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ServicesDeckViewModel")
 
-    public var searchText: String = ""
-    public var selectedStatuses: Set<ServiceStatusFilterOption> = []
-    public var selectedProviders: Set<ProviderCategory> = []
-    public var sortBy: ServiceSortOption = .name
+    // MARK: - Filter Inputs (each triggers recompute on change)
+
+    public var searchText: String = "" {
+        didSet { if oldValue != searchText { recomputeFilteredSnapshots() } }
+    }
+    public var selectedStatuses: Set<ServiceStatusFilterOption> = [] {
+        didSet { if oldValue != selectedStatuses { recomputeFilteredSnapshots() } }
+    }
+    public var selectedProviders: Set<ProviderCategory> = [] {
+        didSet { if oldValue != selectedProviders { recomputeFilteredSnapshots() } }
+    }
+    public var sortBy: ServiceSortOption = .name {
+        didSet { if oldValue != sortBy { recomputeFilteredSnapshots() } }
+    }
+    public var isStarredOnly: Bool = false {
+        didSet { if oldValue != isStarredOnly { recomputeFilteredSnapshots() } }
+    }
+
+    // MARK: - Non-Filter State (changes do NOT trigger recompute)
+
     public var viewMode: DeckViewMode = .card
     public var isInspectorPresented: Bool = false
     public var selectedServiceID: UUID? = nil
-    public var isStarredOnly: Bool = false
     public var hasInitialLoaded: Bool = false
 
-    // Tier 1: Static Snapshots (~64B per item)
-    public var snapshots: [ServiceCardSnapshot] = []
+    // MARK: - Tier 1: Static Snapshots (~64B per item)
 
-    // Tier 2: Live Runtime States (isolated from static list)
+    public var snapshots: [ServiceCardSnapshot] = [] {
+        didSet { recomputeFilteredSnapshots() }
+    }
+
+    // MARK: - Tier 2: Cached Filtered Output (B1 Fix)
+
+    /// Cached filtered + sorted projection. Updated only when filter inputs or snapshots change.
+    public private(set) var filteredSnapshots: [ServiceCardSnapshot] = []
+
+    /// Monotonic version counter for lightweight animation tracking (B2 Fix).
+    /// Views use this instead of diffing the full [ServiceCardSnapshot] array.
+    public private(set) var filterVersion: Int = 0
+
+    // MARK: - Tier 3: Live Runtime States (isolated from static list)
+
     public var runtimeStates: [UUID: ServiceRuntimeState] = [:]
 
     private let serviceRepository: any ServiceRepositoryProtocol
@@ -34,9 +62,11 @@ public final class ServicesDeckViewModel {
         self.isStarredOnly = isStarredOnly
     }
 
-    // MARK: - Filtered & Sorted Projections (Ultra-Fast Zero Allocation)
+    // MARK: - Filtered & Sorted Projection Engine
 
-    public var filteredSnapshots: [ServiceCardSnapshot] {
+    /// Explicitly recomputes the cached filteredSnapshots.
+    /// Called by didSet observers on filter inputs, snapshots, and by runtime-aware methods.
+    private func recomputeFilteredSnapshots() {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let hasSearch = !query.isEmpty
         let hasStatusFilter = !selectedStatuses.isEmpty
@@ -85,7 +115,7 @@ public final class ServicesDeckViewModel {
             result.sort { a, b in
                 let priorityA: Int = a.isDisabled ? 5 : (runtimeStates[a.id]?.status.sortPriority ?? 4)
                 let priorityB: Int = b.isDisabled ? 5 : (runtimeStates[b.id]?.status.sortPriority ?? 4)
-                
+
                 if priorityA != priorityB {
                     return priorityA < priorityB
                 }
@@ -95,7 +125,8 @@ public final class ServicesDeckViewModel {
             result.sort { $0.createdAt > $1.createdAt }
         }
 
-        return result
+        filteredSnapshots = result
+        filterVersion += 1
     }
 
     // MARK: - Actions
@@ -111,15 +142,16 @@ public final class ServicesDeckViewModel {
         do {
             let loaded = try await serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
             guard !Task.isCancelled else { return }
-            self.snapshots = loaded
-            self.hasInitialLoaded = true
 
-            // Ensure initial runtime state exists for each service
+            // Seed initial runtime states before setting snapshots (which triggers recompute)
             for snapshot in loaded {
                 if self.runtimeStates[snapshot.id] == nil {
-                    self.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .stopped, isLoading: false)
+                    self.runtimeStates[snapshot.id] = .idle
                 }
             }
+
+            self.snapshots = loaded
+            self.hasInitialLoaded = true
         } catch {
             guard !Task.isCancelled else { return }
             Self.logger.error("Failed to load snapshots for workspace \(workspaceID): \(error.localizedDescription)")
@@ -129,30 +161,50 @@ public final class ServicesDeckViewModel {
     }
 
     public func toggleService(id: UUID) {
-        var current = runtimeStates[id] ?? ServiceRuntimeState()
-        if current.status.isOperational {
-            current.status = .stopped
-        } else {
-            current.status = .running
+        Task {
+            await toggleServiceAsync(id: id)
         }
+    }
+
+    public func toggleServiceAsync(id: UUID) async {
+        var current = runtimeStates[id] ?? .idle
+        let wasRunning = current.status.isOperational
+        current.isLoading = true
         runtimeStates[id] = current
+
+        if wasRunning {
+            await ServiceExecutionEngine.shared.stop(serviceID: id)
+            var updated = runtimeStates[id] ?? .idle
+            updated.status = .stopped
+            updated.isLoading = false
+            runtimeStates[id] = updated
+        } else {
+            do {
+                try await ServiceExecutionEngine.shared.start(serviceID: id)
+                var updated = runtimeStates[id] ?? .idle
+                updated.status = .running
+                updated.isLoading = false
+                runtimeStates[id] = updated
+            } catch {
+                Self.logger.error("Failed to start service \(id): \(error.localizedDescription)")
+                var updated = runtimeStates[id] ?? .idle
+                updated.status = .crashed
+                updated.isLoading = false
+                runtimeStates[id] = updated
+                AlertService.shared.showError(title: "Execution Error", message: error.localizedDescription)
+            }
+        }
+
+        // Recompute if status filter is active or sorting depends on status
+        if !selectedStatuses.isEmpty || sortBy == .status {
+            recomputeFilteredSnapshots()
+        }
     }
 
     public func toggleStarred(id: UUID, workspaceID: UUID) {
-        // 1. Optimistic zero-latency UI update
+        // 1. Optimistic zero-latency UI update (struct copy, no searchKey recompute)
         if let idx = snapshots.firstIndex(where: { $0.id == id }) {
-            let current = snapshots[idx]
-            let updated = ServiceCardSnapshot(
-                id: current.id,
-                name: current.name,
-                isDisabled: current.isDisabled,
-                isStarred: !current.isStarred,
-                subtitle: current.subtitle,
-                providerCategory: current.providerCategory,
-                portDisplays: current.portDisplays,
-                createdAt: current.createdAt
-            )
-            snapshots[idx] = updated
+            snapshots[idx] = snapshots[idx].toggling(starred: !snapshots[idx].isStarred)
         }
 
         // 2. Asynchronously persist to SQLite
@@ -174,10 +226,15 @@ public final class ServicesDeckViewModel {
 
     /// Batch apply runtime updates from background actor without invalidating static snapshot array
     public func applyRuntimeDiff(_ diff: [UUID: ServiceRuntimeState]) {
+        var changed = false
         for (id, state) in diff {
             if self.runtimeStates[id] != state {
                 self.runtimeStates[id] = state
+                changed = true
             }
+        }
+        if changed && (!selectedStatuses.isEmpty || sortBy == .status) {
+            recomputeFilteredSnapshots()
         }
     }
 }

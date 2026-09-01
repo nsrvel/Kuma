@@ -1,28 +1,34 @@
 import SwiftUI
 
-public struct ServiceCardView: View {
+public struct ServiceCardView: View, Equatable {
     public let snapshot: ServiceCardSnapshot
     public let runtime: ServiceRuntimeState
     public let isSelected: Bool
 
-    public var onToggle: () -> Void
-    public var onSelect: () -> Void
-    public let onToggleStar: () -> Void
+    // Direct ViewModel reference
+    public let viewModel: ServicesDeckViewModel
+    public let workspaceID: UUID
 
     public init(
         snapshot: ServiceCardSnapshot,
-        runtime: ServiceRuntimeState = ServiceRuntimeState(),
+        runtime: ServiceRuntimeState = .idle,
         isSelected: Bool = false,
-        onToggle: @escaping () -> Void = {},
-        onToggleStar: @escaping () -> Void = {},
-        onSelect: @escaping () -> Void = {}
+        viewModel: ServicesDeckViewModel,
+        workspaceID: UUID
     ) {
         self.snapshot = snapshot
         self.runtime = runtime
         self.isSelected = isSelected
-        self.onToggle = onToggle
-        self.onToggleStar = onToggleStar
-        self.onSelect = onSelect
+        self.viewModel = viewModel
+        self.workspaceID = workspaceID
+    }
+
+    // MARK: - Extreme Limit: Equatable bypass for zero redundant body evaluation
+    public static func == (lhs: ServiceCardView, rhs: ServiceCardView) -> Bool {
+        lhs.snapshot == rhs.snapshot &&
+        lhs.runtime == rhs.runtime &&
+        lhs.isSelected == rhs.isSelected &&
+        lhs.workspaceID == rhs.workspaceID
     }
 
     public var body: some View {
@@ -78,22 +84,12 @@ public struct ServiceCardView: View {
 
                 Spacer(minLength: 8)
 
-                // Native macOS Toggle Switch
-                if snapshot.isDisabled {
-                    Image(systemName: "lock.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(.tertiary)
-                } else {
-                    let isOnBinding = Binding<Bool>(
-                        get: { runtime.status == .running || runtime.status == .starting },
-                        set: { _ in onToggle() }
-                    )
-                    Toggle("", isOn: isOnBinding)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
-                        .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
-                }
+                // Micro-component: Isolated Toggle Switch
+                CardToggleSwitch(
+                    isDisabled: snapshot.isDisabled,
+                    runtime: runtime,
+                    onToggle: { viewModel.toggleService(id: snapshot.id) }
+                )
             }
 
             // Footer Row: Static Ports OR Contextual Provider Badge + Live Status Observer
@@ -114,24 +110,23 @@ public struct ServiceCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .strokeBorder(
-                    isSelected ? Color.accentColor : KumaColors.borderSubtle,
-                    lineWidth: isSelected ? 2.0 : 0.5
-                )
+            if isSelected {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: 2.0)
+            }
         }
         .opacity(snapshot.isDisabled ? 0.65 : 1.0)
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onTapGesture {
-            onSelect()
+            viewModel.selectService(snapshot.id)
         }
         .contextMenu {
             ServiceActionContextMenu(
                 snapshot: snapshot,
                 runtime: runtime,
-                onToggle: onToggle,
-                onToggleStar: onToggleStar,
-                onSelect: onSelect
+                onToggle: { viewModel.toggleService(id: snapshot.id) },
+                onToggleStar: { viewModel.toggleStarred(id: snapshot.id, workspaceID: workspaceID) },
+                onSelect: { viewModel.selectService(snapshot.id) }
             )
         }
     }
@@ -141,5 +136,35 @@ public struct ServiceCardView: View {
             return snapshot.subtitle
         }
         return snapshot.providerCategory.sidebarLabel
+    }
+}
+
+/// Isolated micro-view for the toggle switch button to prevent full card re-evaluations
+private struct CardToggleSwitch: View, Equatable {
+    let isDisabled: Bool
+    let runtime: ServiceRuntimeState
+    let onToggle: () -> Void
+
+    static func == (lhs: CardToggleSwitch, rhs: CardToggleSwitch) -> Bool {
+        lhs.isDisabled == rhs.isDisabled &&
+        lhs.runtime == rhs.runtime
+    }
+
+    var body: some View {
+        if isDisabled {
+            Image(systemName: "lock.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.tertiary)
+        } else {
+            let isOnBinding = Binding<Bool>(
+                get: { runtime.status == .running || runtime.status == .starting },
+                set: { _ in onToggle() }
+            )
+            Toggle("", isOn: isOnBinding)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
+        }
     }
 }
