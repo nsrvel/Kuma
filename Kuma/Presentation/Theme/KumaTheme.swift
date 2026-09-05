@@ -118,7 +118,6 @@ public enum KumaTheme {
         public static let widthMax: CGFloat = 565
     }
 
-
     public enum Sidebar {
         public static let widthMin: CGFloat = 200
         public static let widthIdeal: CGFloat = 220
@@ -139,5 +138,16 @@ public enum KumaTheme {
         public static let hoverBgOpacity: Double = 0.08
         public static let selectedBgOpacity: Double = 0.08
         public static let dividerColor = Color.primary.opacity(0.06)
+    }
+
+    public enum Workspace {
+        /// Popover Switcher menu width
+        public static let popoverWidth: CGFloat = 275
+        /// Modal form sheet width (Create / Edit)
+        public static let formSheetWidth: CGFloat = 440
+        /// Minimum sheet height when Danger Zone is hidden
+        public static let formSheetMinHeightCompact: CGFloat = 300
+        /// Minimum sheet height when Danger Zone is displayed
+        public static let formSheetMinHeightExpanded: CGFloat = 380
     }
 }

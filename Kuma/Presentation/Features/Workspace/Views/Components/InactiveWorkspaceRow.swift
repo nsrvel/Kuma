@@ -12,7 +12,6 @@ public struct InactiveWorkspaceRow: View {
 
     @State private var isHovered = false
 
-
     public init(
         workspace: Workspace,
         shortcutIndex: Int?,
@@ -57,12 +56,15 @@ public struct InactiveWorkspaceRow: View {
         .padding(.horizontal, KumaTheme.Sidebar.rowHorizontalPadding)
         .background(isHovered ? Color.primary.opacity(0.05) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: KumaTheme.Sidebar.rowCornerRadius, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(workspace.name)
+        .accessibilityHint(shortcutIndex != nil ? "Switch to workspace, shortcut Command \(shortcutIndex!)" : "Switch to workspace")
+        .accessibilityAddTraits(.isButton)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.14)) {
                 isHovered = hovering
             }
         }
-
         .contextMenu {
             Button {
                 onSelect()

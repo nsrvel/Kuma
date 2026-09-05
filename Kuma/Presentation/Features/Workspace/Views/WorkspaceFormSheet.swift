@@ -15,7 +15,6 @@ public struct WorkspaceFormSheet: View {
     @State private var selectedImagePath: String? = nil
     @State private var selectedImageURL: URL? = nil
     @State private var errorMessage: String? = nil
-    @State private var showDeleteAlert = false
 
     public init(store: WorkspaceStore, mode: WorkspaceFormMode, isPresented: Binding<Bool>) {
         self.store = store
@@ -45,7 +44,6 @@ public struct WorkspaceFormSheet: View {
 
             // 2. Form Body
             VStack(alignment: .leading, spacing: 20) {
-                // Workspace Info (Avatar Picker & Name)
                 VStack(spacing: 16) {
                     WorkspaceAvatarPickerView(
                         name: name.isEmpty ? "Workspace" : name,
@@ -75,8 +73,17 @@ public struct WorkspaceFormSheet: View {
                 }
 
                 // Danger Zone / Delete Button (only if editing and >1 workspace)
-                if case .edit = mode, store.workspaces.count > 1 {
-                    dangerZoneSection
+                if case .edit(let ws) = mode, store.workspaces.count > 1 {
+                    WorkspaceDangerZoneSection(workspace: ws) {
+                        isPresented = false
+                        AlertService.shared.confirmDelete(
+                            title: "Delete Workspace?",
+                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
+                            confirmTitle: "Delete"
+                        ) {
+                            store.deleteWorkspace(ws)
+                        }
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -107,60 +114,8 @@ public struct WorkspaceFormSheet: View {
             .padding(.vertical, 14)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
-        .frame(width: 440)
-        .frame(minHeight: (mode == .create || store.workspaces.count <= 1) ? 300 : 400)
-        .alert("Delete Workspace?", isPresented: $showDeleteAlert) {
-            Button("Delete", role: .destructive) {
-                if case .edit(let ws) = mode {
-                    store.deleteWorkspace(ws)
-                    isPresented = false
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            if case .edit(let ws) = mode {
-                Text("All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.")
-            }
-        }
-    }
-
-    private var dangerZoneSection: some View {
-        KumaFormSection(icon: "exclamationmark.triangle", title: "Danger Zone", style: .danger) {
-            HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.red.opacity(0.8))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Delete Workspace")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    Text("Permanently remove this workspace and all configuration.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer()
-
-                Button(role: .destructive) {
-                    if case .edit(let ws) = mode {
-                        isPresented = false
-                        AlertService.shared.confirmDelete(
-                            title: "Delete Workspace?",
-                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
-                            confirmTitle: "Delete"
-                        ) {
-                            store.deleteWorkspace(ws)
-                        }
-                    }
-                } label: {
-                    Text("Delete...")
-                        .foregroundStyle(Color.red)
-                }
-                .buttonStyle(.bordered)
-            }
-        }
+        .frame(width: KumaTheme.Workspace.formSheetWidth)
+        .frame(minHeight: (mode == .create || store.workspaces.count <= 1) ? KumaTheme.Workspace.formSheetMinHeightCompact : KumaTheme.Workspace.formSheetMinHeightExpanded)
     }
 
     private func saveChanges() {

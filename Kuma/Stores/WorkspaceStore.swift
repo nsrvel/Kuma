@@ -134,6 +134,10 @@ public final class WorkspaceStore {
         var updated = workspace
 
         if let newExternalImageURL {
+            // Delete previous image file if it exists to avoid leaking storage
+            if let oldImagePath = updated.imagePath {
+                WorkspaceImageStore.shared.deleteImage(for: oldImagePath)
+            }
             let managedFileName = WorkspaceImageStore.shared.saveWorkspaceImage(from: newExternalImageURL, workspaceID: workspace.id)
             updated.imagePath = managedFileName
         }
@@ -153,6 +157,12 @@ public final class WorkspaceStore {
     }
 
     public func deleteWorkspace(_ workspace: Workspace) {
+        // Invariant Rule: App must never have 0 workspaces
+        guard workspaces.count > 1 else {
+            Self.logger.warning("Attempted to delete the sole remaining workspace \(workspace.id). Operation blocked.")
+            return
+        }
+
         if let imagePath = workspace.imagePath {
             WorkspaceImageStore.shared.deleteImage(for: imagePath)
         }
@@ -175,7 +185,10 @@ public final class WorkspaceStore {
     }
 
     public func moveWorkspace(from sourceIndex: Int, to destinationIndex: Int) {
-        guard sourceIndex < workspaces.count && destinationIndex < workspaces.count else { return }
+        guard sourceIndex >= 0, sourceIndex < workspaces.count,
+              destinationIndex >= 0, destinationIndex < workspaces.count,
+              sourceIndex != destinationIndex else { return }
+
         workspaces.swapAt(sourceIndex, destinationIndex)
 
         var ordersToUpdate: [(id: UUID, sortOrder: Int)] = []

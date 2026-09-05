@@ -14,12 +14,10 @@ public struct WorkspaceSwitcherPopover: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Active Workspace Container Box (Content-First & Instant Context)
             if let activeWS = store.activeWorkspace {
                 activeWorkspaceRow(activeWS)
             }
 
-            // Inactive Workspaces (Compact Scrollable List)
             let inactiveWS = store.workspaces.filter { $0.id != store.selectedWorkspaceId }
             if !inactiveWS.isEmpty {
                 ScrollView(.vertical, showsIndicators: true) {
@@ -57,10 +55,8 @@ public struct WorkspaceSwitcherPopover: View {
                 .padding(.top, 2)
             }
 
-            // Subtle Divider
             KumaDivider(opacity: 0.06, verticalPadding: 6, horizontalPadding: 10)
 
-            // "New Workspace…" plain action button at the bottom
             NewWorkspaceBottomButton {
                 isPresented = false
                 store.showCreateSheet = true
@@ -68,7 +64,7 @@ public struct WorkspaceSwitcherPopover: View {
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
         }
-        .frame(width: 275)
+        .frame(width: KumaTheme.Workspace.popoverWidth)
     }
 
     private func activeWorkspaceRow(_ activeWS: Workspace) -> some View {
@@ -88,7 +84,6 @@ public struct WorkspaceSwitcherPopover: View {
 
             Spacer()
 
-            // Settings gear button
             Button {
                 isPresented = false
                 store.workspaceToEdit = activeWS
@@ -104,7 +99,6 @@ public struct WorkspaceSwitcherPopover: View {
             .help("Workspace Settings")
         }
         .padding(8)
-
         .background(Color.primary.opacity(isHoveringActiveRow ? 0.05 : 0.03))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
@@ -129,7 +123,6 @@ public struct WorkspaceSwitcherPopover: View {
 
             if store.workspaces.count > 1 {
                 Divider()
-
                 Button(role: .destructive) {
                     isPresented = false
                     AlertService.shared.confirmDelete(

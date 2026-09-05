@@ -50,6 +50,8 @@ public struct WorkspaceAvatarPickerView: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 4, y: 2)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Choose workspace photo")
+            .accessibilityHint("Opens a file picker to select a custom avatar image")
             .onHover { hovering in
                 withAnimation(.easeInOut(duration: 0.15)) {
                     isHoveringAvatar = hovering
@@ -67,6 +69,7 @@ public struct WorkspaceAvatarPickerView: View {
                             .foregroundStyle(Color.red)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Remove workspace photo")
                 } else {
                     Button(action: selectImage) {
                         Text("Choose Photo")
@@ -74,6 +77,7 @@ public struct WorkspaceAvatarPickerView: View {
                             .foregroundStyle(Color.accentColor)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Choose workspace photo")
                 }
             }
         }
