@@ -54,7 +54,7 @@ graph TD
         TunnelSec --> Ngrok[ngrok Binary Path]
         
         KubeCLI & ContainerCLI & Cloudflared & Ngrok --> DepCheck[DependencyChecker Zero-Latency Validation]
-        DepCheck --> Badges[BinaryStatusBadge: Installed / Missing]
+        DepCheck --> ConcreteVal[Concrete Path Population / 'Not detected' Placeholder]
     end
 
     subgraph NotificationsAndLogs [3. Notifications & Buffer]
@@ -84,6 +84,8 @@ graph TD
         TermProc --> WipeDB[AppDatabase.wipeAndResetDatabase]
         WipeDB --> WipeDefaults[UserDefaults Domain Removal]
         WipeDefaults --> RelaunchCoord[coordinator.resetToOnboarding]
+
+        Nav --> AppVersionFooter[App Version & Build Info Footer]
     end
 ```
 
@@ -110,8 +112,8 @@ graph TD
 | **Clear Buffer on Restart**| Toggle Switch | `clearLogsOnSwitch: Bool` | `kuma.settings.clearLogsOnSwitch` | Service restart handler purges in-memory log buffer | Default: `false` |
 | **Export Configuration** | Click "Export…" Button | Modal NSSavePanel | None (Reads DB records) | Writes pretty-printed JSON file atomically | Disabled while `isProcessing == true` |
 | **Import Configuration** | Click "Import…" Button / Drag JSON | Modal NSOpenPanel / Sheet | None (Parses JSON) | Opens `ImportPreviewSheet` with selective workspace & service restoration | Version verification (`backup.version <= currentVersion`) |
-| **Reset Settings to Default**| Confirm Dialog "Reset to Defaults" | Settings Reset | Clears all `kuma.settings.*` keys from UserDefaults | Re-initializes settings properties to factory defaults without touching SQLite database | Protected by confirmation dialog |
-| **Reset All Data** | Confirm Dialog "Reset Everything" | Complete App Wipe | Clears UserDefaults, SQLite DB, Workspace Images | Calls `ProcessRegistry.shared.terminateAll()`, transitions to `.onboarding` | Protected by 2-step destructive confirmation dialog |
+| **Reset Settings to Default**| Click "Reset Settings…" Button | Settings Reset | Clears all `kuma.settings.*` keys from UserDefaults | Re-initializes settings properties to factory defaults without touching SQLite database | Protected by confirmation dialog |
+| **Reset All Data** | Click "Reset All…" Button (Destructive red) | Complete App Wipe | Clears UserDefaults, SQLite DB, Workspace Images | Calls `ProcessRegistry.shared.terminateAll()`, transitions to `.onboarding` | Protected by 2-step destructive confirmation dialog |
 
 ---
 

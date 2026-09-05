@@ -19,13 +19,6 @@ public struct SettingsCLIToolsSection: View {
         DependencyChecker.validateCustomBinary(path: viewModel.customKubectlPath, expectedCommand: "kubectl")
     }
 
-    private var isKubectlAvailable: Bool {
-        if viewModel.customKubectlPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return !defaultKubectlPath.isEmpty
-        }
-        return kubectlValidation.isValid
-    }
-
     private var kubeconfigValidation: String? {
         let trimmed = viewModel.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -36,33 +29,12 @@ public struct SettingsCLIToolsSection: View {
         return nil
     }
 
-    private var isKubeconfigAvailable: Bool {
-        if viewModel.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return DependencyChecker.isKubeconfigPresent()
-        }
-        return kubeconfigValidation == nil
-    }
-
     private var dockerValidation: BinaryValidationResult {
         DependencyChecker.validateCustomBinary(path: viewModel.customDockerPath, expectedCommand: "docker")
     }
 
-    private var isDockerAvailable: Bool {
-        if viewModel.customDockerPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return !defaultDockerPath.isEmpty
-        }
-        return dockerValidation.isValid
-    }
-
     private var podmanValidation: BinaryValidationResult {
         DependencyChecker.validateCustomBinary(path: viewModel.customPodmanPath, expectedCommand: "podman")
-    }
-
-    private var isPodmanAvailable: Bool {
-        if viewModel.customPodmanPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return !defaultPodmanPath.isEmpty
-        }
-        return podmanValidation.isValid
     }
 
     public var body: some View {
@@ -72,18 +44,15 @@ public struct SettingsCLIToolsSection: View {
         ) {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 // Kubectl
-                VStack(alignment: .leading, spacing: KumaSpacing.xs) {
-                    HStack {
-                        Text("Kubectl Binary")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        BinaryStatusBadge(isInstalled: isKubectlAvailable)
-                    }
+                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                    Text("Kubectl Binary")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+
                     KumaFilePickerField(
                         label: "",
                         path: $viewModel.customKubectlPath,
-                        placeholder: defaultKubectlPath.isEmpty ? "/opt/homebrew/bin/kubectl" : defaultKubectlPath,
+                        placeholder: defaultKubectlPath.isEmpty ? "Not detected" : defaultKubectlPath,
                         chooseFiles: true,
                         chooseDirectories: false,
                         allowedContentTypes: [.unixExecutable, .executable],
@@ -94,18 +63,15 @@ public struct SettingsCLIToolsSection: View {
                 Divider().opacity(0.3)
 
                 // Default Kubeconfig Path
-                VStack(alignment: .leading, spacing: KumaSpacing.xs) {
-                    HStack {
-                        Text("Default Kubeconfig Path")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        BinaryStatusBadge(isInstalled: isKubeconfigAvailable)
-                    }
+                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                    Text("Default Kubeconfig Path")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+
                     KumaFilePickerField(
                         label: "",
                         path: $viewModel.customKubeconfigPath,
-                        placeholder: "~/.kube/config",
+                        placeholder: DependencyChecker.isKubeconfigPresent() ? "~/.kube/config" : "Not detected",
                         chooseFiles: true,
                         chooseDirectories: false,
                         error: kubeconfigValidation
@@ -115,18 +81,15 @@ public struct SettingsCLIToolsSection: View {
                 Divider().opacity(0.3)
 
                 // Docker
-                VStack(alignment: .leading, spacing: KumaSpacing.xs) {
-                    HStack {
-                        Text("Docker Binary")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        BinaryStatusBadge(isInstalled: isDockerAvailable)
-                    }
+                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                    Text("Docker Binary")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+
                     KumaFilePickerField(
                         label: "",
                         path: $viewModel.customDockerPath,
-                        placeholder: defaultDockerPath.isEmpty ? "/usr/local/bin/docker" : defaultDockerPath,
+                        placeholder: defaultDockerPath.isEmpty ? "Not detected" : defaultDockerPath,
                         chooseFiles: true,
                         chooseDirectories: false,
                         allowedContentTypes: [.unixExecutable, .executable],
@@ -137,18 +100,15 @@ public struct SettingsCLIToolsSection: View {
                 Divider().opacity(0.3)
 
                 // Podman
-                VStack(alignment: .leading, spacing: KumaSpacing.xs) {
-                    HStack {
-                        Text("Podman Binary")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        BinaryStatusBadge(isInstalled: isPodmanAvailable)
-                    }
+                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                    Text("Podman Binary")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+
                     KumaFilePickerField(
                         label: "",
                         path: $viewModel.customPodmanPath,
-                        placeholder: defaultPodmanPath.isEmpty ? "/opt/homebrew/bin/podman" : defaultPodmanPath,
+                        placeholder: defaultPodmanPath.isEmpty ? "Not detected" : defaultPodmanPath,
                         chooseFiles: true,
                         chooseDirectories: false,
                         allowedContentTypes: [.unixExecutable, .executable],
@@ -178,10 +138,26 @@ public struct SettingsCLIToolsSection: View {
         let docker = await resolver.resolveExecutablePath(for: "docker")
         let kube = await resolver.resolveExecutablePath(for: "kubectl")
         let podman = await resolver.resolveExecutablePath(for: "podman")
+        let kubeconfigExists = DependencyChecker.isKubeconfigPresent()
+
         await MainActor.run {
             self.defaultDockerPath = docker ?? ""
             self.defaultKubectlPath = kube ?? ""
             self.defaultPodmanPath = podman ?? ""
+
+            // Populate detected paths as active concrete values if field is currently unconfigured
+            if viewModel.customKubectlPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let kube {
+                viewModel.customKubectlPath = kube
+            }
+            if viewModel.customDockerPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let docker {
+                viewModel.customDockerPath = docker
+            }
+            if viewModel.customPodmanPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let podman {
+                viewModel.customPodmanPath = podman
+            }
+            if viewModel.customKubeconfigPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, kubeconfigExists {
+                viewModel.customKubeconfigPath = "~/.kube/config"
+            }
         }
     }
 }

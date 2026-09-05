@@ -89,12 +89,12 @@ stateDiagram-v2
 | `0 (Welcome)` | `onAppear` | `0` | None | Background async pre-scan triggered once (`hasInitialScanned = true`). |
 | `0 (Welcome)` | `nextStep()` | `1 (Engines)` | None | Spring transition forward (`trailing -> leading`). |
 | `1 (Engines)` | `prevStep()` | `0 (Welcome)` | None | Spring transition backward (`leading -> trailing`). |
-| `1 (Engines)` | `setCustomPath(dep, path)` [Valid] | `1` | `UserDefaults` update for `dependency.settingsKey` (`KumaSettingsKey`) | Cancel previous in-flight scan task, trigger atomic re-scan. |
+| `1 (Engines)` | `setCustomPath(dep, path)` [Valid] | `1` | `UserDefaults` update for `dependency.settingsKey` (`KumaSettingsKey`) | Cancel previous in-flight scan task, trigger atomic re-scan. Detected binary renders trailing `✓ Ready` status; uninstalled renders `Browse…` button. |
 | `1 (Engines)` | `setCustomPath(dep, path)` [Invalid] | `1` | **No Persistence** | Set `pathValidationError`, present native `.alert("Invalid Binary Selection")`. |
 | `1 (Engines)` | `runScan(force: true)` | `1` | None | Set `isScanning = true`, 200ms haptic throttle, refresh `engineDependencies`. |
 | `1 (Engines)` | `nextStep()` | `2 (Tunneling)` | None | Spring transition forward. Allowed even if some dependencies are missing (non-blocking). |
 | `2 (Tunneling)` | `prevStep()` | `1 (Engines)` | None | Spring transition backward. |
-| `2 (Tunneling)` | `setCustomPath(dep, path)` [Valid] | `2` | `UserDefaults` update for `dependency.settingsKey` (`KumaSettingsKey`) | Cancel previous in-flight scan task, trigger atomic re-scan. |
+| `2 (Tunneling)` | `setCustomPath(dep, path)` [Valid] | `2` | `UserDefaults` update for `dependency.settingsKey` (`KumaSettingsKey`) | Cancel previous in-flight scan task, trigger atomic re-scan. Detected binary renders trailing `✓ Ready` status; uninstalled renders `Browse…` button. |
 | `2 (Tunneling)` | `setCustomPath(dep, path)` [Invalid] | `2` | **No Persistence** | Set `pathValidationError`, present native `.alert("Invalid Binary Selection")`. |
 | `2 (Tunneling)` | `nextStep()` | `3 (Ready)` | None | Spring transition forward. Button changes to "Get Started". |
 | `3 (Ready)` | `prevStep()` | `2 (Tunneling)` | None | Spring transition backward. Button reverts to "Continue". |

@@ -51,20 +51,14 @@ public struct DependencyStatusRowView: View {
                         Text("Checking PATH…")
                             .font(KumaFont.subheadline)
                             .foregroundStyle(.secondary)
-                    } else if dependency.isInstalled {
-                        if let path = dependency.path {
-                            Text(path)
-                                .font(KumaFont.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        } else {
-                            Text("Installed")
-                                .font(KumaFont.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
+                    } else if let path = dependency.path, !path.isEmpty {
+                        Text(path)
+                            .font(KumaFont.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     } else {
-                        Text("Not Found")
+                        Text("Not detected")
                             .font(KumaFont.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -72,18 +66,26 @@ public struct DependencyStatusRowView: View {
 
                 Spacer(minLength: KumaSpacing.sm)
 
-                // Status Indicator or Action Button
+                // Action / Status Area:
+                // - Spinner during scan
+                // - 'Ready' pill if detected
+                // - 'Browse…' button if missing/not detected
                 if isScanning {
                     ProgressView()
                         .controlSize(.small)
                         .frame(width: 14, height: 14)
                         .fixedSize()
-                } else if dependency.isInstalled {
-                    StatusPillView(
-                        text: "Available",
-                        color: KumaColors.statusRunning,
-                        showDot: true
-                    )
+                } else if (dependency.path?.isEmpty == false) || dependency.isInstalled {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.green)
+
+                        Text("Ready")
+                            .font(KumaFont.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.trailing, 2)
                 } else if onBrowse != nil {
                     Button("Browse…") {
                         isFileImporterPresented = true

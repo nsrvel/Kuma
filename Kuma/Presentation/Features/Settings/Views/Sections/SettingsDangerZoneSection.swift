@@ -34,7 +34,7 @@ public struct SettingsDangerZoneSection: View {
                         Text("Reset Settings to Default")
                             .font(KumaFont.body)
                             .foregroundStyle(.primary)
-                        Text("Restore all preferences and binary paths to factory defaults without affecting your workspaces or services.")
+                        Text("Restore preferences and tool paths without affecting your workspaces.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -54,12 +54,12 @@ public struct SettingsDangerZoneSection: View {
                         Text("Reset All Data")
                             .font(KumaFont.body)
                             .foregroundStyle(.red)
-                        Text("Permanently delete all workspaces, services, providers, and port mappings.")
+                        Text("Permanently delete all workspaces, services, and app data.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Reset Data…") {
+                    Button("Reset All…") {
                         showResetConfirmation = true
                     }
                     .buttonStyle(.bordered)

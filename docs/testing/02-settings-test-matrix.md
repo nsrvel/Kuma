@@ -85,7 +85,7 @@
 | **TC-F01** | `testSettingsViewRendersAllSections` | Inisialisasi `SettingsView` dengan viewModel & store | View ter-render tanpa layout crash | ✅ Passed (0.004s) |
 | **TC-F02** | `testAppearanceCardSelectionAnimation`| Render `AppearanceCard` untuk ketiga mode tema | Memiliki identitas namespace matched geometry dan accessibility labels | ✅ Passed (0.003s) |
 | **TC-F03** | `testBinaryStatusBadgeRendering` | Render `BinaryStatusBadge(isInstalled: true/false)` | Menampilkan icon checkmark hijau saat true, xmark abu-abu saat false | ✅ Passed (0.001s) |
-| **TC-F04** | `testDangerZoneConfirmationVisibility` | Pemicu tombol "Reset All Data" & "Reset Settings to Default" | Dialog konfirmasi render dengan benar | ✅ Passed (0.012s) |
+| **TC-F04** | `testDangerZoneConfirmationVisibility` | Pemicu tombol "Reset Settings…" & "Reset All…" | Dialog konfirmasi ter-render dengan benar, tombol berlabel self-descriptive dengan styling netral vs merah | ✅ Passed (0.012s) |
 | **TC-F05** | `testBackupRestoreSectionRendering` | Render `SettingsBackupRestoreSection` | Tombol Export & Import ter-render dengan HIG icons | ✅ Passed (0.001s) |
 | **TC-F06** | `testPortsConnectionsSectionRendering` | Render `SettingsPortsConnectionsSection` | Picker Port Conflict Action ter-render dengan HIG styles | ✅ Passed (0.001s) |
 

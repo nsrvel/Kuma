@@ -18,22 +18,8 @@ public struct SettingsTunnelingToolsSection: View {
         DependencyChecker.validateCustomBinary(path: viewModel.cloudflaredPath, expectedCommand: "cloudflared")
     }
 
-    private var isCloudflaredAvailable: Bool {
-        if viewModel.cloudflaredPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return !defaultCloudflaredPath.isEmpty
-        }
-        return cloudflaredValidation.isValid
-    }
-
     private var ngrokValidation: BinaryValidationResult {
         DependencyChecker.validateCustomBinary(path: viewModel.customNgrokPath, expectedCommand: "ngrok")
-    }
-
-    private var isNgrokAvailable: Bool {
-        if viewModel.customNgrokPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return !defaultNgrokPath.isEmpty
-        }
-        return ngrokValidation.isValid
     }
 
     public var body: some View {
@@ -43,18 +29,15 @@ public struct SettingsTunnelingToolsSection: View {
         ) {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 // Cloudflare Tunnel
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("Cloudflare Tunnel Binary (cloudflared)")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        BinaryStatusBadge(isInstalled: isCloudflaredAvailable)
-                    }
+                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                    Text("Cloudflare Tunnel Binary (cloudflared)")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+
                     KumaFilePickerField(
                         label: "",
                         path: $viewModel.cloudflaredPath,
-                        placeholder: defaultCloudflaredPath.isEmpty ? "/opt/homebrew/bin/cloudflared" : defaultCloudflaredPath,
+                        placeholder: defaultCloudflaredPath.isEmpty ? "Not detected" : defaultCloudflaredPath,
                         chooseFiles: true,
                         chooseDirectories: false,
                         allowedContentTypes: [.unixExecutable, .executable],
@@ -65,18 +48,15 @@ public struct SettingsTunnelingToolsSection: View {
                 Divider().opacity(0.3)
 
                 // ngrok Tunnel
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("ngrok Binary")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        BinaryStatusBadge(isInstalled: isNgrokAvailable)
-                    }
+                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                    Text("ngrok Binary")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+
                     KumaFilePickerField(
                         label: "",
                         path: $viewModel.customNgrokPath,
-                        placeholder: defaultNgrokPath.isEmpty ? "/opt/homebrew/bin/ngrok" : defaultNgrokPath,
+                        placeholder: defaultNgrokPath.isEmpty ? "Not detected" : defaultNgrokPath,
                         chooseFiles: true,
                         chooseDirectories: false,
                         allowedContentTypes: [.unixExecutable, .executable],
@@ -97,6 +77,14 @@ public struct SettingsTunnelingToolsSection: View {
         await MainActor.run {
             self.defaultCloudflaredPath = cf ?? ""
             self.defaultNgrokPath = ng ?? ""
+
+            // Populate detected paths as active concrete values if field is currently unconfigured
+            if viewModel.cloudflaredPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let cf {
+                viewModel.cloudflaredPath = cf
+            }
+            if viewModel.customNgrokPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let ng {
+                viewModel.customNgrokPath = ng
+            }
         }
     }
 }
