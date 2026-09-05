@@ -133,4 +133,22 @@ struct SettingsPersistenceAndSyncTests {
         #expect(viewModel.notifySound == false)
         #expect(viewModel.warnOnPortCollision == false)
     }
+
+    // MARK: - [TC-C07] Port Conflict Policy Persistence
+    @Test("TC-C07: Mutating portConflictPolicy updates UserDefaults immediately")
+    func testPortConflictPolicyPersistence() {
+        let harness = SettingsTestHarness()
+        defer { harness.cleanup() }
+
+        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        #expect(viewModel.portConflictPolicy == .warnAndBlock)
+
+        viewModel.portConflictPolicy = .killExisting
+
+        let saved = harness.userDefaults.string(forKey: KumaSettingsKey.portConflictPolicy)
+        #expect(saved == PortConflictPolicy.killExisting.rawValue)
+
+        let reloadedViewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        #expect(reloadedViewModel.portConflictPolicy == .killExisting)
+    }
 }

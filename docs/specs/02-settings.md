@@ -103,14 +103,14 @@ graph TD
 | **Docker Binary Path** | Text Input / File Picker | `customDockerPath: String` | `kuma.settings.customDockerPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_docker_path` |
 | **Podman Binary Path** | Text Input / File Picker | `customPodmanPath: String` | `kuma.settings.customPodmanPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_podman_path` |
 | **Cloudflared Path** | Text Input / File Picker | `cloudflaredPath: String` | `kuma.settings.cloudflaredPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_cloudflared_path` |
-| **ngrok Binary Path** | Text Input / File Picker | `customNgrokPath: String` | `kuma.settings.customNgrokPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_ngrok_path` |
 | **Notify on Crash** | Toggle Switch | `notifyOnCrash: Bool` | `kuma.settings.notifyOnCrash` | Requests `UNUserNotificationCenter` authorization | Resets to `false` and alerts user if denied |
-| **Notify on Health Fail**| Toggle Switch | `notifyOnHealthFailure: Bool`| `kuma.settings.notifyOnHealthFailure` | HealthCheck engine suppresses or dispatches alerts | Default: `true` |
-| **Port Collision Safety**| Toggle Switch | `warnOnPortCollision: Bool` | `kuma.settings.warnOnPortCollision` | Pre-start check checks socket availability before process launch | Default: `true` |
+| **Notify on Health Fail**| Toggle Switch | `notifyOnHealthFailure: Bool`| `kuma.settings.notifyOnHealthFailure` | HealthCheck engine suppresses or dispatches alerts | Default: `true` (SettingsNotificationsSection) |
+| **Port Conflict Policy**| Select Picker Option | `portConflictPolicy: PortConflictPolicy` | `kuma.settings.portConflictPolicy` | Determines action when port is bound (`warnAndBlock` or `killExisting`) | Default: `.warnAndBlock` (SettingsPortsConnectionsSection) |
 | **Log Retention Buffer** | Select Picker Option | `logRetentionLimit: LogRetentionLimit` | `kuma.settings.logRetentionLimit` | Ring buffer ceiling for process log outputs (10MB, 50MB, 100MB, 0=unlimited) | Default: `50MB` |
 | **Clear Buffer on Restart**| Toggle Switch | `clearLogsOnSwitch: Bool` | `kuma.settings.clearLogsOnSwitch` | Service restart handler purges in-memory log buffer | Default: `false` |
 | **Export Configuration** | Click "Export…" Button | Modal NSSavePanel | None (Reads DB records) | Writes pretty-printed JSON file atomically | Disabled while `isProcessing == true` |
 | **Import Configuration** | Click "Import…" Button / Drag JSON | Modal NSOpenPanel / Sheet | None (Parses JSON) | Opens `ImportPreviewSheet` with selective workspace & service restoration | Version verification (`backup.version <= currentVersion`) |
+| **Reset Settings to Default**| Confirm Dialog "Reset to Defaults" | Settings Reset | Clears all `kuma.settings.*` keys from UserDefaults | Re-initializes settings properties to factory defaults without touching SQLite database | Protected by confirmation dialog |
 | **Reset All Data** | Confirm Dialog "Reset Everything" | Complete App Wipe | Clears UserDefaults, SQLite DB, Workspace Images | Calls `ProcessRegistry.shared.terminateAll()`, transitions to `.onboarding` | Protected by 2-step destructive confirmation dialog |
 
 ---

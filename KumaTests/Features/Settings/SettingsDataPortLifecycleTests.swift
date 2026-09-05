@@ -90,4 +90,51 @@ struct SettingsDataPortLifecycleTests {
         #expect(decoded.service.name == "Standalone API")
         #expect(decoded.id == service.id)
     }
+
+    // MARK: - [TC-E06] Reset Settings To Default Preserves Database
+    @Test("TC-E06: resetSettingsToDefault restores defaults without touching SQLite database records")
+    func testResetSettingsToDefaultPreservesDatabase() async throws {
+        let harness = SettingsTestHarness()
+        defer { harness.cleanup() }
+
+        // 1. Setup custom settings
+        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        viewModel.customKubectlPath = "/custom/path/kubectl"
+        viewModel.defaultShell = "/opt/homebrew/bin/fish"
+        viewModel.portConflictPolicy = .killExisting
+        viewModel.autoResumeServices = false
+
+        // 2. Setup SQLite database with a workspace record
+        let wsRepo = WorkspaceRepository()
+        let countInitial = try await wsRepo.fetchAll().count
+
+        let workspace = Workspace(name: "Production API \(UUID().uuidString)")
+        try await wsRepo.insert(workspace)
+
+        let savedWorkspacesBefore = try await wsRepo.fetchAll()
+        #expect(savedWorkspacesBefore.count == countInitial + 1)
+
+        // 3. Execute Reset Settings to Default
+        viewModel.resetSettingsToDefault()
+
+        // 4. Verify in-memory and persisted settings reset to default
+        #expect(viewModel.customKubectlPath == "")
+        #expect(viewModel.defaultShell == "/bin/zsh")
+        #expect(viewModel.portConflictPolicy == .warnAndBlock)
+        #expect(viewModel.autoResumeServices == true)
+
+        let reloadedViewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        #expect(reloadedViewModel.customKubectlPath == "")
+        #expect(reloadedViewModel.defaultShell == "/bin/zsh")
+        #expect(reloadedViewModel.portConflictPolicy == .warnAndBlock)
+        #expect(reloadedViewModel.autoResumeServices == true)
+
+        // 5. Verify database records are STILL INTACT (NOT deleted)
+        let savedWorkspacesAfter = try await wsRepo.fetchAll()
+        #expect(savedWorkspacesAfter.count == countInitial + 1)
+        #expect(savedWorkspacesAfter.contains(where: { $0.id == workspace.id }))
+
+        // Cleanup DB test record
+        try await wsRepo.delete(id: workspace.id)
+    }
 }

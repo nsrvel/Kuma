@@ -52,16 +52,21 @@ struct SettingsVisualTests {
     @Test("TC-F04: SettingsDangerZoneSection renders with destructive styling and binding")
     func testDangerZoneSectionRendering() {
         var showDialog = false
+        var showResetSettingsDialog = false
         let binding = Binding(get: { showDialog }, set: { showDialog = $0 })
+        let resetSettingsBinding = Binding(get: { showResetSettingsDialog }, set: { showResetSettingsDialog = $0 })
 
         let section = SettingsDangerZoneSection(
             showResetConfirmation: binding,
+            showResetSettingsConfirmation: resetSettingsBinding,
             isProcessing: false,
-            onReset: {}
+            onReset: {},
+            onResetSettings: {}
         )
 
         #expect(section != nil)
         #expect(showDialog == false)
+        #expect(showResetSettingsDialog == false)
     }
 
     // MARK: - [TC-F05] Backup Restore Section Rendering
@@ -79,5 +84,18 @@ struct SettingsVisualTests {
         #expect(section != nil)
         #expect(!exportClicked)
         #expect(!importClicked)
+    }
+
+    // MARK: - [TC-F06] Ports & Connections Section Rendering
+    @Test("TC-F06: SettingsPortsConnectionsSection renders conflict picker")
+    func testPortsConnectionsSectionRendering() {
+        let harness = SettingsTestHarness()
+        defer { harness.cleanup() }
+
+        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        let section = SettingsPortsConnectionsSection(viewModel: viewModel)
+
+        #expect(section != nil)
+        #expect(viewModel.portConflictPolicy == .warnAndBlock)
     }
 }

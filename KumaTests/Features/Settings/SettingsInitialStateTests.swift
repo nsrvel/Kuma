@@ -90,4 +90,17 @@ struct SettingsInitialStateTests {
         #expect(viewModel.logRetentionLimit.title == "50 MB")
         #expect(viewModel.clearLogsOnSwitch == false)
     }
+
+    // MARK: - [TC-A07] Clean Install Default Port Conflict Policy
+    @Test("TC-A07: Fresh install defaults to warnAndBlock port conflict policy")
+    func testDefaultPortConflictPolicy() {
+        let harness = SettingsTestHarness()
+        defer { harness.cleanup() }
+
+        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+
+        #expect(viewModel.portConflictPolicy == .warnAndBlock)
+        #expect(viewModel.portConflictPolicy.title == "Warn & Prevent Start")
+        #expect(PortConflictPolicy.allCases.count == 2)
+    }
 }

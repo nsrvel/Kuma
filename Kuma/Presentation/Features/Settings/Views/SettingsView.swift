@@ -20,10 +20,11 @@ public struct SettingsView: View {
                 // Developer & Engine Tools
                 SettingsCLIToolsSection(viewModel: viewModel)
                 SettingsTunnelingToolsSection(viewModel: viewModel)
+                SettingsPortsConnectionsSection(viewModel: viewModel)
                 SettingsLogsSection(viewModel: viewModel)
 
                 // Data & Storage Management
-                SettingsDataSection(workspaceStore: workspaceStore)
+                SettingsDataSection(viewModel: viewModel, workspaceStore: workspaceStore)
             }
             .padding(.horizontal, KumaSpacing.xxl)
             .padding(.vertical, KumaSpacing.xl)

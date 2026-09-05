@@ -23,6 +23,7 @@
 | **TC-A04** | `testDefaultShellOption` | Inisialisasi default shell | `defaultShell == "/bin/zsh"` | ✅ Passed (0.002s) |
 | **TC-A05** | `testDefaultNotificationSettings` | Fresh install nilai default notifikasi & keamanan | `notifyOnCrash == true`, `notifyOnHealthFailure == true`, `warnOnPortCollision == true` | ✅ Passed (0.002s) |
 | **TC-A06** | `testDefaultLogRetention` | Fresh install default log retention | `logRetentionLimit == .fiftyMB` (50 MB), `clearLogsOnSwitch == false` | ✅ Passed (0.018s) |
+| **TC-A07** | `testDefaultPortConflictPolicy` | Fresh install default port conflict policy | `portConflictPolicy == .warnAndBlock` ("Warn & Prevent Start") | ✅ Passed (0.001s) |
 
 ---
 
@@ -51,6 +52,7 @@
 | **TC-C04** | `testLegacyCloudflaredPathFallback` | Primary key kosong, terdapat legacy key `kuma.custom_cloudflared_path` | `KumaSettingsKey.string` me-resolve nilai legacy key dengan sukses | ✅ Passed (0.021s) |
 | **TC-C05** | `testPrimaryKeyOverridesLegacyKey` | Kedua key (modern & legacy) sama-sama terisi | Nilai modern key yang diutamakan | ✅ Passed (0.013s) |
 | **TC-C06** | `testConcurrentSettingsUpdates` | Menjalankan mutasi setting paralel dari beberapa Task `@MainActor` | State tetap konsisten tanpa data race (Swift 6 strict concurrency) | ✅ Passed (0.006s) |
+| **TC-C07** | `testPortConflictPolicyPersistence` | Mutasi `portConflictPolicy` ke `.killExisting` | Persist ke `UserDefaults` & ter-reload sempurna | ✅ Passed (0.002s) |
 
 ---
 
@@ -73,6 +75,7 @@
 | **TC-E03** | `testImportFutureVersionThrowsError` | Mencoba import JSON dengan version lebih baru dari app | Melempar `DataPortError.unsupportedFutureVersion` | ✅ Passed (0.001s) |
 | **TC-E04** | `testFactoryResetWipesDefaultsAndDB`| Memanggil `DataPortService.resetAllAppStorage()` | UserDefaults bersih, DB di-wipe, ProcessRegistry di-terminate | ✅ Passed (0.014s) |
 | **TC-E05** | `testSelectiveImportFilteredRestore` | Import backup dengan seleksi workspace tertentu saja | Hanya workspace terpilih yang dipulihkan | ✅ Passed (0.001s) |
+| **TC-E06** | `testResetSettingsToDefaultPreservesDatabase`| Reset Settings to Default | UserDefaults di-reset ke baseline, DB SQLite workspaces/services tetap aman | ✅ Passed (0.003s) |
 
 ---
 
@@ -82,5 +85,7 @@
 | **TC-F01** | `testSettingsViewRendersAllSections` | Inisialisasi `SettingsView` dengan viewModel & store | View ter-render tanpa layout crash | ✅ Passed (0.004s) |
 | **TC-F02** | `testAppearanceCardSelectionAnimation`| Render `AppearanceCard` untuk ketiga mode tema | Memiliki identitas namespace matched geometry dan accessibility labels | ✅ Passed (0.003s) |
 | **TC-F03** | `testBinaryStatusBadgeRendering` | Render `BinaryStatusBadge(isInstalled: true/false)` | Menampilkan icon checkmark hijau saat true, xmark abu-abu saat false | ✅ Passed (0.001s) |
-| **TC-F04** | `testDangerZoneConfirmationVisibility` | Pemicu tombol "Reset All Data" | Menampilkan dialog konfirmasi destruktif 2-langkah | ✅ Passed (0.012s) |
-| **TC-F05** | `testCLIToolsSectionAutoDetectPaths` | Trigger `.task { await refreshDefaultPaths() }` | Mendeteksi default binary path dari EnvironmentPathResolver | ✅ Passed (0.015s) |
+| **TC-F04** | `testDangerZoneConfirmationVisibility` | Pemicu tombol "Reset All Data" & "Reset Settings to Default" | Dialog konfirmasi render dengan benar | ✅ Passed (0.012s) |
+| **TC-F05** | `testBackupRestoreSectionRendering` | Render `SettingsBackupRestoreSection` | Tombol Export & Import ter-render dengan HIG icons | ✅ Passed (0.001s) |
+| **TC-F06** | `testPortsConnectionsSectionRendering` | Render `SettingsPortsConnectionsSection` | Picker Port Conflict Action ter-render dengan HIG styles | ✅ Passed (0.001s) |
+

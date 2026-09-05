@@ -31,6 +31,7 @@ public enum KumaSettingsKey {
     public static let notifySound = "kuma.settings.notifySound"
     public static let notifyOnHealthFailure = "kuma.settings.notifyOnHealthFailure"
     public static let warnOnPortCollision = "kuma.settings.warnOnPortCollision"
+    public static let portConflictPolicy = "kuma.settings.portConflictPolicy"
     public static let promptGracefulShutdown = "kuma.settings.promptGracefulShutdown"
 
     // MARK: - Logs & Buffer

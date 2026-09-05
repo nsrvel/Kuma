@@ -31,14 +31,6 @@ public struct SettingsNotificationsSection: View {
                     value: $viewModel.notifyOnHealthFailure,
                     description: "Send alerts when a monitored endpoint or socket stops responding."
                 )
-
-                Divider().opacity(0.3)
-
-                KumaToggleField(
-                    label: "Port Collision Safety Alerts",
-                    value: $viewModel.warnOnPortCollision,
-                    description: "Alert before starting a service if the target local port is already bound."
-                )
             }
         }
         .alert("Notification Permission Required", isPresented: $showPermissionAlert) {

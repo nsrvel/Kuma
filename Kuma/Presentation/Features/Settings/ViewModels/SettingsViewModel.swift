@@ -48,6 +48,18 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
     }
 }
 
+public enum PortConflictPolicy: String, CaseIterable, Codable, Sendable {
+    case warnAndBlock = "warn_and_block"
+    case killExisting = "kill_existing"
+
+    public var title: String {
+        switch self {
+        case .warnAndBlock: return "Warn & Prevent Start"
+        case .killExisting: return "Kill Conflicting Process"
+        }
+    }
+}
+
 @MainActor
 @Observable
 public final class SettingsViewModel {
@@ -143,6 +155,10 @@ public final class SettingsViewModel {
         didSet { userDefaults.set(warnOnPortCollision, forKey: Keys.warnOnPortCollision) }
     }
 
+    public var portConflictPolicy: PortConflictPolicy {
+        didSet { userDefaults.set(portConflictPolicy.rawValue, forKey: Keys.portConflictPolicy) }
+    }
+
     public var promptGracefulShutdown: Bool {
         didSet { userDefaults.set(promptGracefulShutdown, forKey: Keys.promptGracefulShutdown) }
     }
@@ -215,6 +231,8 @@ public final class SettingsViewModel {
         self.notifySound = KumaSettingsKey.bool(forKey: Keys.notifySound, defaultValue: true, defaults: userDefaults)
         self.notifyOnHealthFailure = KumaSettingsKey.bool(forKey: Keys.notifyOnHealthFailure, defaultValue: true, defaults: userDefaults)
         self.warnOnPortCollision = KumaSettingsKey.bool(forKey: Keys.warnOnPortCollision, defaultValue: true, defaults: userDefaults)
+        let rawPortPolicy = userDefaults.string(forKey: Keys.portConflictPolicy) ?? PortConflictPolicy.warnAndBlock.rawValue
+        self.portConflictPolicy = PortConflictPolicy(rawValue: rawPortPolicy) ?? .warnAndBlock
         self.promptGracefulShutdown = KumaSettingsKey.bool(forKey: Keys.promptGracefulShutdown, defaultValue: true, defaults: userDefaults)
 
         if let savedLimit = userDefaults.object(forKey: Keys.logRetentionLimit) as? Int,
@@ -280,6 +298,72 @@ public final class SettingsViewModel {
         @unknown default:
             return false
         }
+    }
+
+    /// Resets all preferences and binary paths to factory defaults in UserDefaults.
+    /// Workspaces, services, credentials and database records are NOT deleted.
+    public func resetSettingsToDefault() {
+        let allKeys = [
+            Keys.launchAtLogin,
+            Keys.autoResumeServices,
+            Keys.confirmBeforeQuit,
+            Keys.appearance,
+            Keys.customPathOverride,
+            Keys.defaultShell,
+            Keys.customKubectlPath,
+            Keys.customKubeconfigPath,
+            Keys.customDockerPath,
+            Keys.customPodmanPath,
+            Keys.cloudflaredPath,
+            Keys.customNgrokPath,
+            Keys.ngrokAuthToken,
+            Keys.ngrokRegion,
+            Keys.notifyOnCrash,
+            Keys.notifySound,
+            Keys.notifyOnHealthFailure,
+            Keys.warnOnPortCollision,
+            Keys.portConflictPolicy,
+            Keys.promptGracefulShutdown,
+            Keys.logRetentionLimit,
+            Keys.clearLogsOnSwitch,
+            Keys.legacyKubectlPath,
+            Keys.legacyKubeconfigPath,
+            Keys.legacyDockerPath,
+            Keys.legacyPodmanPath,
+            Keys.legacyCloudflaredPath,
+            Keys.legacyNgrokPath
+        ]
+
+        for key in allKeys {
+            userDefaults.removeObject(forKey: key)
+        }
+
+        // Re-assign default values to in-memory properties
+        self.launchAtLogin = false
+        self.autoResumeServices = true
+        self.confirmBeforeQuit = true
+        self.appearance = .system
+        self.customPathOverride = ""
+        self.defaultShell = "/bin/zsh"
+        self.customKubectlPath = ""
+        self.customKubeconfigPath = ""
+        self.customDockerPath = ""
+        self.customPodmanPath = ""
+        self.cloudflaredPath = ""
+        self.customNgrokPath = ""
+        self.ngrokAuthToken = ""
+        self.ngrokRegion = "auto"
+        self.notifyOnCrash = true
+        self.notifySound = true
+        self.notifyOnHealthFailure = true
+        self.warnOnPortCollision = true
+        self.portConflictPolicy = .warnAndBlock
+        self.promptGracefulShutdown = true
+        self.logRetentionLimit = .fiftyMB
+        self.clearLogsOnSwitch = false
+
+        applyAppearance(.system)
+        Self.logger.info("All user settings successfully reset to factory defaults.")
     }
 }
 

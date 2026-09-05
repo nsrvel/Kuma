@@ -2,9 +2,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct SettingsDataSection: View {
+    @Bindable var viewModel: SettingsViewModel
     @Bindable var workspaceStore: WorkspaceStore
 
     @State private var showResetConfirmation = false
+    @State private var showResetSettingsConfirmation = false
     @State private var showImportPreview = false
     @State private var loadedBackup: DataPortService.KumaBackup? = nil
     @State private var pendingImportFileName: String = ""
@@ -15,7 +17,8 @@ public struct SettingsDataSection: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
-    public init(workspaceStore: WorkspaceStore) {
+    public init(viewModel: SettingsViewModel, workspaceStore: WorkspaceStore) {
+        self.viewModel = viewModel
         self.workspaceStore = workspaceStore
     }
 
@@ -29,8 +32,13 @@ public struct SettingsDataSection: View {
 
             SettingsDangerZoneSection(
                 showResetConfirmation: $showResetConfirmation,
+                showResetSettingsConfirmation: $showResetSettingsConfirmation,
                 isProcessing: isProcessing,
-                onReset: { resetData() }
+                onReset: { resetData() },
+                onResetSettings: {
+                    viewModel.resetSettingsToDefault()
+                    alertMessage = "All preferences and binary paths have been reset to factory defaults."
+                }
             )
         }
         .sheet(item: $loadedBackup) { backup in
