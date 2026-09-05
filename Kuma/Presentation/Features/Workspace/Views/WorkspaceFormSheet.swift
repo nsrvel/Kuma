@@ -144,7 +144,16 @@ public struct WorkspaceFormSheet: View {
                 Spacer()
 
                 Button(role: .destructive) {
-                    showDeleteAlert = true
+                    if case .edit(let ws) = mode {
+                        isPresented = false
+                        AlertService.shared.confirmDelete(
+                            title: "Delete Workspace?",
+                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
+                            confirmTitle: "Delete"
+                        ) {
+                            store.deleteWorkspace(ws)
+                        }
+                    }
                 } label: {
                     Text("Delete...")
                         .foregroundStyle(Color.red)

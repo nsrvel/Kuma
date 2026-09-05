@@ -22,39 +22,39 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
     /// Image I/O is done outside the DB read closure to keep transaction short.
     public func exportAll() async throws -> DataPortService.KumaBackup {
         // 1. Read relational data inside a single DB read transaction
-        let (workspaces, exportServices, exportProviders, exportPortMappings) = try await dbWriter.read { db in
+        let (workspaces, exportGroups, exportServices, exportProviders, exportPortMappings) = try await dbWriter.read { db in
             let workspaces = try Workspace.order(Column("sortOrder").asc, Column("createdAt").asc).fetchAll(db)
+            let groups = try ServiceGroup.order(Column("sortOrder").asc, Column("createdAt").asc).fetchAll(db)
             let services = try Service.order(Column("createdAt").asc).fetchAll(db)
             let providers = try Provider.order(Column("createdAt").asc).fetchAll(db)
             let portMappings = try ServicePortMapping.fetchAll(db)
+            let memberships = try ServiceGroupMembershipRecord.fetchAll(db)
+
+            var groupsByServiceID: [UUID: [UUID]] = [:]
+            for m in memberships {
+                groupsByServiceID[m.serviceID, default: []].append(m.groupID)
+            }
 
             let exportServices = services.map { s in
                 DataPortService.ExportService(
                     id: s.id,
                     name: s.name,
+                    icon: s.icon,
+                    colorHex: s.colorHex,
                     description: s.description,
+                    activeProviderID: s.activeProviderID,
                     workspaceID: s.workspaceID,
+                    groupIDs: groupsByServiceID[s.id],
                     isDisabled: s.isDisabled,
                     isStarred: s.isStarred
                 )
             }
 
             let exportProviders = providers.map { p in
-                DataPortService.ExportProvider(
-                    id: p.id,
-                    serviceID: p.serviceID,
-                    type: p.type.rawValue,
-                    label: p.label,
-                    runCommand: p.runCommand,
-                    yamlConfig: p.yamlConfig,
-                    kubeContext: p.kubeContext,
-                    kubeNamespace: p.kubeNamespace,
-                    targetName: p.targetName
-                )
+                Self.toExportProvider(p)
             }
 
             let exportPortMappings = portMappings.map { pm in
-                // In V3 JSON, providerID in portMappings maps to the service's active provider
                 var associatedProviderID = pm.serviceID ?? pm.id
                 if let sID = pm.serviceID {
                     if let service = services.first(where: { $0.id == sID }),
@@ -73,7 +73,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
                 )
             }
 
-            return (workspaces, exportServices, exportProviders, exportPortMappings)
+            return (workspaces, groups, exportServices, exportProviders, exportPortMappings)
         }
 
         // 2. Load Base64 images outside DB closure (pure disk I/O, no transaction held)
@@ -90,6 +90,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             exportedAt: Date(),
             workspaces: workspaces,
             workspaceImages: imagesMap.isEmpty ? nil : imagesMap,
+            groups: exportGroups,
             services: exportServices,
             providers: exportProviders,
             portMappings: exportPortMappings,
@@ -97,7 +98,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         )
     }
 
-    /// Restores full relational data into SQLite (Workspaces, Services, Providers, PortMappings).
+    /// Restores full relational data into SQLite (Workspaces, Groups, Services, Providers, PortMappings).
     /// Image I/O is resolved before the DB write transaction to avoid holding the write lock during disk ops.
     public func importAll(from backup: DataPortService.KumaBackup) async throws {
         // 1. Resolve & save any Base64 images to disk BEFORE opening DB write transaction
@@ -123,52 +124,41 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
                 try workspaceToSave.save(db)
             }
 
+            // Restore Groups if present
+            if let groups = backup.groups {
+                for group in groups {
+                    try group.save(db)
+                }
+            }
+
             // Map & Restore Services
             for exportService in backup.services {
                 let service = Service(
                     id: exportService.id,
                     name: exportService.name,
+                    icon: exportService.icon,
+                    colorHex: exportService.colorHex,
                     description: exportService.description,
+                    activeProviderID: exportService.activeProviderID,
                     workspaceID: exportService.workspaceID,
+                    groupIDs: Set(exportService.groupIDs ?? []),
                     isDisabled: exportService.isDisabled ?? false,
                     isStarred: exportService.isStarred ?? false
                 )
                 try service.save(db)
+
+                // Restore group memberships
+                if let gIDs = exportService.groupIDs {
+                    for gID in gIDs {
+                        let membership = ServiceGroupMembershipRecord(serviceID: service.id, groupID: gID)
+                        try membership.save(db)
+                    }
+                }
             }
 
-            // Map & Restore Providers — handle V3 legacy type strings and complete provider fields
+            // Map & Restore Providers — 100% full fields preservation
             for exportProvider in backup.providers {
-                let providerType = exportProvider.category
-
-                let provider = Provider(
-                    id: exportProvider.id,
-                    serviceID: exportProvider.serviceID,
-                    type: providerType,
-                    label: exportProvider.label,
-                    kubeConfigID: exportProvider.kubeConfigID,
-                    customKubeConfigPath: exportProvider.customKubeConfigPath,
-                    kubeContext: exportProvider.kubeContext,
-                    kubeNamespace: exportProvider.kubeNamespace,
-                    targetName: exportProvider.targetName,
-                    kubeTargetType: exportProvider.kubeTargetType,
-                    usePattern: exportProvider.usePattern,
-                    yamlConfig: exportProvider.yamlConfig,
-                    initialScript: exportProvider.initialScript,
-                    runCommand: exportProvider.runCommand,
-                    workingDirectory: exportProvider.workingDirectory,
-                    sshHost: exportProvider.sshHost,
-                    sshUser: exportProvider.sshUser,
-                    sshPort: exportProvider.sshPort,
-                    sshKeyPath: exportProvider.sshKeyPath,
-                    sshPassword: exportProvider.sshPassword,
-                    httpCheckUrl: exportProvider.httpCheckUrl,
-                    httpCheckInterval: exportProvider.httpCheckInterval,
-                    tunnelType: exportProvider.tunnelType,
-                    tunnelTargetUrl: exportProvider.tunnelTargetUrl,
-                    ngrokAuthToken: exportProvider.ngrokAuthToken,
-                    monitorProcessName: exportProvider.monitorProcessName,
-                    monitorInterval: exportProvider.monitorInterval
-                )
+                let provider = Self.fromExportProvider(exportProvider)
                 try provider.save(db)
             }
 
@@ -203,7 +193,6 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             }
 
             self.logger.info("Imported backup: \(backup.workspaces.count) workspaces, \(backup.services.count) services, \(backup.providers.count) providers")
-
         }
     }
 
@@ -227,6 +216,10 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             exportedAt: backup.exportedAt,
             workspaces: filteredWorkspaces,
             workspaceImages: backup.workspaceImages,
+            groups: backup.groups?.filter { g in
+                if let wsID = g.workspaceID { return selectedWorkspaceIDs.contains(wsID) }
+                return true
+            },
             services: filteredServices,
             providers: filteredProviders,
             portMappings: filteredPortMappings,
@@ -238,40 +231,56 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
     /// Exports only data belonging to a single workspace.
     public func exportWorkspace(id: UUID) async throws -> DataPortService.KumaBackup {
-        let (workspaces, exportServices, exportProviders, exportPortMappings) = try await dbWriter.read { db in
+        let (workspaces, groups, exportServices, exportProviders, exportPortMappings) = try await dbWriter.read { db in
             let workspaces = try Workspace.filter(Column("id") == id.uuidString).fetchAll(db)
+            let groups = try ServiceGroup.filter(Column("workspaceID") == id.uuidString).order(Column("sortOrder").asc).fetchAll(db)
             let services = try Service.filter(Column("workspaceID") == id.uuidString).order(Column("createdAt").asc).fetchAll(db)
+            let serviceIDStrings = services.map { $0.id.uuidString }
             let serviceIDs = Set(services.map(\.id))
-            let allProviders = try Provider.order(Column("createdAt").asc).fetchAll(db)
-            let providers = allProviders.filter { serviceIDs.contains($0.serviceID) }
-            let allPortMappings = try ServicePortMapping.fetchAll(db)
-            let portMappings = allPortMappings.filter { pm in
-                if let sID = pm.serviceID, serviceIDs.contains(sID) { return true }
-                return false
+
+            let providers: [Provider]
+            let portMappings: [ServicePortMapping]
+            let memberships: [ServiceGroupMembershipRecord]
+
+            if !serviceIDStrings.isEmpty {
+                providers = try Provider
+                    .filter(serviceIDStrings.contains(Column("serviceID")))
+                    .order(Column("createdAt").asc)
+                    .fetchAll(db)
+                portMappings = try ServicePortMapping
+                    .filter(serviceIDStrings.contains(Column("serviceID")))
+                    .fetchAll(db)
+                memberships = try ServiceGroupMembershipRecord
+                    .filter(serviceIDStrings.contains(Column("serviceID")))
+                    .fetchAll(db)
+            } else {
+                providers = []
+                portMappings = []
+                memberships = []
+            }
+
+            var groupsByServiceID: [UUID: [UUID]] = [:]
+            for m in memberships {
+                groupsByServiceID[m.serviceID, default: []].append(m.groupID)
             }
 
             let exportServices = services.map { s in
                 DataPortService.ExportService(
                     id: s.id,
                     name: s.name,
+                    icon: s.icon,
+                    colorHex: s.colorHex,
                     description: s.description,
+                    activeProviderID: s.activeProviderID,
                     workspaceID: s.workspaceID,
-                    isDisabled: s.isDisabled
+                    groupIDs: groupsByServiceID[s.id],
+                    isDisabled: s.isDisabled,
+                    isStarred: s.isStarred
                 )
             }
 
             let exportProviders = providers.map { p in
-                DataPortService.ExportProvider(
-                    id: p.id,
-                    serviceID: p.serviceID,
-                    type: p.type.rawValue,
-                    label: p.label,
-                    runCommand: p.runCommand,
-                    yamlConfig: p.yamlConfig,
-                    kubeContext: p.kubeContext,
-                    kubeNamespace: p.kubeNamespace,
-                    targetName: p.targetName
-                )
+                Self.toExportProvider(p)
             }
 
             let exportPortMappings = portMappings.map { pm in
@@ -293,7 +302,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
                 )
             }
 
-            return (workspaces, exportServices, exportProviders, exportPortMappings)
+            return (workspaces, groups, exportServices, exportProviders, exportPortMappings)
         }
 
         var imagesMap: [String: String] = [:]
@@ -309,6 +318,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             exportedAt: Date(),
             workspaces: workspaces,
             workspaceImages: imagesMap.isEmpty ? nil : imagesMap,
+            groups: groups,
             services: exportServices,
             providers: exportProviders,
             portMappings: exportPortMappings,
@@ -324,7 +334,6 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         selectedServiceIDs: Set<UUID>,
         resolvedNames: [UUID: String] = [:]
     ) async throws {
-        // 1. Create ID mapping from old service ID -> new service ID
         var serviceIDMap: [UUID: UUID] = [:]
         var providerIDMap: [UUID: UUID] = [:]
 
@@ -335,17 +344,22 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
         let newServices = chosenExportServices.map { s in
             let finalName = resolvedNames[s.id] ?? s.name
+            let mappedActiveProvID = s.activeProviderID.flatMap { providerIDMap[$0] }
             return DataPortService.ExportService(
                 id: serviceIDMap[s.id] ?? UUID(),
                 name: finalName,
+                icon: s.icon,
+                colorHex: s.colorHex,
                 description: s.description,
+                activeProviderID: mappedActiveProvID,
                 workspaceID: targetWorkspaceID,
-                isDisabled: s.isDisabled
+                groupIDs: s.groupIDs,
+                isDisabled: s.isDisabled,
+                isStarred: s.isStarred
             )
         }
 
-
-        // 2. Map and re-ID Providers
+        // Map and re-ID Providers
         let oldServiceIdSet = Set(chosenExportServices.map(\.id))
         let chosenExportProviders = backup.providers.filter { oldServiceIdSet.contains($0.serviceID) }
         for p in chosenExportProviders {
@@ -353,7 +367,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         }
 
         let newProviders = chosenExportProviders.map { p in
-            DataPortService.ExportProvider(
+            var updated = p
+            return DataPortService.ExportProvider(
                 id: providerIDMap[p.id] ?? UUID(),
                 serviceID: serviceIDMap[p.serviceID] ?? p.serviceID,
                 type: p.type,
@@ -362,11 +377,29 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
                 yamlConfig: p.yamlConfig,
                 kubeContext: p.kubeContext,
                 kubeNamespace: p.kubeNamespace,
-                targetName: p.targetName
+                targetName: p.targetName,
+                kubeConfigID: p.kubeConfigID,
+                customKubeConfigPath: p.customKubeConfigPath,
+                kubeTargetType: p.kubeTargetType,
+                usePattern: p.usePattern,
+                initialScript: p.initialScript,
+                workingDirectory: p.workingDirectory,
+                sshHost: p.sshHost,
+                sshUser: p.sshUser,
+                sshPort: p.sshPort,
+                sshKeyPath: p.sshKeyPath,
+                sshPassword: p.sshPassword,
+                httpCheckUrl: p.httpCheckUrl,
+                httpCheckInterval: p.httpCheckInterval,
+                tunnelType: p.tunnelType,
+                tunnelTargetUrl: p.tunnelTargetUrl,
+                ngrokAuthToken: p.ngrokAuthToken,
+                monitorProcessName: p.monitorProcessName,
+                monitorInterval: p.monitorInterval
             )
         }
 
-        // 3. Map and re-ID Port Mappings
+        // Map and re-ID Port Mappings
         let oldProviderIdSet = Set(chosenExportProviders.map(\.id))
         let chosenExportPortMappings = backup.portMappings.filter {
             oldProviderIdSet.contains($0.providerID) || oldServiceIdSet.contains($0.providerID)
@@ -395,6 +428,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             exportedAt: backup.exportedAt,
             workspaces: [],
             workspaceImages: nil,
+            groups: backup.groups,
             services: newServices,
             providers: newProviders,
             portMappings: newPortMappings,
@@ -402,5 +436,122 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         )
 
         try await importAll(from: newBackup)
+    }
+
+    // MARK: - Helpers
+
+    public static func toExportProvider(_ p: Provider) -> DataPortService.ExportProvider {
+        DataPortService.ExportProvider(
+            id: p.id,
+            serviceID: p.serviceID,
+            type: p.type.rawValue,
+            label: p.label,
+            runCommand: p.runCommand,
+            yamlConfig: p.yamlConfig,
+            kubeContext: p.kubeContext,
+            kubeNamespace: p.kubeNamespace,
+            targetName: p.targetName,
+            kubeConfigID: p.kubeConfigID,
+            customKubeConfigPath: p.customKubeConfigPath,
+            kubeTargetType: p.kubeTargetType,
+            usePattern: p.usePattern,
+            initialScript: p.initialScript,
+            workingDirectory: p.workingDirectory,
+            sshHost: p.sshHost,
+            sshUser: p.sshUser,
+            sshPort: p.sshPort,
+            sshKeyPath: p.sshKeyPath,
+            sshPassword: p.sshPassword,
+            httpCheckUrl: p.httpCheckUrl,
+            httpCheckInterval: p.httpCheckInterval,
+            tunnelType: p.tunnelType,
+            tunnelTargetUrl: p.tunnelTargetUrl,
+            ngrokAuthToken: p.ngrokAuthToken,
+            monitorProcessName: p.monitorProcessName,
+            monitorInterval: p.monitorInterval
+        )
+    }
+
+    public static func fromExportProvider(_ p: DataPortService.ExportProvider) -> Provider {
+        Provider(
+            id: p.id,
+            serviceID: p.serviceID,
+            type: p.category,
+            label: p.label,
+            kubeConfigID: p.kubeConfigID,
+            customKubeConfigPath: p.customKubeConfigPath,
+            kubeContext: p.kubeContext,
+            kubeNamespace: p.kubeNamespace,
+            targetName: p.targetName,
+            kubeTargetType: p.kubeTargetType,
+            usePattern: p.usePattern,
+            yamlConfig: p.yamlConfig,
+            initialScript: p.initialScript,
+            runCommand: p.runCommand,
+            workingDirectory: p.workingDirectory,
+            sshHost: p.sshHost,
+            sshUser: p.sshUser,
+            sshPort: p.sshPort,
+            sshKeyPath: p.sshKeyPath,
+            sshPassword: p.sshPassword,
+            httpCheckUrl: p.httpCheckUrl,
+            httpCheckInterval: p.httpCheckInterval,
+            tunnelType: p.tunnelType,
+            tunnelTargetUrl: p.tunnelTargetUrl,
+            ngrokAuthToken: p.ngrokAuthToken,
+            monitorProcessName: p.monitorProcessName,
+            monitorInterval: p.monitorInterval
+        )
+    }
+
+    /// Exports a single service along with its providers and port mappings as formatted JSON string.
+    public func exportSingleServiceJSON(serviceID: UUID) async throws -> String {
+        let (service, providers, ports) = try await dbWriter.read { db -> (Service?, [Provider], [ServicePortMapping]) in
+            let svc = try Service.fetchOne(db, key: serviceID.uuidString)
+            let provs = try Provider.filter(Column("serviceID") == serviceID.uuidString).fetchAll(db)
+            let portMaps = try ServicePortMapping.filter(Column("serviceID") == serviceID.uuidString).fetchAll(db)
+            return (svc, provs, portMaps)
+        }
+
+        guard let svc = service else {
+            throw NSError(domain: "lokastudio.kuma.dataport", code: 404, userInfo: [NSLocalizedDescriptionKey: "Service \(serviceID) not found."])
+        }
+
+        let exportService = DataPortService.ExportService(
+            id: svc.id,
+            name: svc.name,
+            icon: svc.icon,
+            colorHex: svc.colorHex,
+            description: svc.description,
+            activeProviderID: svc.activeProviderID,
+            workspaceID: svc.workspaceID,
+            groupIDs: Array(svc.groupIDs),
+            isDisabled: svc.isDisabled,
+            isStarred: svc.isStarred
+        )
+
+        let exportProviders = providers.map { Self.toExportProvider($0) }
+        let exportPorts = ports.map { p in
+            DataPortService.ExportPortMapping(
+                id: p.id,
+                providerID: svc.activeProviderID ?? svc.id,
+                localPort: p.localPort,
+                remotePort: p.remotePort
+            )
+        }
+
+        let singleExport = DataPortService.SingleServiceExport(
+            version: DataPortService.currentVersion,
+            exportedAt: Date(),
+            service: exportService,
+            providers: exportProviders,
+            portMappings: exportPorts
+        )
+
+        let data = try DataPortService.encodeSingleService(singleExport)
+        guard let jsonString = String(data: data, encoding: .utf8) else {
+            throw NSError(domain: "lokastudio.kuma.dataport", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to encode service JSON."])
+        }
+        return jsonString
     }
 }

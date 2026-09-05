@@ -35,50 +35,53 @@ public struct ServiceCardView: View, Equatable {
         VStack(alignment: .leading, spacing: 14) {
             // Header Row: Provider Icon + Name/Target Subtitle + Native Toggle
             HStack(spacing: 12) {
-                // Service Provider Icon with Star Overlay Badge
-                ZStack(alignment: .topTrailing) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(
-                                snapshot.isDisabled
-                                ? LinearGradient(colors: [Color.secondary.opacity(0.18), Color.secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                                : snapshot.providerCategory.gradient
-                            )
-                            .frame(width: 34, height: 34)
-                            .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.16), radius: 2, y: 1)
-
-                        ProviderBrandIcon(category: snapshot.providerCategory, size: 16)
-                            .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
-                    }
-
-                    if snapshot.isStarred {
+                // Clickable Left Area (Selects Service)
+                HStack(spacing: 12) {
+                    // Service Provider Icon with Star Overlay Badge
+                    ZStack(alignment: .topTrailing) {
                         ZStack {
-                            Circle()
-                                .fill(Color(nsColor: .windowBackgroundColor))
-                                .frame(width: 14, height: 14)
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(
+                                    snapshot.isDisabled
+                                    ? LinearGradient(colors: [Color.secondary.opacity(0.18), Color.secondary.opacity(0.24)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                    : snapshot.providerCategory.gradient
+                                )
+                                .frame(width: 34, height: 34)
+                                .shadow(color: Color.black.opacity(snapshot.isDisabled ? 0.0 : 0.16), radius: 2, y: 1)
 
-                            Image(systemName: "star.fill")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(Color.yellow)
+                            ProviderBrandIcon(category: snapshot.providerCategory, size: 16)
+                                .foregroundStyle(snapshot.isDisabled ? Color.secondary : Color.white)
                         }
-                        .offset(x: 4, y: -4)
-                        .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+
+                        if snapshot.isStarred {
+                            ZStack {
+                                Circle()
+                                    .fill(Color(nsColor: .windowBackgroundColor))
+                                    .frame(width: 14, height: 14)
+
+                                Image(systemName: "star.fill")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(Color.yellow)
+                            }
+                            .offset(x: 4, y: -4)
+                            .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
                     }
-                }
-                .animation(.spring(response: 0.26, dampingFraction: 0.65), value: snapshot.isStarred)
+                    .animation(.spring(response: 0.26, dampingFraction: 0.65), value: snapshot.isStarred)
 
-                // Name & Contextual Target Subtitle (Image/Namespace/Target)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(snapshot.name)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
-                        .lineLimit(1)
+                    // Name & Contextual Target Subtitle (Image/Namespace/Target)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(snapshot.name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(snapshot.isDisabled ? .secondary : .primary)
+                            .lineLimit(1)
 
-                    Text(targetSubtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        Text(targetSubtitle)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 8)
@@ -108,6 +111,10 @@ public struct ServiceCardView: View, Equatable {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .onTapGesture {
+            viewModel.selectService(snapshot.id)
+        }
         .overlay {
             if isSelected {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -115,16 +122,20 @@ public struct ServiceCardView: View, Equatable {
             }
         }
         .opacity(snapshot.isDisabled ? 0.65 : 1.0)
-        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-        .onTapGesture {
-            viewModel.selectService(snapshot.id)
-        }
         .contextMenu {
             ServiceActionContextMenu(
                 snapshot: snapshot,
                 runtime: runtime,
+                groups: viewModel.groups,
                 onToggle: { viewModel.toggleService(id: snapshot.id) },
+                onRestart: { viewModel.restartService(id: snapshot.id) },
+                onSwitchProvider: { providerID in viewModel.switchProvider(serviceID: snapshot.id, providerID: providerID, workspaceID: workspaceID) },
                 onToggleStar: { viewModel.toggleStarred(id: snapshot.id, workspaceID: workspaceID) },
+                onToggleDisabled: { viewModel.toggleDisabled(id: snapshot.id, workspaceID: workspaceID) },
+                onToggleGroup: { groupID in viewModel.toggleGroup(serviceID: snapshot.id, groupID: groupID, workspaceID: workspaceID) },
+                onDuplicate: { viewModel.duplicateService(id: snapshot.id, workspaceID: workspaceID) },
+                onCopyConfig: { viewModel.copyConfig(id: snapshot.id) },
+                onDelete: { viewModel.promptDeleteService(id: snapshot.id) },
                 onSelect: { viewModel.selectService(snapshot.id) }
             )
         }
@@ -138,16 +149,11 @@ public struct ServiceCardView: View, Equatable {
     }
 }
 
-/// Isolated micro-view for the toggle switch button to prevent full card re-evaluations
-private struct CardToggleSwitch: View, Equatable {
+/// Isolated micro-view for the toggle switch button
+private struct CardToggleSwitch: View {
     let isDisabled: Bool
     let runtime: ServiceRuntimeState
     let onToggle: () -> Void
-
-    static func == (lhs: CardToggleSwitch, rhs: CardToggleSwitch) -> Bool {
-        lhs.isDisabled == rhs.isDisabled &&
-        lhs.runtime == rhs.runtime
-    }
 
     var body: some View {
         if isDisabled {
@@ -155,15 +161,15 @@ private struct CardToggleSwitch: View, Equatable {
                 .font(.system(size: 18))
                 .foregroundStyle(.tertiary)
         } else {
-            let isOnBinding = Binding<Bool>(
-                get: { runtime.status == .running || runtime.status == .starting },
+            let isRunning = runtime.status == .running || runtime.status == .starting
+            Toggle("", isOn: Binding<Bool>(
+                get: { isRunning },
                 set: { _ in onToggle() }
-            )
-            Toggle("", isOn: isOnBinding)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .labelsHidden()
-                .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .labelsHidden()
+            .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
         }
     }
 }

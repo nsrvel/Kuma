@@ -7,9 +7,17 @@ public struct ServiceTableView: View {
     public let snapshots: [ServiceCardSnapshot]
     public let runtimeStates: [UUID: ServiceRuntimeState]
     public let selectedID: UUID?
+    public var groups: [ServiceGroup] = []
 
     public var onToggle: (UUID) -> Void
+    public var onRestart: (UUID) -> Void
+    public var onSwitchProvider: (UUID, UUID) -> Void
     public var onToggleStar: (UUID) -> Void
+    public var onToggleDisabled: (UUID) -> Void
+    public var onToggleGroup: (UUID, UUID) -> Void
+    public var onDuplicate: (UUID) -> Void
+    public var onCopyConfig: (UUID) -> Void
+    public var onDelete: (UUID) -> Void
     public var onSelect: (UUID) -> Void
 
     @State private var selection: Set<UUID> = []
@@ -18,15 +26,31 @@ public struct ServiceTableView: View {
         snapshots: [ServiceCardSnapshot],
         runtimeStates: [UUID: ServiceRuntimeState],
         selectedID: UUID?,
+        groups: [ServiceGroup] = [],
         onToggle: @escaping (UUID) -> Void,
+        onRestart: @escaping (UUID) -> Void = { _ in },
+        onSwitchProvider: @escaping (UUID, UUID) -> Void = { _, _ in },
         onToggleStar: @escaping (UUID) -> Void = { _ in },
+        onToggleDisabled: @escaping (UUID) -> Void = { _ in },
+        onToggleGroup: @escaping (UUID, UUID) -> Void = { _, _ in },
+        onDuplicate: @escaping (UUID) -> Void = { _ in },
+        onCopyConfig: @escaping (UUID) -> Void = { _ in },
+        onDelete: @escaping (UUID) -> Void = { _ in },
         onSelect: @escaping (UUID) -> Void
     ) {
         self.snapshots = snapshots
         self.runtimeStates = runtimeStates
         self.selectedID = selectedID
+        self.groups = groups
         self.onToggle = onToggle
+        self.onRestart = onRestart
+        self.onSwitchProvider = onSwitchProvider
         self.onToggleStar = onToggleStar
+        self.onToggleDisabled = onToggleDisabled
+        self.onToggleGroup = onToggleGroup
+        self.onDuplicate = onDuplicate
+        self.onCopyConfig = onCopyConfig
+        self.onDelete = onDelete
         self.onSelect = onSelect
     }
 
@@ -80,8 +104,16 @@ public struct ServiceTableView: View {
                     ServiceActionContextMenu(
                         snapshot: snapshot,
                         runtime: runtime,
+                        groups: groups,
                         onToggle: { onToggle(snapshot.id) },
+                        onRestart: { onRestart(snapshot.id) },
+                        onSwitchProvider: { provID in onSwitchProvider(snapshot.id, provID) },
                         onToggleStar: { onToggleStar(snapshot.id) },
+                        onToggleDisabled: { onToggleDisabled(snapshot.id) },
+                        onToggleGroup: { groupID in onToggleGroup(snapshot.id, groupID) },
+                        onDuplicate: { onDuplicate(snapshot.id) },
+                        onCopyConfig: { onCopyConfig(snapshot.id) },
+                        onDelete: { onDelete(snapshot.id) },
                         onSelect: { onSelect(snapshot.id) }
                     )
                 }
@@ -97,47 +129,32 @@ public struct ServiceTableView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(snapshot.id) }
             }
-            .width(min: 80, ideal: 100)
+            .width(ideal: 90)
 
-            // MARK: 3. Target / Configuration
-            TableColumn("Target / Config") { snapshot in
-                let target = snapshot.subtitle.isEmpty ? "—" : snapshot.subtitle
-                Text(target)
-                    .font(.system(size: 11, design: isMonospaced(snapshot.providerCategory) ? .monospaced : .default))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onSelect(snapshot.id) }
-            }
-            .width(min: 140, ideal: 220)
-
-            // MARK: 4. Ports (Dynamic Natural Chips)
+            // MARK: 3. Ports (Interactive Port Chips)
             TableColumn("Ports") { snapshot in
-                if !snapshot.portDisplays.isEmpty {
-                    PortChipsView(ports: snapshot.portDisplays)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .clipped()
-                        .contentShape(Rectangle())
-                        .onTapGesture { onSelect(snapshot.id) }
-                } else {
-                    Text("—")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.tertiary)
+                Group {
+                    if snapshot.portDisplays.isEmpty {
+                        ServiceNonPortBadge(category: snapshot.providerCategory)
+                    } else {
+                        PortChipsView(ports: snapshot.portDisplays)
+                    }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { onSelect(snapshot.id) }
             }
-            .width(min: 80, ideal: 140)
+            .width(ideal: 110)
 
-            // MARK: 5. Live Status
+            // MARK: 4. Status (Polished Capsule Pill)
             TableColumn("Status") { snapshot in
                 let runtime = runtimeStates[snapshot.id] ?? .idle
                 ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
                     .contentShape(Rectangle())
                     .onTapGesture { onSelect(snapshot.id) }
             }
-            .width(min: 80, ideal: 95)
+            .width(ideal: 90)
 
-            // MARK: 6. Actions (Menu Button with Context Menu)
+            // MARK: 5. Actions (Ellipsis Menu Button)
             TableColumn("") { snapshot in
                 let runtime = runtimeStates[snapshot.id] ?? .idle
 
@@ -145,8 +162,16 @@ public struct ServiceTableView: View {
                     ServiceActionContextMenu(
                         snapshot: snapshot,
                         runtime: runtime,
+                        groups: groups,
                         onToggle: { onToggle(snapshot.id) },
+                        onRestart: { onRestart(snapshot.id) },
+                        onSwitchProvider: { provID in onSwitchProvider(snapshot.id, provID) },
                         onToggleStar: { onToggleStar(snapshot.id) },
+                        onToggleDisabled: { onToggleDisabled(snapshot.id) },
+                        onToggleGroup: { groupID in onToggleGroup(snapshot.id, groupID) },
+                        onDuplicate: { onDuplicate(snapshot.id) },
+                        onCopyConfig: { onCopyConfig(snapshot.id) },
+                        onDelete: { onDelete(snapshot.id) },
                         onSelect: { onSelect(snapshot.id) }
                     )
                 } label: {
@@ -171,8 +196,15 @@ public struct ServiceTableView: View {
                 ServiceActionContextMenu(
                     snapshot: snapshot,
                     runtime: runtime,
+                    groups: groups,
                     onToggle: { onToggle(snapshot.id) },
+                    onRestart: { onRestart(snapshot.id) },
                     onToggleStar: { onToggleStar(snapshot.id) },
+                    onToggleDisabled: { onToggleDisabled(snapshot.id) },
+                    onToggleGroup: { groupID in onToggleGroup(snapshot.id, groupID) },
+                    onDuplicate: { onDuplicate(snapshot.id) },
+                    onCopyConfig: { onCopyConfig(snapshot.id) },
+                    onDelete: { onDelete(snapshot.id) },
                     onSelect: { onSelect(snapshot.id) }
                 )
             }

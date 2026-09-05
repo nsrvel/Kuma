@@ -12,7 +12,7 @@ public enum AppPhase: String, Sendable, Equatable {
 public final class AppCoordinator {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "AppCoordinator")
 
-    public static let completedOnboardingKey = "kuma.has_completed_onboarding"
+    public static let completedOnboardingKey = KumaSettingsKey.hasCompletedOnboarding
 
     public private(set) var currentPhase: AppPhase
 

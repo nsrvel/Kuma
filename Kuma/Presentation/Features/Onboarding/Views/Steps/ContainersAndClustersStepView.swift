@@ -51,9 +51,13 @@ public struct ContainersAndClustersStepView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Re-scan Containers and Clusters")
             .disabled(viewModel.isScanning)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            await viewModel.scanDependenciesIfNeeded()
+        }
     }
 }
 

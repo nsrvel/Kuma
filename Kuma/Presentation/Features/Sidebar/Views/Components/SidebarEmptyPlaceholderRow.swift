@@ -19,7 +19,7 @@ public struct SidebarEmptyPlaceholderRow: View {
                 .foregroundStyle(Color.secondary.opacity(0.65))
             Spacer(minLength: 0)
         }
-        .padding(.leading, KumaTheme.Sidebar.rowHorizontalPadding + (CGFloat(indentLevel) * 6))
+        .padding(.leading, KumaTheme.Sidebar.rowHorizontalPadding + (CGFloat(indentLevel) * KumaTheme.Sidebar.indentWidth))
         .padding(.trailing, KumaTheme.Sidebar.rowHorizontalPadding)
         .padding(.vertical, 3)
     }

@@ -4,48 +4,118 @@ public struct SidebarRowView: View {
     public let node: SidebarNode
     public let isSelected: Bool
     public let isExpanded: Bool
+    public let isEditing: Bool
     public let indentLevel: Int
     public let onSelect: () -> Void
     public let onToggleExpand: () -> Void
+    public let onAddAction: (() -> Void)?
+    public let onCommitRename: (String) -> Void
+    public let onStartRename: () -> Void
+    public let onDelete: () -> Void
+    public let onMoveUp: (() -> Void)?
+    public let onMoveDown: (() -> Void)?
+    public let onReorderGroup: ((UUID, UUID) -> Void)?
 
     @State private var isHovering = false
+    @State private var isDropTargeted = false
 
     public init(
         node: SidebarNode,
         isSelected: Bool,
         isExpanded: Bool,
+        isEditing: Bool = false,
         indentLevel: Int,
         onSelect: @escaping () -> Void,
-        onToggleExpand: @escaping () -> Void
+        onToggleExpand: @escaping () -> Void,
+        onAddAction: (() -> Void)? = nil,
+        onCommitRename: @escaping (String) -> Void = { _ in },
+        onStartRename: @escaping () -> Void = {},
+        onDelete: @escaping () -> Void = {},
+        onMoveUp: (() -> Void)? = nil,
+        onMoveDown: (() -> Void)? = nil,
+        onReorderGroup: ((UUID, UUID) -> Void)? = nil
     ) {
         self.node = node
         self.isSelected = isSelected
         self.isExpanded = isExpanded
+        self.isEditing = isEditing
         self.indentLevel = indentLevel
         self.onSelect = onSelect
         self.onToggleExpand = onToggleExpand
+        self.onAddAction = onAddAction
+        self.onCommitRename = onCommitRename
+        self.onStartRename = onStartRename
+        self.onDelete = onDelete
+        self.onMoveUp = onMoveUp
+        self.onMoveDown = onMoveDown
+        self.onReorderGroup = onReorderGroup
     }
 
     private var hasChildren: Bool { node.children != nil }
-    private var showActions: Bool {
-        if hasChildren {
-            return isHovering || isSelected
-        } else {
-            return isHovering
-        }
-    }
-    private var showChevronActive: Bool {
-        isHovering || isSelected
-    }
+    private var showActions: Bool { hasChildren ? (isHovering || isSelected) : isHovering }
+    private var showChevronActive: Bool { isHovering || isSelected }
 
     public var body: some View {
+        ZStack(alignment: .leading) {
+            if isEditing {
+                SidebarRowInlineEditor(
+                    node: node,
+                    indentLevel: indentLevel,
+                    onCommitRename: onCommitRename
+                )
+            } else {
+                contentRow
+            }
+
+            SidebarRowActionButtons(
+                node: node,
+                showActions: showActions,
+                hasChildren: hasChildren,
+                isExpanded: isExpanded,
+                showChevronActive: showChevronActive,
+                onAddAction: onAddAction,
+                onToggleExpand: onToggleExpand
+            )
+        }
+        .frame(minHeight: KumaTheme.Sidebar.rowMinHeight)
+        .background(rowBackground)
+        .clipShape(RoundedRectangle(cornerRadius: KumaTheme.Sidebar.rowCornerRadius, style: .continuous))
+        .overlay(alignment: .bottom) {
+            if isDropTargeted {
+                SidebarDropIndicator()
+                    .offset(y: 2)
+            }
+        }
+        .foregroundStyle(rowForeground)
+        .onHover { isHovering = $0 }
+        .contextMenu {
+            if node.isGroupRow {
+                Button("Rename") { onStartRename() }
+                if let onMoveUp { Button("Move Up") { onMoveUp() } }
+                if let onMoveDown { Button("Move Down") { onMoveDown() } }
+                Button("Delete", role: .destructive) { onDelete() }
+            }
+        }
+        .animation(.easeInOut(duration: 0.14), value: isSelected)
+        .animation(.easeInOut(duration: 0.12), value: isDropTargeted)
+        .accessibilityLabel(node.title)
+        .accessibilityAddTraits(node.isSpecialHeader ? .isHeader : .isButton)
+        .modifier(GroupDragDropModifier(
+            isGroupRow: node.isGroupRow,
+            nodeID: node.id,
+            onReorder: onReorderGroup,
+            isTargeted: $isDropTargeted
+        ))
+    }
+
+    private var contentRow: some View {
         HStack(spacing: 0) {
             if indentLevel > 0 {
                 Spacer().frame(width: CGFloat(indentLevel) * KumaTheme.Sidebar.indentWidth)
             }
 
             if !node.isSpecialHeader {
-                iconView
+                SidebarRowIcon(icon: node.icon)
                     .frame(width: 18, height: 18)
                     .padding(.trailing, 8)
             }
@@ -56,32 +126,11 @@ public struct SidebarRowView: View {
                 .truncationMode(.tail)
 
             Spacer(minLength: 0)
-
-            HStack(spacing: 4) {
-                if showActions && !node.actions.isEmpty {
-                    ForEach(node.actions) { action in
-                        SidebarActionButton(action: action)
-                            .transaction { $0.animation = nil }
-                    }
-                }
-                if hasChildren {
-                    SidebarChevron(isExpanded: isExpanded, onToggle: onToggleExpand)
-                        .opacity(showChevronActive ? 1.0 : 0.0)
-                }
-            }
         }
-        .frame(minHeight: KumaTheme.Sidebar.rowMinHeight)
-        .contentShape(Rectangle())
         .padding(.vertical, node.isSpecialHeader ? 6 : KumaTheme.Sidebar.rowVerticalPadding)
         .padding(.horizontal, KumaTheme.Sidebar.rowHorizontalPadding)
-        .background(rowBackground)
-        .clipShape(RoundedRectangle(cornerRadius: KumaTheme.Sidebar.rowCornerRadius, style: .continuous))
-        .foregroundStyle(rowForeground)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
-                isHovering = hovering
-            }
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .onTapGesture {
             if node.isSpecialHeader {
                 onToggleExpand()
@@ -89,49 +138,17 @@ public struct SidebarRowView: View {
                 onSelect()
             }
         }
-        .animation(.easeInOut(duration: 0.14), value: isSelected)
-        .accessibilityLabel(node.title)
-        .accessibilityAddTraits(node.isSpecialHeader ? .isHeader : .isButton)
-    }
-
-    @ViewBuilder
-    private var iconView: some View {
-        switch node.icon {
-        case .system(let name):
-            if !name.isEmpty {
-                Image(systemName: name)
-                    .imageScale(.medium)
-                    .symbolRenderingMode(.hierarchical)
-            }
-        case .asset(let name):
-            if !name.isEmpty {
-                Image(name)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-            }
-        }
     }
 
     private var rowBackground: some ShapeStyle {
-        if node.isSpecialHeader {
-            return AnyShapeStyle(Color.clear)
-        }
-        if isSelected {
-            return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.selectedBgOpacity))
-        } else if isHovering {
-            return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.hoverBgOpacity))
-        }
+        if node.isSpecialHeader { return AnyShapeStyle(Color.clear) }
+        if isSelected { return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.selectedBgOpacity)) }
+        if isHovering { return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.hoverBgOpacity)) }
         return AnyShapeStyle(Color.clear)
     }
 
     private var rowForeground: some ShapeStyle {
-        if node.isSpecialHeader {
-            return AnyShapeStyle(Color.primary.opacity(0.88))
-        }
-        return isSelected || isHovering
-            ? AnyShapeStyle(Color.primary)
-            : AnyShapeStyle(Color.secondary)
+        if node.isSpecialHeader { return AnyShapeStyle(Color.primary.opacity(0.88)) }
+        return (isSelected || isHovering) ? AnyShapeStyle(Color.primary) : AnyShapeStyle(Color.secondary)
     }
 }
-

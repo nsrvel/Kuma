@@ -111,20 +111,24 @@ extension ServicesDeckView {
                 }
 
                 Button {
-                    for snapshot in viewModel.snapshots {
-                        viewModel.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
-                    }
+                    viewModel.startAllServices()
                 } label: {
-                    Label("Start All", systemImage: "play.fill")
+                    Label(
+                        viewModel.stoppedServiceCount == 0 ? "All Services Running" : "Start All (\(viewModel.stoppedServiceCount))",
+                        systemImage: "play.fill"
+                    )
                 }
+                .disabled(viewModel.stoppedServiceCount == 0)
 
                 Button {
-                    for snapshot in viewModel.snapshots {
-                        viewModel.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .stopped, isLoading: false)
-                    }
+                    viewModel.stopAllServices()
                 } label: {
-                    Label("Stop All", systemImage: "stop.fill")
+                    Label(
+                        viewModel.runningServiceCount == 0 ? "No Services Running" : "Stop All (\(viewModel.runningServiceCount))",
+                        systemImage: "stop.fill"
+                    )
                 }
+                .disabled(viewModel.runningServiceCount == 0)
 
                 Divider()
 

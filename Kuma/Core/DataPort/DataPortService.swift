@@ -25,6 +25,7 @@ public nonisolated enum DataPortService {
         public let exportedAt: Date
         public let workspaces: [Workspace]
         public let workspaceImages: [String: String]? // [workspaceID: Base64PNG]
+        public let groups: [ServiceGroup]?
         public let services: [ExportService]
         public let providers: [ExportProvider]
         public let portMappings: [ExportPortMapping]
@@ -35,6 +36,7 @@ public nonisolated enum DataPortService {
             exportedAt: Date = Date(),
             workspaces: [Workspace] = [],
             workspaceImages: [String: String]? = nil,
+            groups: [ServiceGroup]? = nil,
             services: [ExportService] = [],
             providers: [ExportProvider] = [],
             portMappings: [ExportPortMapping] = [],
@@ -44,6 +46,7 @@ public nonisolated enum DataPortService {
             self.exportedAt = exportedAt
             self.workspaces = workspaces
             self.workspaceImages = workspaceImages
+            self.groups = groups
             self.services = services
             self.providers = providers
             self.portMappings = portMappings
@@ -54,25 +57,62 @@ public nonisolated enum DataPortService {
     public struct ExportService: Codable, Sendable, Identifiable {
         public let id: UUID
         public let name: String
+        public let icon: String?
+        public let colorHex: String?
         public let description: String?
+        public let activeProviderID: UUID?
         public let workspaceID: UUID?
+        public let groupIDs: [UUID]?
         public let isDisabled: Bool?
         public let isStarred: Bool?
 
         public nonisolated init(
             id: UUID = UUID(),
             name: String,
+            icon: String? = nil,
+            colorHex: String? = nil,
             description: String? = nil,
+            activeProviderID: UUID? = nil,
             workspaceID: UUID? = nil,
+            groupIDs: [UUID]? = nil,
             isDisabled: Bool? = false,
             isStarred: Bool? = false
         ) {
             self.id = id
             self.name = name
+            self.icon = icon
+            self.colorHex = colorHex
             self.description = description
+            self.activeProviderID = activeProviderID
             self.workspaceID = workspaceID
+            self.groupIDs = groupIDs
             self.isDisabled = isDisabled
             self.isStarred = isStarred
+        }
+    }
+
+    /// Single-service complete standalone export structure (for clipboard JSON copying & sharing)
+    public struct SingleServiceExport: Codable, Sendable, Identifiable {
+        public let version: Int
+        public let exportedAt: Date
+        public let service: ExportService
+        public let providers: [ExportProvider]
+        public let portMappings: [ExportPortMapping]
+
+        public var id: UUID { service.id }
+
+        public nonisolated init(
+            version: Int = DataPortService.currentVersion,
+            exportedAt: Date = Date(),
+            service: ExportService,
+            providers: [ExportProvider],
+            portMappings: [ExportPortMapping]
+        ) {
+            self.version = version
+            self.exportedAt = exportedAt
+            self.service = service
+            self.providers = providers
+            self.portMappings = portMappings
         }
     }
 
@@ -303,6 +343,19 @@ public nonisolated enum DataPortService {
         return backup
     }
 
+    public static func encodeSingleService(_ item: SingleServiceExport) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(item)
+    }
+
+    public static func decodeSingleService(from data: Data) throws -> SingleServiceExport {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(SingleServiceExport.self, from: data)
+    }
+
     /// Standardized ISO formatted date suffix for backup filenames (e.g. "2026-08-15")
     public static var backupDateString: String {
         let formatter = DateFormatter()
@@ -313,6 +366,9 @@ public nonisolated enum DataPortService {
     // MARK: - Factory Reset & Relaunch
 
     public static func resetAllAppStorage() async {
+        // 0. Terminate all running service processes / tunnels cleanly
+        await ProcessRegistry.shared.terminateAll()
+
         // 1. Wipe UserDefaults
         if let bundleID = Bundle.main.bundleIdentifier {
             UserDefaults.standard.removePersistentDomain(forName: bundleID)

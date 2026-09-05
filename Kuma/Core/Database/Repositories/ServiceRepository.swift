@@ -14,7 +14,9 @@ public protocol ServiceRepositoryProtocol: Sendable {
     func deleteProvider(id: UUID) async throws
     func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID) async throws
     func toggleStarred(serviceID: UUID) async throws -> Bool
+    func toggleGroupMembership(serviceID: UUID, groupID: UUID) async throws -> Set<UUID>
     func deleteService(id: UUID) async throws
+    func duplicateService(sourceID: UUID, newID: UUID) async throws -> Service
 }
 
 
@@ -70,6 +72,17 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 }
             }
 
+            // Batch fetch all group memberships for all services in this workspace in 1 query
+            let allMemberships = try ServiceGroupMembershipRecord
+                .filter(serviceIDStrings.contains(Column("serviceID")))
+                .fetchAll(db)
+
+            var groupsByServiceID: [UUID: Set<UUID>] = [:]
+            groupsByServiceID.reserveCapacity(services.count)
+            for membership in allMemberships {
+                groupsByServiceID[membership.serviceID, default: []].insert(membership.groupID)
+            }
+
             var snapshots: [ServiceCardSnapshot] = []
             snapshots.reserveCapacity(services.count)
 
@@ -91,16 +104,35 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 }
 
                 let ports = portsByServiceID[service.id] ?? []
+                let groupIDs = groupsByServiceID[service.id] ?? []
+                let provs = providersByServiceID[service.id] ?? []
+                let activeID = service.activeProviderID ?? provs.first?.id
+                let providerOptions = provs.map { p in
+                    let displayLabel: String
+                    if let lbl = p.label, !lbl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        displayLabel = lbl
+                    } else {
+                        displayLabel = p.type.sidebarLabel
+                    }
+                    return ServiceCardSnapshot.ProviderOption(
+                        id: p.id,
+                        category: p.type,
+                        label: displayLabel,
+                        isActive: (p.id == activeID)
+                    )
+                }
 
                 snapshots.append(
                     ServiceCardSnapshot(
                         id: service.id,
                         name: service.name,
+                        groupIDs: groupIDs,
                         isDisabled: service.isDisabled,
                         isStarred: service.isStarred,
                         subtitle: subtitle,
                         providerCategory: category,
                         portDisplays: ports,
+                        providerOptions: providerOptions,
                         createdAt: service.createdAt
                     )
                 )
@@ -112,7 +144,12 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
 
     public func fetchService(id: UUID) async throws -> Service? {
         try await dbWriter.read { db in
-            try Service.fetchOne(db, key: id.uuidString)
+            guard var service = try Service.fetchOne(db, key: id.uuidString) else { return nil }
+            let memberships = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == id.uuidString)
+                .fetchAll(db)
+            service.groupIDs = Set(memberships.map { $0.groupID })
+            return service
         }
     }
 
@@ -161,12 +198,25 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 mapping.serviceID = service.id
                 try mapping.insert(db)
             }
+            for groupID in service.groupIDs {
+                let membership = ServiceGroupMembershipRecord(serviceID: service.id, groupID: groupID)
+                try membership.insert(db)
+            }
         }
     }
 
     public func updateService(_ service: Service) async throws {
         try await dbWriter.write { db in
             try service.update(db)
+
+            _ = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == service.id.uuidString)
+                .deleteAll(db)
+
+            for groupID in service.groupIDs {
+                let membership = ServiceGroupMembershipRecord(serviceID: service.id, groupID: groupID)
+                try membership.insert(db)
+            }
         }
     }
 
@@ -208,9 +258,106 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
         }
     }
 
+    public func toggleGroupMembership(serviceID: UUID, groupID: UUID) async throws -> Set<UUID> {
+        try await dbWriter.write { db in
+            let existing = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == serviceID.uuidString && Column("groupID") == groupID.uuidString)
+                .fetchOne(db)
+
+            if let existing {
+                _ = try existing.delete(db)
+            } else {
+                let membership = ServiceGroupMembershipRecord(serviceID: serviceID, groupID: groupID)
+                try membership.insert(db)
+            }
+
+            let all = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .fetchAll(db)
+
+            return Set(all.map { $0.groupID })
+        }
+    }
+
     public func deleteService(id: UUID) async throws {
         try await dbWriter.write { db in
             _ = try Service.deleteOne(db, key: id.uuidString)
+        }
+    }
+
+    /// Single atomic SQLite transaction for duplicating a service along with all its providers, port mappings, and group memberships
+    public func duplicateService(sourceID: UUID, newID: UUID) async throws -> Service {
+        try await dbWriter.write { db -> Service in
+            guard let original = try Service.fetchOne(db, key: sourceID.uuidString) else {
+                throw NSError(domain: "lokastudio.kuma", code: 404, userInfo: [NSLocalizedDescriptionKey: "Source service not found"])
+            }
+
+            let providers = try Provider
+                .filter(Column("serviceID") == sourceID.uuidString)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+
+            let ports = try ServicePortMapping
+                .filter(Column("serviceID") == sourceID.uuidString)
+                .fetchAll(db)
+
+            let memberships = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == sourceID.uuidString)
+                .fetchAll(db)
+
+            var newService = original
+            newService.id = newID
+            newService.name = "\(original.name) (Copy)"
+            newService.createdAt = Date()
+            newService.updatedAt = Date()
+
+            var newActiveProvID: UUID? = nil
+            var duplicatedProviders: [Provider] = []
+
+            for prov in providers {
+                var newProv = prov
+                newProv.id = UUID()
+                newProv.serviceID = newID
+                newProv.createdAt = Date()
+                newProv.updatedAt = Date()
+                if prov.id == original.activeProviderID {
+                    newActiveProvID = newProv.id
+                }
+                duplicatedProviders.append(newProv)
+            }
+
+            if newActiveProvID == nil {
+                newActiveProvID = duplicatedProviders.first?.id
+            }
+            newService.activeProviderID = newActiveProvID
+
+            // 1. Insert new service
+            try newService.insert(db)
+
+            // 2. Insert duplicated providers
+            for prov in duplicatedProviders {
+                try prov.insert(db)
+            }
+
+            // 3. Insert duplicated port mappings
+            for p in ports {
+                let newPort = ServicePortMapping(
+                    id: UUID(),
+                    serviceID: newID,
+                    localPort: p.localPort,
+                    remotePort: p.remotePort,
+                    protocolType: p.protocolType
+                )
+                try newPort.insert(db)
+            }
+
+            // 4. Insert duplicated group memberships
+            for m in memberships {
+                let newMem = ServiceGroupMembershipRecord(serviceID: newID, groupID: m.groupID)
+                try newMem.insert(db)
+            }
+
+            return newService
         }
     }
 }

@@ -12,5 +12,7 @@ extension NSNotification.Name {
     public static let kumaExportWorkspace = NSNotification.Name("kuma.exportWorkspace")
     public static let kumaImportWorkspace = NSNotification.Name("kuma.importWorkspace")
     public static let kumaFocusSearch = NSNotification.Name("kuma.focusSearch")
+    public static let kumaGroupsUpdated = NSNotification.Name("kuma.groupsUpdated")
+    public static let kumaServiceStateChanged = NSNotification.Name("kuma.serviceStateChanged")
 }
 

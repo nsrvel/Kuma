@@ -20,24 +20,24 @@ public struct OnboardingWizardView: View {
 
             // Center Stage Content Area (Clipped for Zero-Overdraw GPU Performance)
             ZStack {
-                    switch viewModel.currentStep {
-                    case 0:
-                        WelcomeStepView()
-                            .transition(stepTransition)
-                    case 1:
-                        ContainersAndClustersStepView(viewModel: viewModel)
-                            .transition(stepTransition)
-                    case 2:
-                        PublicTunnelingStepView(viewModel: viewModel)
-                            .transition(stepTransition)
-                    default:
-                        ReadyStepView()
-                            .transition(stepTransition)
-                    }
+                switch viewModel.currentStep {
+                case 0:
+                    WelcomeStepView()
+                        .transition(stepTransition)
+                case 1:
+                    ContainersAndClustersStepView(viewModel: viewModel)
+                        .transition(stepTransition)
+                case 2:
+                    PublicTunnelingStepView(viewModel: viewModel)
+                        .transition(stepTransition)
+                default:
+                    ReadyStepView()
+                        .transition(stepTransition)
                 }
-                .padding(.horizontal, KumaSpacing.xxl)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            }
+            .padding(.horizontal, KumaSpacing.xxl)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
 
             // Footer Navigation (Centered Primary CTA Button)
             footerCTA
@@ -49,6 +49,21 @@ public struct OnboardingWizardView: View {
             RoundedRectangle(cornerRadius: KumaRadius.xl, style: .continuous)
                 .stroke(KumaColors.borderSubtle, lineWidth: 0.5)
         )
+        .alert(
+            "Invalid Binary Selection",
+            isPresented: Binding(
+                get: { viewModel.pathValidationError != nil },
+                set: { if !$0 { viewModel.clearValidationError() } }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                viewModel.clearValidationError()
+            }
+        } message: {
+            if let errorMsg = viewModel.pathValidationError {
+                Text(errorMsg)
+            }
+        }
         .onAppear {
             viewModel.currentStep = 0
         }
@@ -66,7 +81,7 @@ public struct OnboardingWizardView: View {
         HStack(alignment: .center) {
             // Top Left: Back Icon Button
             ZStack(alignment: .leading) {
-                if viewModel.currentStep > 0 {
+                if viewModel.canGoPrev {
                     Button {
                         guard !isTransitioning else { return }
                         isTransitioning = true
@@ -121,10 +136,10 @@ public struct OnboardingWizardView: View {
     private var footerCTA: some View {
         VStack {
             KumaPrimaryButton(
-                viewModel.currentStep < viewModel.totalSteps - 1 ? "Continue" : "Get Started"
+                viewModel.canGoNext ? "Continue" : "Get Started"
             ) {
                 guard !isTransitioning else { return }
-                if viewModel.currentStep < viewModel.totalSteps - 1 {
+                if viewModel.canGoNext {
                     isTransitioning = true
                     withAnimation(stepAnimation) {
                         viewModel.nextStep()

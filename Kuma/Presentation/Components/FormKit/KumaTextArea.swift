@@ -1,10 +1,9 @@
 import SwiftUI
-import AppKit
 
 // MARK: - KumaTextArea
 
 /// A multi-line plain text area for descriptions, notes, and multi-line inputs.
-/// Follows Kuma Design Tokens (Colors, Radius, Focus Ring, Native Placeholder).
+/// Built with pure SwiftUI native `TextField(axis: .vertical)` matching `KumaTextField` 1:1.
 public struct KumaTextArea: View {
     public let label: String
     @Binding public var value: String
@@ -12,6 +11,7 @@ public struct KumaTextArea: View {
     public var minHeight: CGFloat
     public var maxHeight: CGFloat?
     public var isMonospaced: Bool
+    public var lineLimit: ClosedRange<Int>
     public var error: String?
 
     @FocusState private var isFocused: Bool
@@ -20,9 +20,10 @@ public struct KumaTextArea: View {
         label: String = "",
         value: Binding<String>,
         placeholder: String = "",
-        minHeight: CGFloat = 64,
+        minHeight: CGFloat = 52,
         maxHeight: CGFloat? = nil,
         isMonospaced: Bool = false,
+        lineLimit: ClosedRange<Int> = 2...5,
         error: String? = nil
     ) {
         self.label = label
@@ -31,6 +32,7 @@ public struct KumaTextArea: View {
         self.minHeight = minHeight
         self.maxHeight = maxHeight
         self.isMonospaced = isMonospaced
+        self.lineLimit = lineLimit
         self.error = error
     }
 
@@ -42,28 +44,20 @@ public struct KumaTextArea: View {
                     .foregroundStyle(.secondary)
             }
 
-            ZStack(alignment: .topLeading) {
-                KumaNativeTextView(
-                    text: $value,
-                    isMonospaced: isMonospaced,
-                    minHeight: minHeight,
-                    maxHeight: maxHeight,
-                    isFocused: $isFocused
-                )
-                .frame(minHeight: minHeight, maxHeight: maxHeight)
-
-                // Native Muted Placeholder
-                if value.isEmpty {
-                    Text(placeholder)
-                        .font(isMonospaced ? .system(size: 11.5, weight: .regular, design: .monospaced) : KumaFont.body)
-                        .foregroundStyle(Color(nsColor: .placeholderTextColor))
-                        .padding(.leading, 4)
-                        .padding(.top, 4)
-                        .allowsHitTesting(false)
-                }
-            }
-            .padding(4)
-            .background(KumaColors.inputBackground, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+            TextField(
+                placeholder,
+                text: $value,
+                prompt: Text(placeholder).foregroundColor(Color(nsColor: .placeholderTextColor)),
+                axis: .vertical
+            )
+            .textFieldStyle(.plain)
+            .font(isMonospaced ? .system(size: 11.5, weight: .regular, design: .monospaced) : KumaFont.body)
+            .foregroundStyle(Color.primary)
+            .lineLimit(lineLimit)
+            .frame(minHeight: minHeight, maxHeight: maxHeight, alignment: .topLeading)
+            .focused($isFocused)
+            .padding(KumaSpacing.sm)
+            .background(KumaColors.inputBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                     .stroke(
@@ -108,87 +102,3 @@ public struct KumaTextArea: View {
     return PreviewWrapper()
 }
 
-// MARK: - KumaNativeTextView
-
-private struct KumaNativeTextView: NSViewRepresentable {
-    @Binding var text: String
-    let isMonospaced: Bool
-    let minHeight: CGFloat
-    let maxHeight: CGFloat?
-    @FocusState.Binding var isFocused: Bool
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
-        scrollView.autohidesScrollers = true
-
-        let contentSize = scrollView.contentSize
-        let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize))
-        textView.minSize = NSSize(width: 0.0, height: minHeight)
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainerInset = NSSize(width: 4, height: 4)
-
-        textView.drawsBackground = false
-        textView.backgroundColor = .clear
-        textView.delegate = context.coordinator
-        textView.allowsUndo = true
-
-        if isMonospaced {
-            textView.font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
-            textView.isAutomaticQuoteSubstitutionEnabled = false
-            textView.isAutomaticDashSubstitutionEnabled = false
-            textView.isAutomaticTextReplacementEnabled = false
-            textView.isAutomaticSpellingCorrectionEnabled = false
-        } else {
-            textView.font = NSFont.systemFont(ofSize: 13, weight: .regular)
-        }
-        textView.textColor = .labelColor
-        textView.string = text
-
-        scrollView.documentView = textView
-        return scrollView
-    }
-
-    func updateNSView(_ nsView: NSScrollView, context: Context) {
-        guard let textView = nsView.documentView as? NSTextView else { return }
-        if textView.string != text {
-            let selectedRanges = textView.selectedRanges
-            textView.string = text
-            textView.selectedRanges = selectedRanges
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: KumaNativeTextView
-
-        init(_ parent: KumaNativeTextView) {
-            self.parent = parent
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            parent.text = textView.string
-        }
-
-        func textDidBeginEditing(_ notification: Notification) {
-            parent.isFocused = true
-        }
-
-        func textDidEndEditing(_ notification: Notification) {
-            parent.isFocused = false
-        }
-    }
-}

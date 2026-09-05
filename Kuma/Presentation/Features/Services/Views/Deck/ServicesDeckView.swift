@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 public struct ServicesDeckView: View {
     public let workspaceID: UUID
     public let isStarredOnly: Bool
+    public let filterGroupID: UUID?
 
     @State var viewModel: ServicesDeckViewModel
     @State var pendingImportBackup: DataPortService.KumaBackup? = nil
@@ -13,10 +14,11 @@ public struct ServicesDeckView: View {
 
     @Environment(WorkspaceStore.self) var workspaceStore
 
-    public init(workspaceID: UUID, isStarredOnly: Bool = false) {
+    public init(workspaceID: UUID, isStarredOnly: Bool = false, filterGroupID: UUID? = nil) {
         self.workspaceID = workspaceID
         self.isStarredOnly = isStarredOnly
-        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly))
+        self.filterGroupID = filterGroupID
+        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly, filterGroupID: filterGroupID))
     }
 
     public var body: some View {
@@ -37,6 +39,11 @@ public struct ServicesDeckView: View {
                 viewModel.isStarredOnly = newStarred
             }
         }
+        .onChange(of: filterGroupID) { _, newGroupID in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+                viewModel.filterGroupID = newGroupID
+            }
+        }
         .task {
             for await _ in NotificationCenter.default.notifications(named: .kumaServiceCreated) {
                 viewModel.loadWorkspace(workspaceID: workspaceID)
@@ -48,12 +55,24 @@ public struct ServicesDeckView: View {
             }
         }
         .task {
+            for await notif in NotificationCenter.default.notifications(named: .kumaServiceStateChanged) {
+                if let serviceID = notif.object as? UUID, let state = notif.userInfo?["state"] as? ServiceState {
+                    viewModel.runtimeStates[serviceID] = ServiceRuntimeState(status: state, isLoading: false)
+                }
+            }
+        }
+        .task {
             for await notif in NotificationCenter.default.notifications(named: .kumaServiceDeleted) {
                 viewModel.loadWorkspace(workspaceID: workspaceID)
                 if let deletedID = notif.object as? UUID, viewModel.selectedServiceID == deletedID {
                     viewModel.selectedServiceID = nil
                     viewModel.isInspectorPresented = false
                 }
+            }
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaGroupsUpdated) {
+                viewModel.loadWorkspace(workspaceID: workspaceID)
             }
         }
         .task {
@@ -93,12 +112,30 @@ public struct ServicesDeckView: View {
         } message: {
             Text(alertMessage ?? "")
         }
+        .confirmationDialog(
+            "Delete Service?",
+            isPresented: Binding(
+                get: { viewModel.servicePendingDeletion != nil },
+                set: { if !$0 { viewModel.servicePendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Service", role: .destructive) {
+                viewModel.confirmDeletePendingService(workspaceID: workspaceID)
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.servicePendingDeletion = nil
+            }
+        } message: {
+            Text("This action cannot be undone. '\(viewModel.servicePendingDeletion?.name ?? "Service")' and all associated runner configurations will be permanently deleted.")
+        }
         .inspector(isPresented: $viewModel.isInspectorPresented) {
             if let selectedID = viewModel.selectedServiceID {
                 ServiceInspectorView(
                     serviceID: selectedID,
                     workspaceID: workspaceID
                 )
+                .id(selectedID)
                 .inspectorColumnWidth(
                     min: KumaTheme.Inspector.widthMin,
                     ideal: KumaTheme.Inspector.widthIdeal,
@@ -190,8 +227,16 @@ public struct ServicesDeckView: View {
             snapshots: viewModel.filteredSnapshots,
             runtimeStates: viewModel.runtimeStates,
             selectedID: viewModel.selectedServiceID,
+            groups: viewModel.groups,
             onToggle: { viewModel.toggleService(id: $0) },
+            onRestart: { viewModel.restartService(id: $0) },
+            onSwitchProvider: { serviceID, providerID in viewModel.switchProvider(serviceID: serviceID, providerID: providerID, workspaceID: workspaceID) },
             onToggleStar: { viewModel.toggleStarred(id: $0, workspaceID: workspaceID) },
+            onToggleDisabled: { viewModel.toggleDisabled(id: $0, workspaceID: workspaceID) },
+            onToggleGroup: { serviceID, groupID in viewModel.toggleGroup(serviceID: serviceID, groupID: groupID, workspaceID: workspaceID) },
+            onDuplicate: { viewModel.duplicateService(id: $0, workspaceID: workspaceID) },
+            onCopyConfig: { viewModel.copyConfig(id: $0) },
+            onDelete: { viewModel.promptDeleteService(id: $0) },
             onSelect: { viewModel.selectService($0) }
         )
     }

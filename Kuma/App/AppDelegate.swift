@@ -14,6 +14,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().delegate = self
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        Task {
+            await ProcessRegistry.shared.terminateAll()
+            await LogFileWriter.shared.flushAll()
+        }
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,

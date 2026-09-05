@@ -57,6 +57,18 @@ public struct SidebarView: View {
             ideal: KumaTheme.Sidebar.widthIdeal,
             max: KumaTheme.Sidebar.widthMax
         )
+        .task(id: workspaceStore.activeWorkspace?.id) {
+            if let wsID = workspaceStore.activeWorkspace?.id {
+                await viewModel.loadGroups(workspaceID: wsID)
+            }
+        }
+        .task {
+            for await _ in NotificationCenter.default.notifications(named: .kumaGroupsUpdated) {
+                if let wsID = workspaceStore.activeWorkspace?.id {
+                    await viewModel.loadGroups(workspaceID: wsID)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -73,6 +85,7 @@ public struct SidebarView: View {
                     node: node,
                     isSelected: viewModel.selectedID == node.id,
                     isExpanded: viewModel.isExpanded(node.id),
+                    isEditing: viewModel.editingGroupID == node.id,
                     indentLevel: item.indentLevel,
                     onSelect: {
                         withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
@@ -83,6 +96,39 @@ public struct SidebarView: View {
                         withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
                             viewModel.toggleExpanded(node.id)
                         }
+                    },
+                    onAddAction: node.id == .stable("groups") ? {
+                        if let wsID = workspaceStore.activeWorkspace?.id {
+                            viewModel.addGroup(workspaceID: wsID)
+                        }
+                    } : nil,
+                    onCommitRename: { newName in
+                        viewModel.renameGroup(id: node.id, newName: newName)
+                    },
+                    onStartRename: {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.85)) {
+                            viewModel.editingGroupID = node.id
+                        }
+                    },
+                    onDelete: {
+                        AlertService.shared.confirmDelete(
+                            title: "Delete Group?",
+                            message: "Are you sure you want to delete “\(node.title)”? Services in this group will remain in your workspace.",
+                            confirmTitle: "Delete"
+                        ) {
+                            withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
+                                viewModel.deleteGroup(id: node.id)
+                            }
+                        }
+                    },
+                    onMoveUp: viewModel.canMoveGroupUp(id: node.id) ? {
+                        viewModel.moveGroupUp(id: node.id)
+                    } : nil,
+                    onMoveDown: viewModel.canMoveGroupDown(id: node.id) ? {
+                        viewModel.moveGroupDown(id: node.id)
+                    } : nil,
+                    onReorderGroup: { draggedID, targetID in
+                        viewModel.reorderGroup(draggedID: draggedID, targetID: targetID)
                     }
                 )
             }

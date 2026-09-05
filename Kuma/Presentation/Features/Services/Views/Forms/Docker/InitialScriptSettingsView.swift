@@ -5,6 +5,7 @@ import SwiftUI
 /// Pre-startup shell script editor with progressive disclosure inline expansion.
 public struct InitialScriptSettingsView: View {
     @Binding public var initialScript: String
+    public var isLocked: Bool
     public var onSave: () -> Void
 
     @State private var isExpanded: Bool = false
@@ -12,9 +13,11 @@ public struct InitialScriptSettingsView: View {
 
     public init(
         initialScript: Binding<String>,
+        isLocked: Bool = false,
         onSave: @escaping () -> Void = {}
     ) {
         self._initialScript = initialScript
+        self.isLocked = isLocked
         self.onSave = onSave
     }
 
@@ -61,12 +64,10 @@ public struct InitialScriptSettingsView: View {
                         .buttonStyle(.plain)
                     }
 
-                    KumaTextArea(
-                        label: "",
-                        value: $draftScript,
+                    KumaCodeEditor(
+                        code: $draftScript,
                         placeholder: "#!/bin/sh\necho 'Preparing database migrations...'\n# Add any pre-startup commands here",
-                        minHeight: 110,
-                        isMonospaced: true
+                        minHeight: 140
                     )
 
                     HStack {
@@ -99,6 +100,13 @@ public struct InitialScriptSettingsView: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 )
+            }
+        }
+        .onChange(of: isLocked) { _, locked in
+            if locked && isExpanded {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isExpanded = false
+                }
             }
         }
     }

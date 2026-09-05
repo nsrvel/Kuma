@@ -38,6 +38,7 @@ public struct SidebarNode: Identifiable, Hashable, Sendable {
     public var actions: [SidebarAction]
     public var isSpecialHeader: Bool
     public var isExpandedByDefault: Bool
+    public var isGroupRow: Bool
 
     public init(
         id: UUID = UUID(),
@@ -46,7 +47,8 @@ public struct SidebarNode: Identifiable, Hashable, Sendable {
         children: [SidebarEntry]? = nil,
         actions: [SidebarAction] = [],
         isSpecialHeader: Bool = false,
-        isExpandedByDefault: Bool = true
+        isExpandedByDefault: Bool = true,
+        isGroupRow: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -55,10 +57,27 @@ public struct SidebarNode: Identifiable, Hashable, Sendable {
         self.actions = actions
         self.isSpecialHeader = isSpecialHeader
         self.isExpandedByDefault = isExpandedByDefault
+        self.isGroupRow = isGroupRow
     }
 
-    public func hash(into hasher: inout Hasher) { hasher.combine(id) }
-    public static func == (lhs: SidebarNode, rhs: SidebarNode) -> Bool { lhs.id == rhs.id }
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(title)
+        hasher.combine(icon)
+        hasher.combine(isSpecialHeader)
+        hasher.combine(isExpandedByDefault)
+        hasher.combine(isGroupRow)
+    }
+
+    public static func == (lhs: SidebarNode, rhs: SidebarNode) -> Bool {
+        lhs.id == rhs.id &&
+        lhs.title == rhs.title &&
+        lhs.icon == rhs.icon &&
+        lhs.isSpecialHeader == rhs.isSpecialHeader &&
+        lhs.isExpandedByDefault == rhs.isExpandedByDefault &&
+        lhs.isGroupRow == rhs.isGroupRow &&
+        lhs.children == rhs.children
+    }
 }
 
 // MARK: - SidebarEntry

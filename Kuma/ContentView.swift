@@ -112,16 +112,19 @@ struct ContentView: View {
     private func detailView(for selectedID: UUID?) -> some View {
         if selectedID == .stable("settings") {
             SettingsView(viewModel: settingsViewModel, workspaceStore: workspaceStore)
-        } else if selectedID == .stable("port-registry") {
-            PortRegistryView()
         } else if selectedID == .stable("live-logs") {
             LiveLogsView()
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
 
-            // Main Dashboard Workspace Stage with Deck View (All Services or Starred Filter)
+            // Main Dashboard Workspace Stage with Deck View (All Services, Starred, or Group Filter)
             let isStarred = (selectedID == .stable("starred-services"))
-            ServicesDeckView(workspaceID: activeWorkspace.id, isStarredOnly: isStarred)
-                .id(activeWorkspace.id)
+            let filterGroupID = sidebarViewModel.groupIDForSelectedRow(selectedID)
+            ServicesDeckView(
+                workspaceID: activeWorkspace.id,
+                isStarredOnly: isStarred,
+                filterGroupID: filterGroupID
+            )
+            .id(activeWorkspace.id)
         } else {
             KumaEmptyStateView(
                 iconName: "square.stack.3d.up.slash",

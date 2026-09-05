@@ -129,7 +129,7 @@ public enum KumaTheme {
         public static let rowHorizontalPadding: CGFloat = 8
         public static let rowCornerRadius: CGFloat = 8
 
-        public static let indentWidth: CGFloat = 16
+        public static let indentWidth: CGFloat = 4
         public static let specialHeaderTopPadding: CGFloat = 12
 
         public static let workspaceIconSize: CGFloat = 22

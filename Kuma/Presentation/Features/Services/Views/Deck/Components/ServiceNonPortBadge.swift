@@ -10,21 +10,18 @@ public struct ServiceNonPortBadge: View {
     }
 
     public var body: some View {
-        HStack(spacing: 4.5) {
-            ProviderBrandIcon(category: category, size: 9.5)
+        HStack(spacing: 6) {
+            Image(systemName: "square.2.layers.3d.bottom.filled")
+                .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
+
             Text(category.sidebarLabel)
-                .font(.system(size: 9.5, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 5.5)
-        .padding(.vertical, 2)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 3.5, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-        }
+        .padding(.vertical, 3)
+        .fixedSize()
     }
 
     private var metadata: (icon: String, label: String) {

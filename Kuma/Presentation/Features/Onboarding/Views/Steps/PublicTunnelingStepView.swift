@@ -51,9 +51,13 @@ public struct PublicTunnelingStepView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Re-scan Public Tunneling tools")
             .disabled(viewModel.isScanning)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            await viewModel.scanDependenciesIfNeeded()
+        }
     }
 }
 

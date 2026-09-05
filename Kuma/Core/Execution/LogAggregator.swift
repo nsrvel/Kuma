@@ -27,16 +27,17 @@ public struct LiveLogEntry: Identifiable, Sendable, Equatable {
     }
 }
 
+/// Thread-safe in-memory live log manager isolated to MainActor for smooth 120fps UI consumption.
 @Observable
-public final class LogAggregator: @unchecked Sendable {
-    public nonisolated static let shared = LogAggregator()
+@MainActor
+public final class LogAggregator {
+    public static let shared = LogAggregator()
 
-    @MainActor public private(set) var entries: [LiveLogEntry] = []
+    public private(set) var entries: [LiveLogEntry] = []
     private let maxEntries = 2000
 
     private init() {}
 
-    @MainActor
     public func append(serviceID: UUID, serviceName: String, level: String = "INFO", message: String) {
         let lines = message.components(separatedBy: .newlines).filter { !$0.isEmpty }
         let now = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
@@ -51,14 +52,18 @@ public final class LogAggregator: @unchecked Sendable {
         }
     }
 
+    /// Convenience static method safely bridging background threads to MainActor.
     public nonisolated static func appendLog(serviceID: UUID, serviceName: String, level: String = "INFO", message: String) {
         Task { @MainActor in
             shared.append(serviceID: serviceID, serviceName: serviceName, level: level, message: message)
         }
     }
 
-    @MainActor
-    public func clear() {
-        entries.removeAll()
+    public func clear(serviceID: UUID? = nil) {
+        if let serviceID {
+            entries.removeAll(where: { $0.serviceID == serviceID })
+        } else {
+            entries.removeAll()
+        }
     }
 }

@@ -1,0 +1,6 @@
+{
+  "markdown.marp.enableHtml": true,
+  "markdown-preview-mermaid-support.useDarkModeTheme": true,
+  "markdown.preview.typographer": true,
+  "markdown.preview.doubleClickToSwitchToEditor": true
+}

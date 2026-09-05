@@ -91,6 +91,7 @@ public struct DependencyStatusRowView: View {
                     .font(KumaFont.subheadline)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .accessibilityLabel("Browse executable for \(dependency.name)")
                 }
             }
         }

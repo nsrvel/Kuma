@@ -77,6 +77,7 @@ public struct InspectorFormSections: View {
                                 get: { provider.yamlConfig ?? "" },
                                 set: { provider.yamlConfig = $0; onFieldChanged() }
                             ),
+                            isLocked: isLocked,
                             onSave: onFieldChanged
                         )
 
@@ -87,6 +88,7 @@ public struct InspectorFormSections: View {
                                 get: { provider.initialScript ?? "" },
                                 set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
                             ),
+                            isLocked: isLocked,
                             onSave: onFieldChanged
                         )
                     }
@@ -101,6 +103,7 @@ public struct InspectorFormSections: View {
                                 get: { provider.yamlConfig ?? "" },
                                 set: { provider.yamlConfig = $0; onFieldChanged() }
                             ),
+                            isLocked: isLocked,
                             onSave: onFieldChanged
                         )
 
@@ -111,6 +114,7 @@ public struct InspectorFormSections: View {
                                 get: { provider.initialScript ?? "" },
                                 set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
                             ),
+                            isLocked: isLocked,
                             onSave: onFieldChanged
                         )
                     }

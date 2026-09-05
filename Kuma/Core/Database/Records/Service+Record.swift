@@ -30,6 +30,7 @@ extension Service: FetchableRecord, PersistableRecord {
             description: description,
             activeProviderID: activeProviderID,
             workspaceID: workspaceID,
+            groupIDs: [],
             isDisabled: isDisabled,
             isStarred: isStarred,
             createdAt: createdAt,

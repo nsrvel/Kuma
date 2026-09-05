@@ -5,6 +5,7 @@ import SwiftUI
 /// Docker Compose YAML configuration editor with progressive disclosure inline expansion.
 public struct DockerComposeSettingsView: View {
     @Binding public var yamlConfig: String
+    public var isLocked: Bool
     public var onSave: () -> Void
 
     @State private var isExpanded: Bool = false
@@ -12,9 +13,11 @@ public struct DockerComposeSettingsView: View {
 
     public init(
         yamlConfig: Binding<String>,
+        isLocked: Bool = false,
         onSave: @escaping () -> Void = {}
     ) {
         self._yamlConfig = yamlConfig
+        self.isLocked = isLocked
         self.onSave = onSave
     }
 
@@ -61,12 +64,10 @@ public struct DockerComposeSettingsView: View {
                         .buttonStyle(.plain)
                     }
 
-                    KumaTextArea(
-                        label: "",
-                        value: $draftYAML,
+                    KumaCodeEditor(
+                        code: $draftYAML,
                         placeholder: "version: '3.8'\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"80:80\"",
-                        minHeight: 140,
-                        isMonospaced: true
+                        minHeight: 160
                     )
 
                     HStack {
@@ -99,6 +100,13 @@ public struct DockerComposeSettingsView: View {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 )
+            }
+        }
+        .onChange(of: isLocked) { _, locked in
+            if locked && isExpanded {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isExpanded = false
+                }
             }
         }
     }
