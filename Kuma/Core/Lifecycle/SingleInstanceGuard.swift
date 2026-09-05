@@ -10,8 +10,9 @@ public enum SingleInstanceGuard {
     @discardableResult
     @MainActor
     public static func activateExistingInstanceIfRunning() -> Bool {
-        // Skip check during XCTest / Swift Testing execution
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        // Skip check during XCTest / Swift Testing or when attached to a debugger (e.g. Xcode LLDB)
+        if isDebuggerAttached ||
+           ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
            NSClassFromString("XCTestCase") != nil {
             return false
         }
@@ -27,5 +28,15 @@ public enum SingleInstanceGuard {
         }
 
         return false
+    }
+
+    /// Determines if the current process is running under a debugger (such as LLDB in Xcode).
+    public static var isDebuggerAttached: Bool {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        let junk = sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0)
+        guard junk == 0 else { return false }
+        return (info.kp_proc.p_flag & P_TRACED) != 0
     }
 }

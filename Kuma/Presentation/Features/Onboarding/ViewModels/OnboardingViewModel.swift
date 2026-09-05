@@ -21,8 +21,11 @@ public final class OnboardingViewModel {
 
     /// Single background scan task reference to prevent overlapping/concurrent scans (race conditions)
     private var scanTask: Task<Void, Never>? = nil
+    private let userDefaults: UserDefaults
 
-    public init() {}
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
 
     public var canGoNext: Bool {
         currentStep < totalSteps - 1
@@ -49,27 +52,33 @@ public final class OnboardingViewModel {
 
             let customKubectl = KumaSettingsKey.string(
                 forKey: KumaSettingsKey.customKubectlPath,
-                fallbackKey: KumaSettingsKey.legacyKubectlPath
+                fallbackKey: KumaSettingsKey.legacyKubectlPath,
+                defaults: self.userDefaults
             )
             let customKubeconfig = KumaSettingsKey.string(
                 forKey: KumaSettingsKey.customKubeconfigPath,
-                fallbackKey: KumaSettingsKey.legacyKubeconfigPath
+                fallbackKey: KumaSettingsKey.legacyKubeconfigPath,
+                defaults: self.userDefaults
             )
             let customDocker = KumaSettingsKey.string(
                 forKey: KumaSettingsKey.customDockerPath,
-                fallbackKey: KumaSettingsKey.legacyDockerPath
+                fallbackKey: KumaSettingsKey.legacyDockerPath,
+                defaults: self.userDefaults
             )
             let customPodman = KumaSettingsKey.string(
                 forKey: KumaSettingsKey.customPodmanPath,
-                fallbackKey: KumaSettingsKey.legacyPodmanPath
+                fallbackKey: KumaSettingsKey.legacyPodmanPath,
+                defaults: self.userDefaults
             )
             let customCloudflared = KumaSettingsKey.string(
                 forKey: KumaSettingsKey.cloudflaredPath,
-                fallbackKey: KumaSettingsKey.legacyCloudflaredPath
+                fallbackKey: KumaSettingsKey.legacyCloudflaredPath,
+                defaults: self.userDefaults
             )
             let customNgrok = KumaSettingsKey.string(
                 forKey: KumaSettingsKey.customNgrokPath,
-                fallbackKey: KumaSettingsKey.legacyNgrokPath
+                fallbackKey: KumaSettingsKey.legacyNgrokPath,
+                defaults: self.userDefaults
             )
 
             async let kubectlPath = DependencyChecker.resolvedPath(for: "kubectl", customPath: customKubectl)
@@ -178,7 +187,7 @@ public final class OnboardingViewModel {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             // User cleared path -> save empty string to reset to system default
-            UserDefaults.standard.set("", forKey: dependency.settingsKey)
+            self.userDefaults.set("", forKey: dependency.settingsKey)
             self.pathValidationError = nil
             Task { await runScan(isManualRescan: false) }
             return true
@@ -201,7 +210,7 @@ public final class OnboardingViewModel {
 
         // Valid -> persist to standardized settings key and trigger atomic re-scan
         self.pathValidationError = nil
-        UserDefaults.standard.set(trimmed, forKey: dependency.settingsKey)
+        self.userDefaults.set(trimmed, forKey: dependency.settingsKey)
 
         self.scanTask = Task {
             await runScan(isManualRescan: false)

@@ -365,13 +365,23 @@ public nonisolated enum DataPortService {
 
     // MARK: - Factory Reset & Relaunch
 
-    public static func resetAllAppStorage() async {
+    public static func resetAllAppStorage(defaults: UserDefaults = .standard) async {
         // 0. Terminate all running service processes / tunnels cleanly
         await ProcessRegistry.shared.terminateAll()
 
         // 1. Wipe UserDefaults
-        if let bundleID = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: bundleID)
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil || NSClassFromString("XCTestCase") != nil
+        if !isTesting, let bundleID = Bundle.main.bundleIdentifier {
+            defaults.removePersistentDomain(forName: bundleID)
+        } else if isTesting {
+            // In testing, remove known settings keys safely without blowing away the host test runner's standard defaults
+            defaults.removeObject(forKey: KumaSettingsKey.hasCompletedOnboarding)
+            defaults.removeObject(forKey: KumaSettingsKey.customKubectlPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customKubeconfigPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customDockerPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customPodmanPath)
+            defaults.removeObject(forKey: KumaSettingsKey.cloudflaredPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customNgrokPath)
         }
 
         // 2. Wipe SQLite DB

@@ -9,7 +9,10 @@ struct OnboardingBinaryValidationTests {
     // MARK: - [TC-B01] File Not Found Rejection
     @Test("TC-B01: Path to non-existent file is rejected and storage remains unmutated")
     func testFileNotFoundRejection() {
-        let viewModel = OnboardingViewModel()
+        let harness = OnboardingTestHarness()
+        defer { harness.cleanup() }
+
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "kubectl",
             name: "Kubernetes CLI",
@@ -23,7 +26,7 @@ struct OnboardingBinaryValidationTests {
 
         #expect(success == false)
         #expect(viewModel.pathValidationError?.contains("File does not exist") == true)
-        #expect(UserDefaults.standard.string(forKey: KumaSettingsKey.customKubectlPath) != nonExistentPath)
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customKubectlPath) != nonExistentPath)
     }
 
     // MARK: - [TC-B02] Directory Path Rejection
@@ -33,7 +36,7 @@ struct OnboardingBinaryValidationTests {
         defer { harness.cleanup() }
 
         let tempDir = harness.createTempDirectory(named: "kubectl_dir")
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "kubectl",
             name: "Kubernetes CLI",
@@ -54,7 +57,7 @@ struct OnboardingBinaryValidationTests {
         defer { harness.cleanup() }
 
         let textFile = harness.createNonExecutableFile(named: "kubectl")
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "kubectl",
             name: "Kubernetes CLI",
@@ -75,7 +78,7 @@ struct OnboardingBinaryValidationTests {
         defer { harness.cleanup() }
 
         let dockerBinary = harness.createDummyExecutable(named: "docker")
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "kubectl",
             name: "Kubernetes CLI",
@@ -95,18 +98,11 @@ struct OnboardingBinaryValidationTests {
         let harness = OnboardingTestHarness()
         defer { harness.cleanup() }
 
-        // Create executable in user's home directory
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        let uniqueName = "test_kuma_kubectl_\(UUID().uuidString)"
-        let realPath = (homeDir as NSString).appendingPathComponent(uniqueName)
+        // Create executable in user's home directory with automatic tracking for cleanup
+        let created = harness.createHomeExecutable(named: "kubectl")
+        let tildePath = created.tildePath
 
-        FileManager.default.createFile(atPath: realPath, contents: "#!/bin/sh".data(using: .utf8), attributes: [
-            .posixPermissions: 0o755
-        ])
-        defer { try? FileManager.default.removeItem(atPath: realPath) }
-
-        let tildePath = "~/\(uniqueName)"
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "kubectl",
             name: "Kubernetes CLI",
@@ -118,27 +114,18 @@ struct OnboardingBinaryValidationTests {
         let success = viewModel.setCustomPath(for: dep, path: tildePath)
         #expect(success == true)
         #expect(viewModel.pathValidationError == nil)
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customKubectlPath) == tildePath)
     }
 
     // MARK: - [TC-B06] Whitespace Trimmed Path
     @Test("TC-B06: Raw path with surrounding whitespace is automatically trimmed and saved")
     func testWhitespaceTrimmedPath() {
-        let key = KumaSettingsKey.customDockerPath
-        let originalValue = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let originalValue {
-                UserDefaults.standard.set(originalValue, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-
         let harness = OnboardingTestHarness()
         defer { harness.cleanup() }
 
         let binaryPath = harness.createDummyExecutable(named: "docker")
         let paddedPath = "   \(binaryPath)   \n"
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "docker",
             name: "Docker Engine",
@@ -150,13 +137,16 @@ struct OnboardingBinaryValidationTests {
         let success = viewModel.setCustomPath(for: dep, path: paddedPath)
         #expect(success == true)
         #expect(viewModel.pathValidationError == nil)
-        #expect(UserDefaults.standard.string(forKey: KumaSettingsKey.customDockerPath) == binaryPath)
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customDockerPath) == binaryPath)
     }
 
     // MARK: - [TC-B07] Clearing Custom Path
     @Test("TC-B07: Clearing path with empty string resets settings key and invokes auto-scan")
     func testClearingCustomPath() {
-        let viewModel = OnboardingViewModel()
+        let harness = OnboardingTestHarness()
+        defer { harness.cleanup() }
+
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "podman",
             name: "Podman Engine",
@@ -168,7 +158,7 @@ struct OnboardingBinaryValidationTests {
         let success = viewModel.setCustomPath(for: dep, path: "")
         #expect(success == true)
         #expect(viewModel.pathValidationError == nil)
-        #expect(UserDefaults.standard.string(forKey: KumaSettingsKey.customPodmanPath) == "")
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customPodmanPath) == "")
     }
 
     // MARK: - [TC-B08] Kubeconfig YAML Validation
@@ -178,7 +168,7 @@ struct OnboardingBinaryValidationTests {
         defer { harness.cleanup() }
 
         let yamlFile = harness.createDummyKubeconfig()
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "kubeconfig",
             name: "Kubeconfig File",
@@ -190,6 +180,6 @@ struct OnboardingBinaryValidationTests {
         let success = viewModel.setCustomPath(for: dep, path: yamlFile)
         #expect(success == true)
         #expect(viewModel.pathValidationError == nil)
-        #expect(UserDefaults.standard.string(forKey: KumaSettingsKey.customKubeconfigPath) == yamlFile)
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customKubeconfigPath) == yamlFile)
     }
 }

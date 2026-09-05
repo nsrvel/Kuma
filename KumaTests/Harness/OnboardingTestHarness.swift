@@ -4,16 +4,36 @@ import Foundation
 /// Isolated to `@MainActor` for 100% Swift 6 Strict Concurrency safety without `@unchecked Sendable`.
 @MainActor
 public final class OnboardingTestHarness {
+    public let suiteName: String
+    public let userDefaults: UserDefaults
     private var createdFilePaths: [String] = []
     private let fileManager = FileManager.default
 
-    public init() {}
+    public init(suiteName: String = "kuma.tests.onboarding.\(UUID().uuidString)") {
+        self.suiteName = suiteName
+        self.userDefaults = UserDefaults(suiteName: suiteName) ?? .standard
+        self.userDefaults.removePersistentDomain(forName: suiteName)
+    }
 
     deinit {
         // Safe cleanup invoked upon deallocation
         for path in createdFilePaths {
             try? FileManager.default.removeItem(atPath: path)
         }
+    }
+
+    /// Creates an executable file in user's home directory (e.g. for testing tilde expansion) and tracks for automatic cleanup.
+    @discardableResult
+    public func createHomeExecutable(named name: String, content: String = "#!/bin/sh\necho ok") -> (realPath: String, tildePath: String) {
+        let homeDir = fileManager.homeDirectoryForCurrentUser.path(percentEncoded: false)
+        let uniqueName = "\(UUID().uuidString)_\(name)"
+        let realPath = (homeDir as NSString).appendingPathComponent(uniqueName)
+
+        fileManager.createFile(atPath: realPath, contents: content.data(using: .utf8), attributes: [
+            .posixPermissions: 0o755
+        ])
+        createdFilePaths.append(realPath)
+        return (realPath, "~/\(uniqueName)")
     }
 
     /// Creates a temporary dummy executable file with POSIX permissions 0755 (`chmod +x`).
@@ -81,8 +101,9 @@ public final class OnboardingTestHarness {
         return createSymlink(named: name, pointingTo: nonExistentTarget)
     }
 
-    /// Cleans up all temporary files and directories created during the test run.
+    /// Cleans up all temporary files and directories created during the test run and purges isolated userDefaults.
     public func cleanup() {
+        userDefaults.removePersistentDomain(forName: suiteName)
         for path in createdFilePaths {
             try? fileManager.removeItem(atPath: path)
         }

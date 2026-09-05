@@ -6,15 +6,36 @@ public enum KumaSettingsKey {
     // MARK: - App & Lifecycle
     public static let hasCompletedOnboarding = "kuma.has_completed_onboarding"
 
-    // MARK: - Engine Custom Binary Paths
+    // MARK: - General & App Settings
+    public static let launchAtLogin = "kuma.settings.launchAtLogin"
+    public static let autoResumeServices = "kuma.settings.autoResumeServices"
+    public static let confirmBeforeQuit = "kuma.settings.confirmBeforeQuit"
+    public static let appearance = "kuma.settings.appearance"
+
+    // MARK: - Engine & CLI Binary Paths
+    public static let customPathOverride = "kuma.settings.customPathOverride"
+    public static let defaultShell = "kuma.settings.defaultShell"
     public static let customKubectlPath = "kuma.settings.customKubectlPath"
     public static let customKubeconfigPath = "kuma.settings.customKubeconfigPath"
     public static let customDockerPath = "kuma.settings.customDockerPath"
     public static let customPodmanPath = "kuma.settings.customPodmanPath"
 
-    // MARK: - Tunneling Custom Binary Paths
+    // MARK: - Tunneling Custom Binary Paths & Config
     public static let cloudflaredPath = "kuma.settings.cloudflaredPath"
     public static let customNgrokPath = "kuma.settings.customNgrokPath"
+    public static let ngrokAuthToken = "kuma.settings.ngrokAuthToken"
+    public static let ngrokRegion = "kuma.settings.ngrokRegion"
+
+    // MARK: - Notifications & Safety
+    public static let notifyOnCrash = "kuma.settings.notifyOnCrash"
+    public static let notifySound = "kuma.settings.notifySound"
+    public static let notifyOnHealthFailure = "kuma.settings.notifyOnHealthFailure"
+    public static let warnOnPortCollision = "kuma.settings.warnOnPortCollision"
+    public static let promptGracefulShutdown = "kuma.settings.promptGracefulShutdown"
+
+    // MARK: - Logs & Buffer
+    public static let logRetentionLimit = "kuma.settings.logRetentionLimit"
+    public static let clearLogsOnSwitch = "kuma.settings.clearLogsOnSwitch"
 
     // MARK: - Legacy Compatibility Keys (Fallback reading)
     public static let legacyKubectlPath = "kuma.custom_kubectl_path"
@@ -33,5 +54,21 @@ public enum KumaSettingsKey {
             return fallbackVal
         }
         return nil
+    }
+
+    /// Helper to resolve a boolean preference with an explicit default value.
+    public static func bool(forKey key: String, defaultValue: Bool, defaults: UserDefaults = .standard) -> Bool {
+        if let object = defaults.object(forKey: key) as? Bool {
+            return object
+        }
+        return defaultValue
+    }
+
+    /// Helper to resolve an integer preference with an explicit default value.
+    public static func integer(forKey key: String, defaultValue: Int, defaults: UserDefaults = .standard) -> Int {
+        if let object = defaults.object(forKey: key) as? Int {
+            return object
+        }
+        return defaultValue
     }
 }

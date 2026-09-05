@@ -26,21 +26,11 @@ struct OnboardingConcurrencyAndMappingTests {
     // MARK: - [TC-C02] Path Override During In-Flight Scan
     @Test("TC-C02: Setting custom path while background scan is running cancels scan and re-evaluates atomically")
     func testPathOverrideDuringScan() async {
-        let key = KumaSettingsKey.customDockerPath
-        let originalValue = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let originalValue {
-                UserDefaults.standard.set(originalValue, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-
         let harness = OnboardingTestHarness()
         defer { harness.cleanup() }
 
         let validDocker = harness.createDummyExecutable(named: "docker")
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(
             id: "docker",
             name: "Docker Engine",
@@ -61,11 +51,12 @@ struct OnboardingConcurrencyAndMappingTests {
         let success = viewModel.setCustomPath(for: dep, path: validDocker)
         #expect(success == true)
 
-        // Await the new scan triggered by setCustomPath to finish deterministically
+        // Give the task a brief run loop spin, then await pending scan
+        try? await Task.sleep(nanoseconds: 50_000_000)
         await viewModel.waitForPendingScan()
 
         #expect(viewModel.isScanning == false)
-        #expect(UserDefaults.standard.string(forKey: KumaSettingsKey.customDockerPath) == validDocker)
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customDockerPath) == validDocker)
     }
 
     // MARK: - [TC-C03] Rapid Step Forward Spam

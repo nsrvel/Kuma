@@ -38,9 +38,14 @@ public final class KubeConfigViewModel {
 
     private let repo: any KubeConfigRepositoryProtocol
     private var activeValidationTask: Task<Void, Never>? = nil
+    private let userDefaults: UserDefaults
 
-    public init(repo: any KubeConfigRepositoryProtocol = KubeConfigRepository()) {
+    public init(
+        repo: any KubeConfigRepositoryProtocol = KubeConfigRepository(),
+        userDefaults: UserDefaults = .standard
+    ) {
         self.repo = repo
+        self.userDefaults = userDefaults
 
         Task {
             await self.loadConfigs()
@@ -49,7 +54,11 @@ public final class KubeConfigViewModel {
 
     public func loadConfigs() async {
         let repo = self.repo
-        let customPath = UserDefaults.standard.string(forKey: "kuma.custom_kubeconfig_path")
+        let customPath = KumaSettingsKey.string(
+            forKey: KumaSettingsKey.customKubeconfigPath,
+            fallbackKey: KumaSettingsKey.legacyKubeconfigPath,
+            defaults: self.userDefaults
+        )
         let finalizedList = await Task.detached(priority: .utility) { () -> [KubeConfig] in
             return await Self.fetchAndDecryptConfigs(repo: repo, customPath: customPath)
         }.value

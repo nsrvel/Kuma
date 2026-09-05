@@ -31,7 +31,7 @@ stateDiagram-v2
         
         state ExistingFound {
             [*] --> BringToFront : existingApp.activate()
-            BringToFront --> TerminateSelf : NSApp.terminate(nil)
+            BringToFront --> TerminateSelf : NSApp.terminate(nil) (Before UI/DB init)
         }
     }
 
@@ -103,7 +103,7 @@ stateDiagram-v2
 
 ## 3. Invariant Rules (Kontrak Baku - Non-Negotiables)
 
-1. **`[INV-APP-01]` Strict Single-Instance Execution**: Kuma tidak boleh berjalan lebih dari satu instance di satu user session macOS. Jika instance kedua diluncurkan, instance aktif harus di-bring to front dan instance baru keluar (`terminate`) seketika. Pemeriksaan ini **wajib dilewati (bypass)** jika berjalan di bawah environment unit test (`XCTestConfigurationFilePath != nil` / `NSClassFromString("XCTestCase") != nil`).
+1. **`[INV-APP-01]` Strict Single-Instance Execution & Graceful Multi-Launch Guard**: Kuma tidak boleh berjalan lebih dari satu instance di satu user session macOS. Jika instance kedua diluncurkan (misal double click bersamaan), instance aktif harus di-bring to front (`activate()`) dan instance kedua keluar (`terminate`) seketika di `applicationWillFinishLaunching` sebelum UI scene dan database terbuka. Pemeriksaan ini **wajib dilewati (bypass)** jika berjalan di bawah environment unit test (`XCTestConfigurationFilePath != nil` / `NSClassFromString("XCTestCase") != nil` / `SWIFT_TESTING != nil`).
 2. **`[INV-APP-02]` Deterministic Phase Transitions & Storage Integrity**: Transisi `AppCoordinator` antara `.onboarding` dan `.mainWorkspace` wajib sinkron secara atomik dengan `KumaSettingsKey.hasCompletedOnboarding`. Tidak boleh ada ambiguitas fase ketika storage kosong atau rusak (wajib fallback ke `.onboarding`).
 3. **`[INV-APP-03]` Zero-Orphan Subprocess Termination**: Saat aplikasi ditutup (`applicationWillTerminate`), Kuma wajib mematikan seluruh subproses yang terdaftar di `ProcessRegistry` menggunakan eskalasi sinyal POSIX (`SIGINT` $\to$ `SIGTERM` $\to$ `SIGKILL`) serta mem-flush semua buffer log di `LogFileWriter`. Tidak boleh ada child process yang tertinggal sebagai zombie/orphan.
 4. **`[INV-APP-04]` Thread-Safe Global Alert Bus**: `AlertService` wajib terisolasi ke `@MainActor` dan reactive via Swift Observation (`@Observable`). Alert aktif hanya boleh ada satu pada satu waktu (`single-slot modal`), dan dismiss wajib me-reset `activeAlert` kembali ke `nil`.

@@ -11,7 +11,7 @@ Setelah saya memilih fiturnya, jalankan pipeline standar end-to-end tanpa jalan 
   - Invariant Rules (Kontrak baku / Non-negotiables).
   - Invariant Guardrails mapping ke target test suite.
 
-### Phase 2: Comprehensive Test Matrix (`docs/testing/`)
+### Phase 2: Comprehensive Test Matrix (`docs/testing/`) & Implementation Plan
 - Rancang Test Matrix komprehensif di `docs/testing/[0X-feature-name]-test-matrix.md` (minimal 25–40 Test Cases terstruktur):
   - Kategori A: Initial State & Baseline Contracts.
   - Kategori B: Input/Form Validation, Crypto/Vault & Security.
@@ -19,19 +19,24 @@ Setelah saya memilih fiturnya, jalankan pipeline standar end-to-end tanpa jalan 
   - Kategori D: Runtime/Process State Integration (ProcessRegistry/Subprocesses).
   - Kategori E: Edge Cases, Error Handling, & macOS System Quirks.
   - Kategori F: Headless SwiftUI View Hierarchy & Accessibility HIG.
-- Minta konfirmasi/approval saya terhadap Spec & Test Matrix sebelum menulis kode.
+- **Wajib Buat `implementation_plan.md`**: Buat artifact Implementation Plan detail yang merinci file apa saja yang diubah/dibuat, arsitektur yang dipakai, dan strategi verifikasi.
+- Minta konfirmasi/approval saya terhadap Spec, Test Matrix, dan Implementation Plan sebelum menulis kode implementasi/tes.
 
-### Phase 3: Test Implementation & Hardening
-- Siapkan isolated Test Harness (mock in-memory DB, temp files, sandbox environment).
-- Tulis test suite menggunakan modern Swift Testing framework (`@Suite`, `@Test`, `#expect`), gunakan `@Suite(..., .serialized)` untuk tes yang menyentuh shared storage/DB.
-- Patuhi aturan arsitektur Kuma:
-  - Swift 6 Strict Concurrency (`@MainActor`, `@Sendable`, zero data race).
-  - View modular (< 150 baris per file).
-  - Zero `print()` (wajib gunakan `os.Logger`).
-  - Co-location repository protocol & implementation.
+### Phase 3: Code Refactoring, Bug Fixing, Hardening & Test Implementation
+- **Audit & Bersihkan Hal yang "Bobrok" (Zero Tech-Debt)**:
+  - Wajib periksa dan langsung perbaiki semua kode usang / anti-pattern di fitur terkait.
+  - Modernisasi URL path: ganti semua `.path` lama menjadi `.path(percentEncoded: false)` (macOS 14+).
+  - Pastikan 100% kepatuhan **Swift 6 Strict Concurrency**: `@Sendable`, actor isolation (`@MainActor` vs `actor`), zero data-race, zero uncoordinated background Tasks pada synchronous lifecycle (misal: `applicationWillTerminate`).
+  - Hapus semua `print()`, wajib gunakan `os.Logger`.
+  - Pastikan modularitas View (< 150 baris per file) dan co-location repository protocol.
+- **Test Implementation**:
+  - Siapkan isolated Test Harness (mock in-memory DB, temp files, sandbox environment).
+  - Tulis test suite komprehensif menggunakan modern Swift Testing framework (`@Suite`, `@Test`, `#expect`).
+  - Wajib gunakan `@Suite(..., .serialized)` untuk tes yang menyentuh shared storage / defaults / DB untuk mencegah flakiness.
 
 ### Phase 4: Full Verification & 100% Pass
 - Jalankan `xcodebuild -scheme Kuma -destination 'platform=macOS' test` sampai 100% SUCCEEDED (zero failure, zero flaky tests).
+- Buat/update artifact `walkthrough.md` berisi rangkuman perubahan dan hasil testing.
 - Pastikan seluruh dokumentasi spec dan matriks tersinkronisasi sempurna dengan implementasi final.
 
 Silakan mulai dengan mengaudit codebase dan tanyakan fitur apa yang akan kita kerjakan!

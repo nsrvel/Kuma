@@ -57,35 +57,9 @@ public struct SettingsNotificationsSection: View {
         guard newValue else { return }
 
         Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-
-            switch settings.authorizationStatus {
-            case .notDetermined:
-                do {
-                    let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
-                    await MainActor.run {
-                        viewModel.notifyOnCrash = granted
-                        if !granted {
-                            showPermissionAlert = true
-                        }
-                    }
-                } catch {
-                    await MainActor.run {
-                        viewModel.notifyOnCrash = false
-                    }
-                }
-            case .denied:
-                await MainActor.run {
-                    viewModel.notifyOnCrash = false
-                    showPermissionAlert = true
-                }
-            case .authorized, .provisional, .ephemeral:
-                await MainActor.run {
-                    viewModel.notifyOnCrash = true
-                }
-            @unknown default:
-                break
+            let shouldPrompt = await viewModel.requestNotificationAuthorization()
+            if shouldPrompt {
+                showPermissionAlert = true
             }
         }
     }

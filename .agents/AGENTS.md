@@ -95,9 +95,10 @@ Kuma/
 
 ## 6. Workflow & Development Protocol
 
-1. **Step-by-Step Approval**: No large refactoring or multi-file creation without user review of the audit and implementation plan.
-2. **Standard Verifications**: Always run `xcodebuild -scheme Kuma -destination 'platform=macOS' test` to verify 100% test suite pass after any architectural change.
-3. **Reference Targets**:
+1. **Mandatory Implementation Plan**: An `implementation_plan.md` artifact MUST ALWAYS be created and reviewed before writing any production code, tests, or executing refactorings. The plan must clearly outline architectural decisions, file changes, and verification strategies.
+2. **Step-by-Step Approval**: No code modification or multi-file creation without explicit user review and approval of the spec, test matrix, and implementation plan.
+3. **Standard Verifications**: Always run `xcodebuild -scheme Kuma -destination 'platform=macOS' test` to verify 100% test suite pass after any architectural change.
+4. **Reference Targets**:
    - UI/UX aesthetics & visual fidelity → Match **KumaV3** references.
    - Core architecture, safety & concurrency → Match **KumaV4** patterns.
 

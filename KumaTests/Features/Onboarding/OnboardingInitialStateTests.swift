@@ -25,38 +25,28 @@ struct OnboardingInitialStateTests {
     // MARK: - [TC-A02] Launch Returning User State
     @Test("TC-A02: Returning user with hasCompletedOnboarding skips onboarding to mainWorkspace")
     func testLaunchReturningUser() {
-        let key = KumaSettingsKey.hasCompletedOnboarding
-        let originalValue = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let originalValue {
-                UserDefaults.standard.set(originalValue, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let suiteName = "kuma.tests.onboarding.initial.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
 
+        let key = KumaSettingsKey.hasCompletedOnboarding
         // Simulate existing completed user
-        UserDefaults.standard.set(true, forKey: key)
-        let coordinator = AppCoordinator()
+        defaults.set(true, forKey: key)
+        let coordinator = AppCoordinator(userDefaults: defaults)
         #expect(coordinator.currentPhase == .mainWorkspace)
     }
 
     // MARK: - [TC-A03] Corrupted Defaults Fallback
     @Test("TC-A03: Missing or non-boolean value in settings defaults safely falls back to onboarding phase")
     func testCorruptedDefaultsFallback() {
-        let key = KumaSettingsKey.hasCompletedOnboarding
-        let originalValue = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let originalValue {
-                UserDefaults.standard.set(originalValue, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
+        let suiteName = "kuma.tests.onboarding.corrupted.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suiteName) }
 
+        let key = KumaSettingsKey.hasCompletedOnboarding
         // Set garbage non-boolean string value
-        UserDefaults.standard.set("corrupted_value_xyz", forKey: key)
-        let coordinator = AppCoordinator()
+        defaults.set("corrupted_value_xyz", forKey: key)
+        let coordinator = AppCoordinator(userDefaults: defaults)
         #expect(coordinator.currentPhase == .onboarding)
     }
 

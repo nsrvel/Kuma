@@ -9,17 +9,14 @@ struct OnboardingFlowTests {
     // MARK: - [TC-E01] Full Onboarding Lifecycle Journey
     @Test("TC-E01: Complete flow from Step 0 to Step 3 transitions phase and marks completed flag")
     func testCompleteOnboardingLifecycle() async {
-        let key = KumaSettingsKey.hasCompletedOnboarding
-        let original = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let original { UserDefaults.standard.set(original, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
-        }
+        let harness = OnboardingTestHarness()
+        defer { harness.cleanup() }
 
-        let coordinator = AppCoordinator(initialPhase: .onboarding)
+        let key = KumaSettingsKey.hasCompletedOnboarding
+        let coordinator = AppCoordinator(initialPhase: .onboarding, userDefaults: harness.userDefaults)
         #expect(coordinator.currentPhase == .onboarding)
 
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         #expect(viewModel.currentStep == 0)
 
         await viewModel.scanDependenciesIfNeeded()
@@ -39,27 +36,17 @@ struct OnboardingFlowTests {
         coordinator.transitionTo(.mainWorkspace)
 
         #expect(coordinator.currentPhase == .mainWorkspace)
-        #expect(UserDefaults.standard.bool(forKey: key) == true)
+        #expect(harness.userDefaults.bool(forKey: key) == true)
     }
 
     // MARK: - [TC-E02] Back and Forth State Retention
     @Test("TC-E02: Navigating forward and backward preserves scanned state and custom overrides")
     func testBackAndForthStateRetention() async {
-        let key = KumaSettingsKey.customDockerPath
-        let originalValue = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let originalValue {
-                UserDefaults.standard.set(originalValue, forKey: key)
-            } else {
-                UserDefaults.standard.removeObject(forKey: key)
-            }
-        }
-
         let harness = OnboardingTestHarness()
         defer { harness.cleanup() }
 
         let validDocker = harness.createDummyExecutable(named: "docker")
-        let viewModel = OnboardingViewModel()
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         await viewModel.scanDependenciesIfNeeded()
 
         viewModel.nextStep() // To Step 1
@@ -77,25 +64,22 @@ struct OnboardingFlowTests {
         viewModel.nextStep()
         #expect(viewModel.currentStep == 1)
         #expect(viewModel.hasInitialScanned == true)
-        #expect(UserDefaults.standard.string(forKey: KumaSettingsKey.customDockerPath) == validDocker)
+        #expect(harness.userDefaults.string(forKey: KumaSettingsKey.customDockerPath) == validDocker)
     }
 
     // MARK: - [TC-E03] Reset to Onboarding
     @Test("TC-E03: Factory reset reverts coordinator to onboarding and clears completion flag")
     func testResetToOnboarding() {
-        let key = KumaSettingsKey.hasCompletedOnboarding
-        let original = UserDefaults.standard.object(forKey: key)
-        defer {
-            if let original { UserDefaults.standard.set(original, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
-        }
+        let harness = OnboardingTestHarness()
+        defer { harness.cleanup() }
 
-        let coordinator = AppCoordinator(initialPhase: .mainWorkspace)
+        let key = KumaSettingsKey.hasCompletedOnboarding
+        let coordinator = AppCoordinator(initialPhase: .mainWorkspace, userDefaults: harness.userDefaults)
         #expect(coordinator.currentPhase == .mainWorkspace)
 
         coordinator.resetToOnboarding()
         #expect(coordinator.currentPhase == .onboarding)
-        #expect(UserDefaults.standard.bool(forKey: key) == false)
+        #expect(harness.userDefaults.bool(forKey: key) == false)
     }
 
     // MARK: - [TC-F01] Homebrew Path Resolution
@@ -151,7 +135,10 @@ struct OnboardingFlowTests {
     // MARK: - [TC-G01] Alert Dismissal Clears State
     @Test("TC-G01: clearValidationError resets pathValidationError to nil")
     func testAlertDismissalClearsState() {
-        let viewModel = OnboardingViewModel()
+        let harness = OnboardingTestHarness()
+        defer { harness.cleanup() }
+
+        let viewModel = OnboardingViewModel(userDefaults: harness.userDefaults)
         let dep = SystemDependency(id: "kubectl", name: "Kubectl", iconName: "network", isInstalled: false, settingsKey: KumaSettingsKey.customKubectlPath)
 
         viewModel.setCustomPath(for: dep, path: "/invalid/path")
@@ -180,21 +167,20 @@ struct OnboardingFlowTests {
     // MARK: - [TC-G03] Legacy Key Migration Fallback
     @Test("TC-G03: KumaSettingsKey resolves primary key and falls back to legacy key seamlessly")
     func testLegacyKeyMigrationFallback() {
+        let harness = OnboardingTestHarness()
+        defer { harness.cleanup() }
+
         let primaryKey = "test.primary.key.\(UUID().uuidString)"
         let fallbackKey = "test.legacy.key.\(UUID().uuidString)"
-        defer {
-            UserDefaults.standard.removeObject(forKey: primaryKey)
-            UserDefaults.standard.removeObject(forKey: fallbackKey)
-        }
 
         // Case 1: Only fallback exists
-        UserDefaults.standard.set("/usr/local/bin/legacy_docker", forKey: fallbackKey)
-        let resolvedFallback = KumaSettingsKey.string(forKey: primaryKey, fallbackKey: fallbackKey)
+        harness.userDefaults.set("/usr/local/bin/legacy_docker", forKey: fallbackKey)
+        let resolvedFallback = KumaSettingsKey.string(forKey: primaryKey, fallbackKey: fallbackKey, defaults: harness.userDefaults)
         #expect(resolvedFallback == "/usr/local/bin/legacy_docker")
 
         // Case 2: Primary key takes precedence
-        UserDefaults.standard.set("/opt/homebrew/bin/new_docker", forKey: primaryKey)
-        let resolvedPrimary = KumaSettingsKey.string(forKey: primaryKey, fallbackKey: fallbackKey)
+        harness.userDefaults.set("/opt/homebrew/bin/new_docker", forKey: primaryKey)
+        let resolvedPrimary = KumaSettingsKey.string(forKey: primaryKey, fallbackKey: fallbackKey, defaults: harness.userDefaults)
         #expect(resolvedPrimary == "/opt/homebrew/bin/new_docker")
     }
 

@@ -4,13 +4,15 @@ import UserNotifications
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
-    func applicationWillFinishLaunching(_ notification: Notification) {
-        if SingleInstanceGuard.activateExistingInstanceIfRunning() {
-            NSApp.terminate(nil)
-        }
-    }
-
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if SingleInstanceGuard.activateExistingInstanceIfRunning() {
+            // Defer termination to next turn of runloop so AppKit lifecycle finishes cleanly
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
+            return
+        }
+
         UNUserNotificationCenter.current().delegate = self
     }
 

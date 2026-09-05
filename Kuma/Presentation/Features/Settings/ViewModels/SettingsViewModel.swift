@@ -1,6 +1,7 @@
 import SwiftUI
 import Observation
 import ServiceManagement
+import UserNotifications
 import os
 
 public enum KumaAppearance: String, CaseIterable, Codable, Sendable {
@@ -53,31 +54,8 @@ public final class SettingsViewModel {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SettingsViewModel")
     private let userDefaults: UserDefaults
 
-    // MARK: - Keys
-
-    public enum Keys {
-        public static let launchAtLogin = "kuma.settings.launchAtLogin"
-        public static let autoResumeServices = "kuma.settings.autoResumeServices"
-        public static let confirmBeforeQuit = "kuma.settings.confirmBeforeQuit"
-        public static let appearance = "kuma.settings.appearance"
-        public static let customPathOverride = "kuma.settings.customPathOverride"
-        public static let defaultShell = "kuma.settings.defaultShell"
-        public static let customKubectlPath = "kuma.settings.customKubectlPath"
-        public static let customKubeconfigPath = "kuma.settings.customKubeconfigPath"
-        public static let customDockerPath = "kuma.settings.customDockerPath"
-        public static let customPodmanPath = "kuma.settings.customPodmanPath"
-        public static let cloudflaredPath = "kuma.settings.cloudflaredPath"
-        public static let customNgrokPath = "kuma.settings.customNgrokPath"
-        public static let ngrokAuthToken = "kuma.settings.ngrokAuthToken"
-        public static let ngrokRegion = "kuma.settings.ngrokRegion"
-        public static let notifyOnCrash = "kuma.settings.notifyOnCrash"
-        public static let notifySound = "kuma.settings.notifySound"
-        public static let notifyOnHealthFailure = "kuma.settings.notifyOnHealthFailure"
-        public static let warnOnPortCollision = "kuma.settings.warnOnPortCollision"
-        public static let promptGracefulShutdown = "kuma.settings.promptGracefulShutdown"
-        public static let logRetentionLimit = "kuma.settings.logRetentionLimit"
-        public static let clearLogsOnSwitch = "kuma.settings.clearLogsOnSwitch"
-    }
+    // MARK: - Keys (Centralized)
+    public typealias Keys = KumaSettingsKey
 
     // MARK: - General Settings
 
@@ -185,29 +163,59 @@ public final class SettingsViewModel {
         self.userDefaults = userDefaults
 
         self.launchAtLogin = userDefaults.bool(forKey: Keys.launchAtLogin)
-        self.autoResumeServices = userDefaults.object(forKey: Keys.autoResumeServices) as? Bool ?? true
-        self.confirmBeforeQuit = userDefaults.object(forKey: Keys.confirmBeforeQuit) as? Bool ?? true
+        self.autoResumeServices = KumaSettingsKey.bool(forKey: Keys.autoResumeServices, defaultValue: true, defaults: userDefaults)
+        self.confirmBeforeQuit = KumaSettingsKey.bool(forKey: Keys.confirmBeforeQuit, defaultValue: true, defaults: userDefaults)
 
         let rawAppearance = userDefaults.string(forKey: Keys.appearance) ?? KumaAppearance.system.rawValue
         self.appearance = KumaAppearance(rawValue: rawAppearance) ?? .system
 
         self.customPathOverride = userDefaults.string(forKey: Keys.customPathOverride) ?? ""
         self.defaultShell = userDefaults.string(forKey: Keys.defaultShell) ?? "/bin/zsh"
-        self.customKubectlPath = userDefaults.string(forKey: Keys.customKubectlPath) ?? ""
-        self.customKubeconfigPath = userDefaults.string(forKey: Keys.customKubeconfigPath) ?? ""
-        self.customDockerPath = userDefaults.string(forKey: Keys.customDockerPath) ?? ""
-        self.customPodmanPath = userDefaults.string(forKey: Keys.customPodmanPath) ?? ""
 
-        self.cloudflaredPath = userDefaults.string(forKey: Keys.cloudflaredPath) ?? ""
-        self.customNgrokPath = userDefaults.string(forKey: Keys.customNgrokPath) ?? ""
+        self.customKubectlPath = KumaSettingsKey.string(
+            forKey: Keys.customKubectlPath,
+            fallbackKey: Keys.legacyKubectlPath,
+            defaults: userDefaults
+        ) ?? ""
+
+        self.customKubeconfigPath = KumaSettingsKey.string(
+            forKey: Keys.customKubeconfigPath,
+            fallbackKey: Keys.legacyKubeconfigPath,
+            defaults: userDefaults
+        ) ?? ""
+
+        self.customDockerPath = KumaSettingsKey.string(
+            forKey: Keys.customDockerPath,
+            fallbackKey: Keys.legacyDockerPath,
+            defaults: userDefaults
+        ) ?? ""
+
+        self.customPodmanPath = KumaSettingsKey.string(
+            forKey: Keys.customPodmanPath,
+            fallbackKey: Keys.legacyPodmanPath,
+            defaults: userDefaults
+        ) ?? ""
+
+        self.cloudflaredPath = KumaSettingsKey.string(
+            forKey: Keys.cloudflaredPath,
+            fallbackKey: Keys.legacyCloudflaredPath,
+            defaults: userDefaults
+        ) ?? ""
+
+        self.customNgrokPath = KumaSettingsKey.string(
+            forKey: Keys.customNgrokPath,
+            fallbackKey: Keys.legacyNgrokPath,
+            defaults: userDefaults
+        ) ?? ""
+
         self.ngrokAuthToken = userDefaults.string(forKey: Keys.ngrokAuthToken) ?? ""
         self.ngrokRegion = userDefaults.string(forKey: Keys.ngrokRegion) ?? "auto"
 
-        self.notifyOnCrash = userDefaults.object(forKey: Keys.notifyOnCrash) as? Bool ?? true
-        self.notifySound = userDefaults.object(forKey: Keys.notifySound) as? Bool ?? true
-        self.notifyOnHealthFailure = userDefaults.object(forKey: Keys.notifyOnHealthFailure) as? Bool ?? true
-        self.warnOnPortCollision = userDefaults.object(forKey: Keys.warnOnPortCollision) as? Bool ?? true
-        self.promptGracefulShutdown = userDefaults.object(forKey: Keys.promptGracefulShutdown) as? Bool ?? true
+        self.notifyOnCrash = KumaSettingsKey.bool(forKey: Keys.notifyOnCrash, defaultValue: true, defaults: userDefaults)
+        self.notifySound = KumaSettingsKey.bool(forKey: Keys.notifySound, defaultValue: true, defaults: userDefaults)
+        self.notifyOnHealthFailure = KumaSettingsKey.bool(forKey: Keys.notifyOnHealthFailure, defaultValue: true, defaults: userDefaults)
+        self.warnOnPortCollision = KumaSettingsKey.bool(forKey: Keys.warnOnPortCollision, defaultValue: true, defaults: userDefaults)
+        self.promptGracefulShutdown = KumaSettingsKey.bool(forKey: Keys.promptGracefulShutdown, defaultValue: true, defaults: userDefaults)
 
         if let savedLimit = userDefaults.object(forKey: Keys.logRetentionLimit) as? Int,
            let limit = LogRetentionLimit(rawValue: savedLimit) {
@@ -244,6 +252,33 @@ public final class SettingsViewModel {
             app.appearance = NSAppearance(named: .aqua)
         case .dark:
             app.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
+    /// Requests UNUserNotificationCenter authorization asynchronously with coordinated state updates.
+    /// Returns true if an external macOS System Settings prompt dialog should be shown to the user.
+    public func requestNotificationAuthorization() async -> Bool {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+
+        switch settings.authorizationStatus {
+        case .notDetermined:
+            do {
+                let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                self.notifyOnCrash = granted
+                return !granted
+            } catch {
+                self.notifyOnCrash = false
+                return false
+            }
+        case .denied:
+            self.notifyOnCrash = false
+            return true
+        case .authorized, .provisional, .ephemeral:
+            self.notifyOnCrash = true
+            return false
+        @unknown default:
+            return false
         }
     }
 }
