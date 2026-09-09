@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 public struct ServiceGroupMembershipRecord: FetchableRecord, PersistableRecord, Sendable {
-    public static let databaseTableName = "service_group_membership"
+    public nonisolated static let databaseTableName = "service_group_membership"
 
     public let serviceID: UUID
     public let groupID: UUID

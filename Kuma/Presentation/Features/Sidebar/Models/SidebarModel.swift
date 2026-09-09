@@ -13,9 +13,9 @@ public struct SidebarAction: Identifiable, Sendable {
     public let id: UUID
     public let icon: String        // SF Symbol name
     public let tooltip: String
-    public let handler: @Sendable () -> Void
+    public let handler: @MainActor @Sendable () -> Void
 
-    public init(id: UUID = UUID(), icon: String, tooltip: String, handler: @escaping @Sendable () -> Void) {
+    public init(id: UUID = UUID(), icon: String, tooltip: String, handler: @escaping @MainActor @Sendable () -> Void) {
         self.id = id
         self.icon = icon
         self.tooltip = tooltip

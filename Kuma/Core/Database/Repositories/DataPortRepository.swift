@@ -310,7 +310,6 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             let groups = try ServiceGroup.filter(Column("workspaceID") == id.uuidString).order(Column("sortOrder").asc).fetchAll(db)
             let services = try Service.filter(Column("workspaceID") == id.uuidString).order(Column("createdAt").asc).fetchAll(db)
             let serviceIDStrings = services.map { $0.id.uuidString }
-            let serviceIDs = Set(services.map(\.id))
 
             let providers: [Provider]
             let portMappings: [ServicePortMapping]
@@ -441,7 +440,6 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         }
 
         let newProviders = chosenExportProviders.map { p in
-            var updated = p
             return DataPortService.ExportProvider(
                 id: providerIDMap[p.id] ?? UUID(),
                 serviceID: serviceIDMap[p.serviceID] ?? p.serviceID,
@@ -514,7 +512,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
     // MARK: - Helpers
 
-    public static func toExportProvider(_ p: Provider) -> DataPortService.ExportProvider {
+    public nonisolated static func toExportProvider(_ p: Provider) -> DataPortService.ExportProvider {
         let encryptedPassword: String?
         if let pass = p.sshPassword, !pass.isEmpty {
             encryptedPassword = (try? CryptoVault.shared.encrypt(plainText: pass)) ?? pass
@@ -560,7 +558,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         )
     }
 
-    public static func fromExportProvider(_ p: DataPortService.ExportProvider) -> Provider {
+    public nonisolated static func fromExportProvider(_ p: DataPortService.ExportProvider) -> Provider {
         let decryptedPassword: String?
         if let pass = p.sshPassword, !pass.isEmpty {
             decryptedPassword = (try? CryptoVault.shared.decrypt(cipherText: pass)) ?? pass

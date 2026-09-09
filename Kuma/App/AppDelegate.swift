@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             return
         }
 
+        guard !SingleInstanceGuard.isTestingEnvironment else { return }
+
         UNUserNotificationCenter.current().delegate = self
         Task {
             let status = await SystemNotificationCenter.shared.checkAuthorizationStatus()

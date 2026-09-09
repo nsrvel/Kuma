@@ -11,18 +11,14 @@ struct SidebarRuntimeAndNotificationTests {
         let harness = SidebarTestHarness()
         let vm = SidebarViewModel(groupRepository: harness.repository)
 
-        var notificationFired = false
-        let token = NotificationCenter.default.addObserver(
-            forName: .kumaGroupsUpdated,
-            object: nil,
-            queue: .main
-        ) { _ in
-            notificationFired = true
-        }
-        defer { NotificationCenter.default.removeObserver(token) }
-
+        let notificationStream = NotificationCenter.default.notifications(named: .kumaGroupsUpdated)
         vm.addGroup(name: "New Group", workspaceID: harness.workspaceID)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        var notificationFired = false
+        for await _ in notificationStream {
+            notificationFired = true
+            break
+        }
 
         #expect(notificationFired == true)
     }

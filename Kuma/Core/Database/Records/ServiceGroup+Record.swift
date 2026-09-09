@@ -3,8 +3,8 @@ import GRDB
 
 // MARK: - ServiceGroup GRDB Record Conformance
 
-extension ServiceGroup: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "service_group"
+extension ServiceGroup: @preconcurrency FetchableRecord, @preconcurrency PersistableRecord {
+    public nonisolated static let databaseTableName = "service_group"
 
     public nonisolated init(row: Row) throws {
         let idStr: String = row["id"]

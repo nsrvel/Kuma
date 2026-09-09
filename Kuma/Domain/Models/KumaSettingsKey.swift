@@ -2,7 +2,7 @@ import Foundation
 
 /// Centralized configuration keys for user preferences, persistent settings, and binary paths.
 /// Eliminates hardcoded magic strings and prevents typo-induced state desync across features.
-public enum KumaSettingsKey {
+public nonisolated enum KumaSettingsKey {
     // MARK: - App & Lifecycle
     public static let hasCompletedOnboarding = "kuma.has_completed_onboarding"
 
@@ -48,7 +48,7 @@ public enum KumaSettingsKey {
     public static let legacyNgrokPath = "kuma.custom_ngrok_path"
 
     /// Helper to resolve a string preference checking new key first, then legacy key fallback.
-    public static func string(forKey primaryKey: String, fallbackKey: String? = nil, defaults: UserDefaults = .standard) -> String? {
+    public nonisolated static func string(forKey primaryKey: String, fallbackKey: String? = nil, defaults: UserDefaults = .standard) -> String? {
         if let val = defaults.string(forKey: primaryKey), !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return val
         }
@@ -59,7 +59,7 @@ public enum KumaSettingsKey {
     }
 
     /// Helper to resolve a boolean preference with an explicit default value.
-    public static func bool(forKey key: String, defaultValue: Bool, defaults: UserDefaults = .standard) -> Bool {
+    public nonisolated static func bool(forKey key: String, defaultValue: Bool, defaults: UserDefaults = .standard) -> Bool {
         if let object = defaults.object(forKey: key) as? Bool {
             return object
         }
@@ -67,7 +67,7 @@ public enum KumaSettingsKey {
     }
 
     /// Helper to resolve an integer preference with an explicit default value.
-    public static func integer(forKey key: String, defaultValue: Int, defaults: UserDefaults = .standard) -> Int {
+    public nonisolated static func integer(forKey key: String, defaultValue: Int, defaults: UserDefaults = .standard) -> Int {
         if let object = defaults.object(forKey: key) as? Int {
             return object
         }

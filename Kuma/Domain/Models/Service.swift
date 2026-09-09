@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Service: Identifiable, Codable, Equatable, Sendable, Hashable {
+public nonisolated struct Service: Identifiable, Codable, Equatable, Sendable, Hashable {
     public var id: UUID
     public var name: String
     public var icon: String?

@@ -13,7 +13,10 @@ public enum SingleInstanceGuard {
         // Skip check during XCTest / Swift Testing or when attached to a debugger (e.g. Xcode LLDB)
         if isDebuggerAttached ||
            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
-           NSClassFromString("XCTestCase") != nil {
+           ProcessInfo.processInfo.environment["XCTestSessionIdentifier"] != nil ||
+           ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil ||
+           NSClassFromString("XCTestCase") != nil ||
+           Bundle.allBundles.contains(where: { $0.bundlePath.hasSuffix(".xctest") }) {
             return false
         }
 
@@ -28,6 +31,15 @@ public enum SingleInstanceGuard {
         }
 
         return false
+    }
+
+    /// Indicates whether the application is running in an automated test environment.
+    public static var isTestingEnvironment: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
+        ProcessInfo.processInfo.environment["XCTestSessionIdentifier"] != nil ||
+        ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil ||
+        NSClassFromString("XCTestCase") != nil ||
+        Bundle.allBundles.contains(where: { $0.bundlePath.hasSuffix(".xctest") })
     }
 
     /// Determines if the current process is running under a debugger (such as LLDB in Xcode).

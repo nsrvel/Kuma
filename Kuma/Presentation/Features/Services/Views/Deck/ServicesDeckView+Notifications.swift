@@ -8,7 +8,9 @@ extension ServicesDeckView {
                     if let sID = notif.object as? UUID {
                         await viewModel.refreshSingleServiceSnapshot(id: sID)
                     } else {
-                        viewModel.loadWorkspace(workspaceID: workspaceID)
+                        await MainActor.run {
+                            viewModel.loadWorkspace(workspaceID: workspaceID)
+                        }
                     }
                 }
             }
@@ -17,7 +19,9 @@ extension ServicesDeckView {
                     if let sID = notif.object as? UUID {
                         await viewModel.refreshSingleServiceSnapshot(id: sID)
                     } else {
-                        viewModel.loadWorkspace(workspaceID: workspaceID)
+                        await MainActor.run {
+                            viewModel.loadWorkspace(workspaceID: workspaceID)
+                        }
                     }
                 }
             }
@@ -32,29 +36,37 @@ extension ServicesDeckView {
                         case .stopping: execState = .stopping
                         case .crashed: execState = .crashed(exitCode: 1)
                         }
-                        serviceStateStore.setExecutionState(execState, for: serviceID)
-                        viewModel.applyRuntimeDiff([serviceID: ServiceRuntimeState(status: state, isLoading: false)])
+                        await MainActor.run {
+                            serviceStateStore.setExecutionState(execState, for: serviceID)
+                            viewModel.applyRuntimeDiff([serviceID: ServiceRuntimeState(status: state, isLoading: false)])
+                        }
                     }
                 }
             }
             group.addTask {
                 for await notif in NotificationCenter.default.notifications(named: .kumaServiceDeleted) {
                     if let deletedID = notif.object as? UUID {
-                        viewModel.snapshots.removeAll(where: { $0.id == deletedID })
-                        viewModel.runtimeStates.removeValue(forKey: deletedID)
-                        serviceStateStore.removeService(deletedID)
-                        if viewModel.selectedServiceID == deletedID {
-                            viewModel.selectedServiceID = nil
-                            viewModel.isInspectorPresented = false
+                        await MainActor.run {
+                            viewModel.snapshots.removeAll(where: { $0.id == deletedID })
+                            viewModel.runtimeStates.removeValue(forKey: deletedID)
+                            serviceStateStore.removeService(deletedID)
+                            if viewModel.selectedServiceID == deletedID {
+                                viewModel.selectedServiceID = nil
+                                viewModel.isInspectorPresented = false
+                            }
                         }
                     } else {
-                        viewModel.loadWorkspace(workspaceID: workspaceID)
+                        await MainActor.run {
+                            viewModel.loadWorkspace(workspaceID: workspaceID)
+                        }
                     }
                 }
             }
             group.addTask {
                 for await _ in NotificationCenter.default.notifications(named: .kumaGroupsUpdated) {
-                    viewModel.loadWorkspace(workspaceID: workspaceID)
+                    await MainActor.run {
+                        viewModel.loadWorkspace(workspaceID: workspaceID)
+                    }
                 }
             }
             group.addTask {

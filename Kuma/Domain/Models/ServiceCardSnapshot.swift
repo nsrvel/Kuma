@@ -2,14 +2,14 @@ import Foundation
 
 /// Lightweight read-only projection DTO for Service Cards and Table rows.
 /// Contains only the essential fields needed for rendering lists without loading heavy Provider details or sensitive configs.
-public struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
-    public struct ProviderOption: Identifiable, Sendable, Equatable, Hashable {
+public nonisolated struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
+    public nonisolated struct ProviderOption: Identifiable, Sendable, Equatable, Hashable {
         public let id: UUID
         public let category: ProviderCategory
         public let label: String
         public let isActive: Bool
 
-        public init(id: UUID, category: ProviderCategory, label: String, isActive: Bool) {
+        public nonisolated init(id: UUID, category: ProviderCategory, label: String, isActive: Bool) {
             self.id = id
             self.category = category
             self.label = label

@@ -94,8 +94,10 @@ public struct ServiceInspectorView: View {
                 group.addTask {
                     for await notif in NotificationCenter.default.notifications(named: .kumaServiceStateChanged) {
                         if let changedID = notif.object as? UUID, changedID == serviceID, let state = notif.userInfo?["state"] as? ServiceState {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                inspectorVM.isRunning = state.isOperational
+                            await MainActor.run {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    inspectorVM.isRunning = state.isOperational
+                                }
                             }
                         }
                     }

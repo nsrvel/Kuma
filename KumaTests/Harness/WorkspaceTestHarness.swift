@@ -62,10 +62,10 @@ public final class WorkspaceTestHarness {
     }
 
     deinit {
-        userDefaults.removePersistentDomain(forName: suiteName)
-        try? fileManager.removeItem(at: tempImagesDir)
+        UserDefaults.standard.removePersistentDomain(forName: suiteName)
+        try? FileManager.default.removeItem(at: tempImagesDir)
         for path in createdFilePaths {
-            try? fileManager.removeItem(atPath: path)
+            try? FileManager.default.removeItem(atPath: path)
         }
     }
 

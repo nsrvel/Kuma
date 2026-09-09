@@ -10,7 +10,7 @@ public actor ProcessRegistry {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ProcessRegistry")
 
     private static let stateLock = NSLock()
-    private static var _cachedActiveServiceIDs: [UUID] = []
+    nonisolated(unsafe) private static var _cachedActiveServiceIDs: [UUID] = []
 
     /// Thread-safe synchronous access to active running service IDs from any context (e.g. AppDelegate)
     public nonisolated static var activeRunningServiceIDs: [UUID] {

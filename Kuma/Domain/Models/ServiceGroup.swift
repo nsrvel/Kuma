@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ServiceGroup: Identifiable, Codable, Sendable, Equatable, Hashable {
+public nonisolated struct ServiceGroup: Identifiable, Codable, Sendable, Equatable, Hashable {
     public let id: UUID
     public var name: String
     public var workspaceID: UUID?

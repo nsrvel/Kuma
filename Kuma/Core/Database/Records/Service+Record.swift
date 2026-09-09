@@ -3,8 +3,8 @@ import GRDB
 
 // MARK: - Service GRDB Record Conformance
 
-extension Service: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "service"
+extension Service: @preconcurrency FetchableRecord, @preconcurrency PersistableRecord {
+    public nonisolated static let databaseTableName = "service"
 
     public nonisolated init(row: Row) throws {
         let idStr: String = row["id"]

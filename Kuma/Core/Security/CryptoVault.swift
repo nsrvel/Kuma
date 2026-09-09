@@ -29,18 +29,18 @@ public enum CryptoVaultError: Error, LocalizedError, Sendable, Equatable {
 /// Thread-safe class providing AES-256-GCM authenticated encryption for sensitive credentials.
 /// Synchronized via OSAllocatedUnfairLock for both sync (DB record encode/decode) and async contexts.
 /// Uses a private 256-bit Master Key stored in Application Support with strict POSIX 0600 permissions.
-public final class CryptoVault: Sendable {
-    public static let shared = CryptoVault()
+public final nonisolated class CryptoVault: Sendable {
+    public nonisolated static let shared = CryptoVault()
 
     private let logger = Logger(subsystem: "lokastudio.kuma", category: "CryptoVault")
     private let keyLock = OSAllocatedUnfairLock<SymmetricKey?>(initialState: nil)
 
-    public init() {}
+    public nonisolated init() {}
 
     // MARK: - Master Key Management
 
     /// Returns or generates the 256-bit symmetric master key from disk.
-    public func getOrCreateMasterKey() throws -> SymmetricKey {
+    public nonisolated func getOrCreateMasterKey() throws -> SymmetricKey {
         if let existing = keyLock.withLock({ $0 }) {
             return existing
         }
@@ -91,7 +91,7 @@ public final class CryptoVault: Sendable {
     // MARK: - Encryption & Decryption API
 
     /// Encrypts plain text with AES-256-GCM. Returns a compact string `nonceBase64:tagBase64:ciphertextBase64`.
-    public func encrypt(plainText: String) throws -> String {
+    public nonisolated func encrypt(plainText: String) throws -> String {
         guard let data = plainText.data(using: .utf8) else {
             throw CryptoVaultError.invalidUTF8
         }
@@ -107,7 +107,7 @@ public final class CryptoVault: Sendable {
     }
 
     /// Decrypts a compact string payload `nonceBase64:tagBase64:ciphertextBase64` back to plain text.
-    public func decrypt(cipherText: String) throws -> String {
+    public nonisolated func decrypt(cipherText: String) throws -> String {
         let trimmed = cipherText.trimmingCharacters(in: .whitespacesAndNewlines)
         let components = trimmed.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
 
