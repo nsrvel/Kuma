@@ -3,7 +3,9 @@ import GRDB
 
 public protocol ServiceRepositoryProtocol: Sendable {
     func fetchSnapshots(forWorkspace workspaceID: UUID) async throws -> [ServiceCardSnapshot]
+    func fetchSnapshot(serviceID: UUID) async throws -> ServiceCardSnapshot?
     func fetchService(id: UUID) async throws -> Service?
+    func fetchServiceDetail(id: UUID) async throws -> (service: Service, providers: [Provider], portMappings: [ServicePortMapping])?
     func fetchProviders(forService serviceID: UUID) async throws -> [Provider]
     func fetchPortMappings(forService serviceID: UUID) async throws -> [ServicePortMapping]
     func fetchAllPortMappings() async throws -> [ServicePortMapping]
@@ -142,6 +144,72 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
         }
     }
 
+    public func fetchSnapshot(serviceID: UUID) async throws -> ServiceCardSnapshot? {
+        try await dbWriter.read { db in
+            guard let service = try Service.fetchOne(db, key: serviceID.uuidString) else { return nil }
+
+            let providers = try Provider
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+
+            let portMappings = try ServicePortMapping
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .fetchAll(db)
+
+            let memberships = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .fetchAll(db)
+
+            var category: ProviderCategory = .docker
+            var subtitle: String = service.description ?? ""
+
+            if let activeProvID = service.activeProviderID,
+               let provider = providers.first(where: { $0.id == activeProvID }) {
+                category = provider.type
+                subtitle = provider.resolvedTarget
+            } else if let firstProv = providers.first {
+                category = firstProv.type
+                subtitle = firstProv.resolvedTarget
+            }
+
+            if subtitle.isEmpty, let desc = service.description, !desc.isEmpty {
+                subtitle = desc
+            }
+
+            let ports = portMappings.map(\.localPort)
+            let groupIDs = Set(memberships.map(\.groupID))
+            let activeID = service.activeProviderID ?? providers.first?.id
+            let providerOptions = providers.map { p in
+                let displayLabel: String
+                if let lbl = p.label, !lbl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    displayLabel = lbl
+                } else {
+                    displayLabel = p.type.sidebarLabel
+                }
+                return ServiceCardSnapshot.ProviderOption(
+                    id: p.id,
+                    category: p.type,
+                    label: displayLabel,
+                    isActive: (p.id == activeID)
+                )
+            }
+
+            return ServiceCardSnapshot(
+                id: service.id,
+                name: service.name,
+                groupIDs: groupIDs,
+                isDisabled: service.isDisabled,
+                isStarred: service.isStarred,
+                subtitle: subtitle,
+                providerCategory: category,
+                portDisplays: ports,
+                providerOptions: providerOptions,
+                createdAt: service.createdAt
+            )
+        }
+    }
+
     public func fetchService(id: UUID) async throws -> Service? {
         try await dbWriter.read { db in
             guard var service = try Service.fetchOne(db, key: id.uuidString) else { return nil }
@@ -150,6 +218,28 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 .fetchAll(db)
             service.groupIDs = Set(memberships.map { $0.groupID })
             return service
+        }
+    }
+
+    /// Unified single-transaction query fetching a Service, all its Providers, and all its PortMappings in 1 read transaction.
+    public func fetchServiceDetail(id: UUID) async throws -> (service: Service, providers: [Provider], portMappings: [ServicePortMapping])? {
+        try await dbWriter.read { db in
+            guard var service = try Service.fetchOne(db, key: id.uuidString) else { return nil }
+            let memberships = try ServiceGroupMembershipRecord
+                .filter(Column("serviceID") == id.uuidString)
+                .fetchAll(db)
+            service.groupIDs = Set(memberships.map { $0.groupID })
+
+            let providers = try Provider
+                .filter(Column("serviceID") == id.uuidString)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+
+            let portMappings = try ServicePortMapping
+                .filter(Column("serviceID") == id.uuidString)
+                .fetchAll(db)
+
+            return (service: service, providers: providers, portMappings: portMappings)
         }
     }
 

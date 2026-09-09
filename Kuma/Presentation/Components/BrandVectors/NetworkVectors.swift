@@ -23,6 +23,7 @@ public struct ShellPromptVector: View {
                 cursor.addLine(to: CGPoint(x: 20.5 * scaleX, y: 18.5 * scaleY))
                 ctx.stroke(cursor, with: .foreground, style: StrokeStyle(lineWidth: max(1.4, size.width * 0.12), lineCap: .round))
             }
+            .drawingGroup()
         }
     }
 }
@@ -64,6 +65,7 @@ public struct CloudflareBrandVector: View {
 
                 ctx.fill(cloud, with: .foreground)
             }
+            .drawingGroup()
         }
     }
 }
@@ -102,6 +104,7 @@ public struct NgrokBrandVector: View {
                     )
                 )
             }
+            .drawingGroup()
         }
     }
 }

@@ -38,7 +38,8 @@ struct ContentView: View {
             }
             do {
                 let data = try Data(contentsOf: fileURL)
-                let backup = try DataPortService.decodeBackup(from: data)
+                let targetWS = workspaceStore.activeWorkspace?.id
+                let backup = try DataPortService.parseAnyBackup(from: data, targetWorkspaceID: targetWS)
                 self.droppedBackup = backup
                 self.droppedFileName = fileURL.lastPathComponent
                 return true
@@ -59,9 +60,16 @@ struct ContentView: View {
                 existingWorkspaceIDs: Set(workspaceStore.workspaces.map(\.id)),
                 onConfirmImport: { selectedWorkspaces, selectedServices in
                     Task {
-                        let dataPort = DataPortRepository()
-                        try? await dataPort.importSelective(from: backup, selectedWorkspaceIDs: selectedWorkspaces, selectedServiceIDs: selectedServices)
-                        workspaceStore.loadFromDatabase()
+                        do {
+                            let dataPort = DataPortRepository()
+                            try await dataPort.importSelective(from: backup, selectedWorkspaceIDs: selectedWorkspaces, selectedServiceIDs: selectedServices)
+                            workspaceStore.loadFromDatabase()
+                        } catch {
+                            AlertService.shared.showError(
+                                title: "Import Failed",
+                                message: error.localizedDescription
+                            )
+                        }
                     }
                 }
             )

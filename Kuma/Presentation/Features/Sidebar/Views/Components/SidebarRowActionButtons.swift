@@ -33,23 +33,16 @@ public struct SidebarRowActionButtons: View {
 
             if showActions && !node.actions.isEmpty {
                 ForEach(node.actions) { action in
-                    Button {
+                    SidebarActionButton(
+                        icon: action.icon,
+                        tooltip: action.tooltip
+                    ) {
                         if let onAddAction {
                             onAddAction()
                         } else {
                             action.handler()
                         }
-                    } label: {
-                        Image(systemName: action.icon)
-                            .imageScale(.small)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(Color.secondary)
-                            .frame(width: KumaTheme.Sidebar.actionButtonSize, height: KumaTheme.Sidebar.actionButtonSize)
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .help(action.tooltip)
-                    .transaction { $0.animation = nil }
                 }
             }
             if hasChildren {

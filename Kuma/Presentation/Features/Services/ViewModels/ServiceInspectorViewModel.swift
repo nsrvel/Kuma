@@ -20,11 +20,12 @@ public final class ServiceInspectorViewModel {
 
     // MARK: - UI & State Flags
     public var isLoadingData: Bool = false
-    public var isRunning: Bool = false
     public var isViewingLogs: Bool = false
     public var showDeleteConfirmation: Bool = false
     public var showDeleteProviderConfirmation: Bool = false
     public var providerPendingDeletion: Provider? = nil
+
+    public var stateStore: ServiceStateStore?
 
     // Kubernetes context helper (lazy initialization)
     public var kubeConfigVM: KubeConfigViewModel? = nil
@@ -33,6 +34,23 @@ public final class ServiceInspectorViewModel {
     private var autoSaveTask: Task<Void, Never>? = nil
 
     // MARK: - Computed Helpers
+
+    public var executionState: ServiceExecutionState {
+        stateStore?.state(for: serviceID) ?? (isRunning ? .running(pid: 0) : .idle)
+    }
+
+    public var isRunning: Bool {
+        get {
+            if let store = stateStore {
+                return store.state(for: serviceID).isOperational
+            }
+            return _legacyIsRunning
+        }
+        set {
+            _legacyIsRunning = newValue
+        }
+    }
+    private var _legacyIsRunning: Bool = false
 
     public var activeProvider: Provider? {
         if let activeProviderID {
@@ -49,12 +67,14 @@ public final class ServiceInspectorViewModel {
         Task {
             let wasRunning = isRunning
             if wasRunning {
+                stateStore?.setExecutionState(.stopping, for: serviceID)
                 NotificationCenter.default.post(
                     name: .kumaServiceStateChanged,
                     object: serviceID,
                     userInfo: ["state": ServiceState.stopping]
                 )
                 await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
+                stateStore?.setExecutionState(.idle, for: serviceID)
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                     self.isRunning = false
                 }
@@ -64,6 +84,7 @@ public final class ServiceInspectorViewModel {
                     userInfo: ["state": ServiceState.stopped]
                 )
             } else {
+                stateStore?.setExecutionState(.starting, for: serviceID)
                 NotificationCenter.default.post(
                     name: .kumaServiceStateChanged,
                     object: serviceID,
@@ -71,6 +92,11 @@ public final class ServiceInspectorViewModel {
                 )
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
+                    if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID) {
+                        stateStore?.setExecutionState(.running(pid: proc.pid), for: serviceID)
+                    } else {
+                        stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
+                    }
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                         self.isRunning = true
                     }
@@ -81,6 +107,7 @@ public final class ServiceInspectorViewModel {
                     )
                 } catch {
                     Self.logger.error("Failed to start service \(self.serviceID): \(error.localizedDescription)")
+                    stateStore?.setExecutionState(.crashed(exitCode: 1), for: serviceID)
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                         self.isRunning = false
                     }
@@ -91,8 +118,16 @@ public final class ServiceInspectorViewModel {
                     )
                 }
             }
-            NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+            postUpdatedNotification()
         }
+    }
+
+    private func postUpdatedNotification() {
+        NotificationCenter.default.post(
+            name: .kumaServiceUpdated,
+            object: serviceID,
+            userInfo: ["source": "inspector"]
+        )
     }
 
     // MARK: - Initializer
@@ -100,11 +135,13 @@ public final class ServiceInspectorViewModel {
     public init(
         serviceID: UUID,
         workspaceID: UUID,
-        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
+        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
+        stateStore: ServiceStateStore? = nil
     ) {
         self.serviceID = serviceID
         self.workspaceID = workspaceID
         self.serviceRepository = serviceRepository
+        self.stateStore = stateStore
     }
 
     // MARK: - Data Loading
@@ -113,13 +150,13 @@ public final class ServiceInspectorViewModel {
         cancelAutoSave()
         self.serviceID = id
         do {
-            async let fetchService = serviceRepository.fetchService(id: id)
-            async let fetchProviders = serviceRepository.fetchProviders(forService: id)
-            async let fetchPorts = serviceRepository.fetchPortMappings(forService: id)
+            // PERF-08: Unified single-transaction read query
+            guard let detail = try await serviceRepository.fetchServiceDetail(id: id) else { return }
+            guard self.serviceID == id else { return }
 
-            let (srv, provs, portList) = try await (fetchService, fetchProviders, fetchPorts)
-
-            guard let srv, self.serviceID == id else { return }
+            let srv = detail.service
+            let provs = detail.providers
+            let portList = detail.portMappings
 
             // In-place atomic update: values morph without destroying UI layout
             self.service = srv
@@ -134,7 +171,12 @@ public final class ServiceInspectorViewModel {
                 }
             }
 
-            self.isRunning = await ProcessRegistry.shared.isRunning(serviceID: id)
+            if let store = stateStore {
+                await store.refreshProcessStates(for: [id])
+                self.isRunning = store.state(for: id).isOperational
+            } else {
+                self.isRunning = await ProcessRegistry.shared.isRunning(serviceID: id)
+            }
 
             if self.activeCategory == .kubernetes && self.kubeConfigVM == nil {
                 self.kubeConfigVM = KubeConfigViewModel()
@@ -149,6 +191,16 @@ public final class ServiceInspectorViewModel {
     public func cancelAutoSave() {
         autoSaveTask?.cancel()
         autoSaveTask = nil
+    }
+
+    /// Flushes any pending auto-save immediately before teardown or dismissal.
+    public func flushPendingAutoSave() async {
+        let hadPending = autoSaveTask != nil
+        autoSaveTask?.cancel()
+        autoSaveTask = nil
+        if hadPending {
+            await commitChanges()
+        }
     }
 
     /// Schedules an auto-commit with debouncing (300ms) for high-frequency text editing.
@@ -210,7 +262,7 @@ public final class ServiceInspectorViewModel {
             }
 
             // Broadcast passive notification to notify Deck and surrounding views
-            NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+            postUpdatedNotification()
         } catch is CancellationError {
             // Structured task was cancelled, ignore
             return
@@ -238,6 +290,7 @@ public final class ServiceInspectorViewModel {
         Task {
             do {
                 try await serviceRepository.updateService(srv)
+                postUpdatedNotification()
             } catch {
                 Self.logger.error("Failed to switch active provider for service \(srv.id): \(error.localizedDescription)")
             }
@@ -267,6 +320,7 @@ public final class ServiceInspectorViewModel {
                 if let srv = self.service {
                     try await serviceRepository.updateService(srv)
                 }
+                postUpdatedNotification()
             } catch {
                 Self.logger.error("Failed to add provider: \(error.localizedDescription)")
             }
@@ -280,7 +334,7 @@ public final class ServiceInspectorViewModel {
                 if let idx = self.providers.firstIndex(where: { $0.id == provider.id }) {
                     self.providers[idx] = provider
                 }
-                NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                postUpdatedNotification()
             } catch {
                 Self.logger.error("Failed to update provider \(provider.id): \(error.localizedDescription)")
             }
@@ -300,7 +354,7 @@ public final class ServiceInspectorViewModel {
                         self.service = srv
                     }
                 }
-                NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                postUpdatedNotification()
             } catch {
                 Self.logger.error("Failed to delete provider \(provider.id): \(error.localizedDescription)")
             }
@@ -316,7 +370,7 @@ public final class ServiceInspectorViewModel {
         Task {
             do {
                 _ = try await serviceRepository.toggleStarred(serviceID: serviceID)
-                NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                postUpdatedNotification()
             } catch {
                 Self.logger.error("Failed to toggle starred for \(self.serviceID): \(error.localizedDescription)")
             }
@@ -332,7 +386,7 @@ public final class ServiceInspectorViewModel {
         Task {
             do {
                 try await serviceRepository.updateService(srv)
-                NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                postUpdatedNotification()
             } catch {
                 Self.logger.error("Failed to toggle disabled state for \(self.serviceID): \(error.localizedDescription)")
             }

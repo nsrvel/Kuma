@@ -3,6 +3,8 @@ import GRDB
 import os
 
 public protocol DataPortRepositoryProtocol: Sendable {
+    func exportData(scope: DataPortService.DataPortScope) async throws -> DataPortService.KumaBackup
+    func importData(backup: DataPortService.KumaBackup, strategy: DataPortService.DataPortImportStrategy) async throws
     func exportAll() async throws -> DataPortService.KumaBackup
     func importAll(from backup: DataPortService.KumaBackup) async throws
 }
@@ -13,9 +15,81 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
     private let logger = Logger(subsystem: "lokastudio.kuma", category: "DataPortRepository")
     private let dbWriter: any DatabaseWriter
 
-
     public nonisolated init(dbWriter: (any DatabaseWriter)? = nil) {
         self.dbWriter = dbWriter ?? AppDatabase.shared.dbWriter
+    }
+
+    // MARK: - Unified Scoped Operations
+
+    /// Unified export operation scoped to all, single workspace, or single service.
+    public func exportData(scope: DataPortService.DataPortScope) async throws -> DataPortService.KumaBackup {
+        switch scope {
+        case .all:
+            return try await exportAll()
+        case .workspace(let wsID):
+            return try await exportWorkspace(id: wsID)
+        case .service(let serviceID):
+            return try await exportSingleServiceBackup(serviceID: serviceID)
+        }
+    }
+
+    /// Unified import operation applying either preserveOrMerge or reassignIDs strategy.
+    public func importData(backup: DataPortService.KumaBackup, strategy: DataPortService.DataPortImportStrategy) async throws {
+        switch strategy {
+        case .preserveOrMerge:
+            try await importAll(from: backup)
+        case .reassignIDs(let targetWSID):
+            let allServiceIDs = Set(backup.services.map(\.id))
+            try await importIntoWorkspace(targetWorkspaceID: targetWSID, backup: backup, selectedServiceIDs: allServiceIDs)
+        }
+    }
+
+    private func exportSingleServiceBackup(serviceID: UUID) async throws -> DataPortService.KumaBackup {
+        let (service, providers, ports) = try await dbWriter.read { db -> (Service?, [Provider], [ServicePortMapping]) in
+            let svc = try Service.fetchOne(db, key: serviceID.uuidString)
+            let provs = try Provider.filter(Column("serviceID") == serviceID.uuidString).fetchAll(db)
+            let portMaps = try ServicePortMapping.filter(Column("serviceID") == serviceID.uuidString).fetchAll(db)
+            return (svc, provs, portMaps)
+        }
+
+        guard let svc = service else {
+            throw NSError(domain: "lokastudio.kuma.dataport", code: 404, userInfo: [NSLocalizedDescriptionKey: "Service \(serviceID) not found."])
+        }
+
+        let exportService = DataPortService.ExportService(
+            id: svc.id,
+            name: svc.name,
+            icon: svc.icon,
+            colorHex: svc.colorHex,
+            description: svc.description,
+            activeProviderID: svc.activeProviderID,
+            workspaceID: svc.workspaceID,
+            groupIDs: Array(svc.groupIDs),
+            isDisabled: svc.isDisabled,
+            isStarred: svc.isStarred
+        )
+
+        let exportProviders = providers.map { Self.toExportProvider($0) }
+        let exportPorts = ports.map { p in
+            DataPortService.ExportPortMapping(
+                id: p.id,
+                providerID: svc.activeProviderID ?? svc.id,
+                localPort: p.localPort,
+                remotePort: p.remotePort
+            )
+        }
+
+        return DataPortService.KumaBackup(
+            version: DataPortService.currentVersion,
+            exportedAt: Date(),
+            workspaces: [],
+            workspaceImages: nil,
+            groups: nil,
+            services: [exportService],
+            providers: exportProviders,
+            portMappings: exportPorts,
+            kubeConfigs: []
+        )
     }
 
     /// Exports full relational data from SQLite into KumaBackup payload.
@@ -441,7 +515,21 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
     // MARK: - Helpers
 
     public static func toExportProvider(_ p: Provider) -> DataPortService.ExportProvider {
-        DataPortService.ExportProvider(
+        let encryptedPassword: String?
+        if let pass = p.sshPassword, !pass.isEmpty {
+            encryptedPassword = (try? CryptoVault.shared.encrypt(plainText: pass)) ?? pass
+        } else {
+            encryptedPassword = nil
+        }
+
+        let encryptedToken: String?
+        if let token = p.ngrokAuthToken, !token.isEmpty {
+            encryptedToken = (try? CryptoVault.shared.encrypt(plainText: token)) ?? token
+        } else {
+            encryptedToken = nil
+        }
+
+        return DataPortService.ExportProvider(
             id: p.id,
             serviceID: p.serviceID,
             type: p.type.rawValue,
@@ -461,19 +549,33 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             sshUser: p.sshUser,
             sshPort: p.sshPort,
             sshKeyPath: p.sshKeyPath,
-            sshPassword: p.sshPassword,
+            sshPassword: encryptedPassword,
             httpCheckUrl: p.httpCheckUrl,
             httpCheckInterval: p.httpCheckInterval,
             tunnelType: p.tunnelType,
             tunnelTargetUrl: p.tunnelTargetUrl,
-            ngrokAuthToken: p.ngrokAuthToken,
+            ngrokAuthToken: encryptedToken,
             monitorProcessName: p.monitorProcessName,
             monitorInterval: p.monitorInterval
         )
     }
 
     public static func fromExportProvider(_ p: DataPortService.ExportProvider) -> Provider {
-        Provider(
+        let decryptedPassword: String?
+        if let pass = p.sshPassword, !pass.isEmpty {
+            decryptedPassword = (try? CryptoVault.shared.decrypt(cipherText: pass)) ?? pass
+        } else {
+            decryptedPassword = nil
+        }
+
+        let decryptedToken: String?
+        if let token = p.ngrokAuthToken, !token.isEmpty {
+            decryptedToken = (try? CryptoVault.shared.decrypt(cipherText: token)) ?? token
+        } else {
+            decryptedToken = nil
+        }
+
+        return Provider(
             id: p.id,
             serviceID: p.serviceID,
             type: p.category,
@@ -493,12 +595,12 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             sshUser: p.sshUser,
             sshPort: p.sshPort,
             sshKeyPath: p.sshKeyPath,
-            sshPassword: p.sshPassword,
+            sshPassword: decryptedPassword,
             httpCheckUrl: p.httpCheckUrl,
             httpCheckInterval: p.httpCheckInterval,
             tunnelType: p.tunnelType,
             tunnelTargetUrl: p.tunnelTargetUrl,
-            ngrokAuthToken: p.ngrokAuthToken,
+            ngrokAuthToken: decryptedToken,
             monitorProcessName: p.monitorProcessName,
             monitorInterval: p.monitorInterval
         )

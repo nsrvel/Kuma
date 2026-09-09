@@ -73,7 +73,6 @@ struct SettingsInitialStateTests {
 
         #expect(viewModel.notifyOnCrash == true)
         #expect(viewModel.notifySound == true)
-        #expect(viewModel.notifyOnHealthFailure == true)
         #expect(viewModel.warnOnPortCollision == true)
         #expect(viewModel.promptGracefulShutdown == true)
     }

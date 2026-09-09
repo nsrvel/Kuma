@@ -322,6 +322,62 @@ public nonisolated enum DataPortService {
         }
     }
 
+    // MARK: - Scopes & Polymorphic Ingestion
+
+    public enum DataPortScope: Sendable, Equatable {
+        case all
+        case workspace(UUID)
+        case service(UUID)
+    }
+
+    public enum DataPortImportStrategy: Sendable {
+        case preserveOrMerge
+        case reassignIDs(targetWorkspaceID: UUID)
+    }
+
+    /// Converts a standalone single-service export payload into standard KumaBackup representation.
+    public static func wrapSingleService(_ singleExport: SingleServiceExport, targetWorkspaceID: UUID? = nil) -> KumaBackup {
+        var service = singleExport.service
+        if let targetWorkspaceID {
+            service = ExportService(
+                id: service.id,
+                name: service.name,
+                icon: service.icon,
+                colorHex: service.colorHex,
+                description: service.description,
+                activeProviderID: service.activeProviderID,
+                workspaceID: targetWorkspaceID,
+                groupIDs: service.groupIDs,
+                isDisabled: service.isDisabled,
+                isStarred: service.isStarred
+            )
+        }
+
+        return KumaBackup(
+            version: singleExport.version,
+            exportedAt: singleExport.exportedAt,
+            workspaces: [],
+            workspaceImages: nil,
+            groups: nil,
+            services: [service],
+            providers: singleExport.providers,
+            portMappings: singleExport.portMappings,
+            kubeConfigs: []
+        )
+    }
+
+    /// Polymorphic parser that handles both full KumaBackup and SingleServiceExport gracefully.
+    public static func parseAnyBackup(from data: Data, targetWorkspaceID: UUID? = nil) throws -> KumaBackup {
+        if let backup = try? decodeBackup(from: data) {
+            return backup
+        }
+        if let singleService = try? decodeSingleService(from: data) {
+            return wrapSingleService(singleService, targetWorkspaceID: targetWorkspaceID)
+        }
+        // If both fail, re-run decodeBackup to throw the descriptive JSON decoding error or version error
+        return try decodeBackup(from: data)
+    }
+
     // MARK: - Export & Import Engine
 
     public static func encodeBackup(_ backup: KumaBackup) throws -> Data {

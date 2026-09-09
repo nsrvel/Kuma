@@ -16,4 +16,10 @@ public struct ServiceRuntimeState: Sendable, Equatable {
         self.status = status
         self.isLoading = isLoading
     }
+
+    /// Convenience initializer bridging from discrete ServiceExecutionState
+    public init(executionState: ServiceExecutionState) {
+        self.status = executionState.legacyState
+        self.isLoading = executionState.isLoading
+    }
 }

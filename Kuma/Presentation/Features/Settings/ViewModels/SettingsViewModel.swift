@@ -147,10 +147,6 @@ public final class SettingsViewModel {
         didSet { userDefaults.set(notifySound, forKey: Keys.notifySound) }
     }
 
-    public var notifyOnHealthFailure: Bool {
-        didSet { userDefaults.set(notifyOnHealthFailure, forKey: Keys.notifyOnHealthFailure) }
-    }
-
     public var warnOnPortCollision: Bool {
         didSet { userDefaults.set(warnOnPortCollision, forKey: Keys.warnOnPortCollision) }
     }
@@ -229,7 +225,6 @@ public final class SettingsViewModel {
 
         self.notifyOnCrash = KumaSettingsKey.bool(forKey: Keys.notifyOnCrash, defaultValue: true, defaults: userDefaults)
         self.notifySound = KumaSettingsKey.bool(forKey: Keys.notifySound, defaultValue: true, defaults: userDefaults)
-        self.notifyOnHealthFailure = KumaSettingsKey.bool(forKey: Keys.notifyOnHealthFailure, defaultValue: true, defaults: userDefaults)
         self.warnOnPortCollision = KumaSettingsKey.bool(forKey: Keys.warnOnPortCollision, defaultValue: true, defaults: userDefaults)
         let rawPortPolicy = userDefaults.string(forKey: Keys.portConflictPolicy) ?? PortConflictPolicy.warnAndBlock.rawValue
         self.portConflictPolicy = PortConflictPolicy(rawValue: rawPortPolicy) ?? .warnAndBlock
@@ -320,7 +315,6 @@ public final class SettingsViewModel {
             Keys.ngrokRegion,
             Keys.notifyOnCrash,
             Keys.notifySound,
-            Keys.notifyOnHealthFailure,
             Keys.warnOnPortCollision,
             Keys.portConflictPolicy,
             Keys.promptGracefulShutdown,
@@ -355,7 +349,6 @@ public final class SettingsViewModel {
         self.ngrokRegion = "auto"
         self.notifyOnCrash = true
         self.notifySound = true
-        self.notifyOnHealthFailure = true
         self.warnOnPortCollision = true
         self.portConflictPolicy = .warnAndBlock
         self.promptGracefulShutdown = true

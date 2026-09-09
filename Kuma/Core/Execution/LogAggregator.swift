@@ -34,21 +34,36 @@ public final class LogAggregator {
     public static let shared = LogAggregator()
 
     public private(set) var entries: [LiveLogEntry] = []
-    private let maxEntries = 2000
+    public private(set) var entriesByService: [UUID: [LiveLogEntry]] = [:]
+    private let maxEntriesPerService = 500
+    private let maxTotalEntries = 2000
 
     private init() {}
 
+    public func logs(for serviceID: UUID) -> [LiveLogEntry] {
+        entriesByService[serviceID] ?? []
+    }
+
     public func append(serviceID: UUID, serviceName: String, level: String = "INFO", message: String) {
         let lines = message.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        guard !lines.isEmpty else { return }
         let now = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+
+        var serviceList = entriesByService[serviceID] ?? []
 
         for line in lines {
             let entry = LiveLogEntry(serviceID: serviceID, serviceName: serviceName, timestamp: now, level: level, message: line)
             entries.append(entry)
+            serviceList.append(entry)
         }
 
-        if entries.count > maxEntries {
-            entries.removeFirst(entries.count - maxEntries)
+        if serviceList.count > maxEntriesPerService {
+            serviceList.removeFirst(serviceList.count - maxEntriesPerService)
+        }
+        entriesByService[serviceID] = serviceList
+
+        if entries.count > maxTotalEntries {
+            entries.removeFirst(entries.count - maxTotalEntries)
         }
     }
 
@@ -61,8 +76,10 @@ public final class LogAggregator {
 
     public func clear(serviceID: UUID? = nil) {
         if let serviceID {
+            entriesByService.removeValue(forKey: serviceID)
             entries.removeAll(where: { $0.serviceID == serviceID })
         } else {
+            entriesByService.removeAll()
             entries.removeAll()
         }
     }

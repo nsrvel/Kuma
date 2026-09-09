@@ -34,6 +34,23 @@ public struct SettingsGeneralSection: View {
                     value: $viewModel.confirmBeforeQuit,
                     description: "Show a confirmation prompt when quitting Kuma while services are running."
                 )
+
+                if viewModel.confirmBeforeQuit && UserDefaults.standard.string(forKey: KumaSettingsKey.quitBehavior) != nil {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Remembered Quit Choice")
+                                .font(KumaFont.subheadline)
+                            Text("Reset saved quit behavior preference to prompt every time.")
+                                .font(KumaFont.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Reset Choice") {
+                            UserDefaults.standard.removeObject(forKey: KumaSettingsKey.quitBehavior)
+                        }
+                        .controlSize(.small)
+                    }
+                }
             }
         }
     }

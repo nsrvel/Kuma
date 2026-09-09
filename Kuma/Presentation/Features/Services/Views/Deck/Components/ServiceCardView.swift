@@ -64,7 +64,6 @@ public struct ServiceCardView: View, Equatable {
                                     .foregroundStyle(Color.yellow)
                             }
                             .offset(x: 4, y: -4)
-                            .shadow(color: Color.black.opacity(0.15), radius: 1, y: 0.5)
                             .transition(.scale(scale: 0.5).combined(with: .opacity))
                         }
                     }
@@ -146,30 +145,5 @@ public struct ServiceCardView: View, Equatable {
             return snapshot.subtitle
         }
         return snapshot.providerCategory.sidebarLabel
-    }
-}
-
-/// Isolated micro-view for the toggle switch button
-private struct CardToggleSwitch: View {
-    let isDisabled: Bool
-    let runtime: ServiceRuntimeState
-    let onToggle: () -> Void
-
-    var body: some View {
-        if isDisabled {
-            Image(systemName: "lock.circle.fill")
-                .font(.system(size: 18))
-                .foregroundStyle(.tertiary)
-        } else {
-            let isRunning = runtime.status == .running || runtime.status == .starting
-            Toggle("", isOn: Binding<Bool>(
-                get: { isRunning },
-                set: { _ in onToggle() }
-            ))
-            .toggleStyle(.switch)
-            .controlSize(.small)
-            .labelsHidden()
-            .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
-        }
     }
 }

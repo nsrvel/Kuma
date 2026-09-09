@@ -34,6 +34,7 @@ public struct KubernetesBrandVector: View {
                     ctx.stroke(spoke, with: .foreground, style: StrokeStyle(lineWidth: max(1.0, size.width * 0.085)))
                 }
             }
+            .drawingGroup()
         }
     }
 }

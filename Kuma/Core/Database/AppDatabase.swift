@@ -237,6 +237,13 @@ public nonisolated final class AppDatabase: Sendable {
             try db.create(index: "idx_membership_group", on: "service_group_membership", columns: ["groupID", "serviceID"])
         }
 
+        migrator.registerMigration("v4_provider_custom_kubeconfig") { db in
+            // Add customKubeConfigPath column to provider table
+            try db.alter(table: "provider") { t in
+                t.add(column: "customKubeConfigPath", .text)
+            }
+        }
+
         return migrator
     }
 }

@@ -89,75 +89,41 @@ public struct ServiceProvidersSectionView: View {
 
     private var emptyStateView: some View {
         VStack(alignment: .center, spacing: 8) {
-            Text("No providers configured yet.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+            Text("No providers configured yet.").font(.caption).foregroundStyle(.secondary)
             Button { openAddForm() } label: { Label("Add First Provider", systemImage: "plus") }
-                .buttonStyle(.bordered)
-                .disabled(isLocked)
+                .buttonStyle(.bordered).disabled(isLocked)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 12)
     }
 
     private var providerListView: some View {
-        VStack(spacing: 6) {
-            ForEach(providers) { provider in
-                ProviderItemRowView(
-                    provider: provider,
-                    isSelected: activeProviderID == provider.id,
-                    isLocked: isLocked,
-                    canDelete: providers.count > 1,
-                    onSelect: { onSelectProvider(provider.id) },
-                    onEdit: { openEditForm(provider) },
-                    onDelete: {
-                        providerToDelete = provider
-                        showDeleteConfirmation = true
-                    }
-                )
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .background(Color.primary.opacity(0.01))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        ServiceProvidersListView(
+            providers: providers,
+            activeProviderID: activeProviderID,
+            isLocked: isLocked,
+            onSelectProvider: onSelectProvider,
+            onEdit: { openEditForm($0) },
+            onDelete: {
+                providerToDelete = $0
+                showDeleteConfirmation = true
+            },
+            onOpenAddForm: { openAddForm() }
         )
-        .overlay(alignment: .bottomLeading) {
-            Button { openAddForm() } label: {
-                Text("Add new provider")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(isAddHovered && !isLocked ? Color.primary : Color.secondary)
-            }
-            .buttonStyle(.plain)
-            .disabled(isLocked)
-            .opacity(isLocked ? 0.45 : 1.0)
-            .onHover { isAddHovered = $0 }
-            .help(isLocked ? "Stop service to add providers" : "Add new provider")
-            .offset(y: 24)
-            .padding(.horizontal, 4)
-        }
-        .padding(.bottom, 24)
     }
 
     private func openAddForm() {
         formLabel = ""
         formType = .docker
         editingProviderID = nil
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showInlineForm = true
-        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = true }
     }
 
     private func openEditForm(_ provider: Provider) {
         formLabel = provider.label ?? ""
         formType = provider.type
         editingProviderID = provider.id
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showInlineForm = true
-        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = true }
     }
 
     private func saveInlineForm() {
@@ -175,8 +141,6 @@ public struct ServiceProvidersSectionView: View {
             onAddProvider(newProv)
         }
 
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showInlineForm = false
-        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = false }
     }
 }

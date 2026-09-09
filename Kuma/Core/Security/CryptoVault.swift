@@ -26,13 +26,14 @@ public enum CryptoVaultError: Error, LocalizedError, Sendable, Equatable {
 
 // MARK: - CryptoVault (AES-256-GCM MasterKey Utility)
 
-/// Thread-safe actor providing AES-256-GCM authenticated encryption for sensitive credentials.
+/// Thread-safe class providing AES-256-GCM authenticated encryption for sensitive credentials.
+/// Synchronized via OSAllocatedUnfairLock for both sync (DB record encode/decode) and async contexts.
 /// Uses a private 256-bit Master Key stored in Application Support with strict POSIX 0600 permissions.
-public actor CryptoVault {
+public final class CryptoVault: Sendable {
     public static let shared = CryptoVault()
 
     private let logger = Logger(subsystem: "lokastudio.kuma", category: "CryptoVault")
-    private var cachedKey: SymmetricKey?
+    private let keyLock = OSAllocatedUnfairLock<SymmetricKey?>(initialState: nil)
 
     public init() {}
 
@@ -40,8 +41,8 @@ public actor CryptoVault {
 
     /// Returns or generates the 256-bit symmetric master key from disk.
     public func getOrCreateMasterKey() throws -> SymmetricKey {
-        if let key = cachedKey {
-            return key
+        if let existing = keyLock.withLock({ $0 }) {
+            return existing
         }
 
         let fileManager = FileManager.default
@@ -67,7 +68,7 @@ public actor CryptoVault {
             let keyData = try Data(contentsOf: keyURL)
             if keyData.count == 32 {
                 let key = SymmetricKey(data: keyData)
-                self.cachedKey = key
+                keyLock.withLock { $0 = key }
                 return key
             } else {
                 logger.warning("Existing master key file corrupted (length != 32 bytes). Generating a replacement.")
@@ -82,7 +83,7 @@ public actor CryptoVault {
         try rawData.write(to: keyURL, options: .atomic)
         try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyPath)
 
-        self.cachedKey = newKey
+        keyLock.withLock { $0 = newKey }
         logger.info("Successfully generated and secured new 256-bit Master Key at \(keyPath, privacy: .private)")
         return newKey
     }

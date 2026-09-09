@@ -58,11 +58,7 @@ public struct SidebarRowView: View {
     public var body: some View {
         ZStack(alignment: .leading) {
             if isEditing {
-                SidebarRowInlineEditor(
-                    node: node,
-                    indentLevel: indentLevel,
-                    onCommitRename: onCommitRename
-                )
+                SidebarRowInlineEditor(node: node, indentLevel: indentLevel, onCommitRename: onCommitRename)
             } else {
                 contentRow
             }
@@ -80,12 +76,12 @@ public struct SidebarRowView: View {
         .frame(minHeight: KumaTheme.Sidebar.rowMinHeight)
         .background(rowBackground)
         .clipShape(RoundedRectangle(cornerRadius: KumaTheme.Sidebar.rowCornerRadius, style: .continuous))
-        .overlay(alignment: .bottom) {
+        .overlay {
             if isDropTargeted {
                 SidebarDropIndicator()
-                    .offset(y: 2)
             }
         }
+        .scaleEffect(isDropTargeted ? 1.02 : 1.0)
         .foregroundStyle(rowForeground)
         .onHover { isHovering = $0 }
         .contextMenu {
@@ -96,16 +92,11 @@ public struct SidebarRowView: View {
                 Button("Delete", role: .destructive) { onDelete() }
             }
         }
+        .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isDropTargeted)
         .animation(.easeInOut(duration: 0.14), value: isSelected)
-        .animation(.easeInOut(duration: 0.12), value: isDropTargeted)
         .accessibilityLabel(node.title)
         .accessibilityAddTraits(node.isSpecialHeader ? .isHeader : .isButton)
-        .modifier(GroupDragDropModifier(
-            isGroupRow: node.isGroupRow,
-            nodeID: node.id,
-            onReorder: onReorderGroup,
-            isTargeted: $isDropTargeted
-        ))
+        .modifier(GroupDragDropModifier(isGroupRow: node.isGroupRow, nodeID: node.id, onReorder: onReorderGroup, isTargeted: $isDropTargeted))
     }
 
     private var contentRow: some View {
@@ -128,7 +119,8 @@ public struct SidebarRowView: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, node.isSpecialHeader ? 6 : KumaTheme.Sidebar.rowVerticalPadding)
-        .padding(.horizontal, KumaTheme.Sidebar.rowHorizontalPadding)
+        .padding(.leading, KumaTheme.Sidebar.rowHorizontalPadding)
+        .padding(.trailing, hasChildren ? 48 : (node.isSpecialHeader ? 44 : KumaTheme.Sidebar.rowHorizontalPadding))
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {

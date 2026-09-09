@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Contextual notification banner shown in Inspector when service is active or running.
-/// Informs user that settings are locked while providing a direct CTA to Live Logs.
+/// Contextual notification banner shown in Inspector indicating current service status.
+/// Always visible (static banner) regardless of whether the service is running, starting,
+/// stopping, crashed, or stopped, providing a consistent layout with CTA to Live Logs.
 public struct InspectorRunningBanner: View {
     public let runtime: ServiceRuntimeState
     public let isDisabled: Bool
@@ -61,7 +62,13 @@ public struct InspectorRunningBanner: View {
                     onViewLogs: onViewLogs
                 )
             case .stopped:
-                EmptyView()
+                InspectorStatusPillBanner(
+                    icon: "stop.circle.fill",
+                    title: "Ready to Start",
+                    subtitle: "All configurations are unlocked and ready for execution",
+                    tintColor: .secondary,
+                    onViewLogs: onViewLogs
+                )
             }
         }
     }

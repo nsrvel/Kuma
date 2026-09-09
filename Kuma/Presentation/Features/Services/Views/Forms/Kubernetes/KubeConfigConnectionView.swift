@@ -22,11 +22,7 @@ public struct KubeConfigConnectionView: View {
     }
 
     public var body: some View {
-        KumaFormSection(
-            icon: "server.rack",
-            title: "Kube Config",
-            subtitle: "Select cluster credentials"
-        ) {
+        KumaFormSection(icon: "server.rack", title: "Kube Config", subtitle: "Select cluster credentials") {
             VStack(alignment: .leading, spacing: 12) {
                 if viewModel.availableKubeConfigs.isEmpty && !viewModel.showInlineNewConfigForm {
                     emptyStateView
@@ -40,11 +36,7 @@ public struct KubeConfigConnectionView: View {
                     )
                 }
             }
-            .confirmationDialog(
-                "Are you sure you want to delete this Kube Config?",
-                isPresented: $viewModel.showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
+            .confirmationDialog("Are you sure you want to delete this Kube Config?", isPresented: $viewModel.showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete Config", role: .destructive) {
                     Task {
                         await viewModel.deleteConfig()

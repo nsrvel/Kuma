@@ -4,18 +4,21 @@ public struct ServiceInspectorView: View {
     public let serviceID: UUID
     public let workspaceID: UUID
     @State private var inspectorVM: ServiceInspectorViewModel
+    @Environment(ServiceStateStore.self) var serviceStateStore
 
     public init(
         serviceID: UUID,
         workspaceID: UUID,
-        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
+        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
+        stateStore: ServiceStateStore? = nil
     ) {
         self.serviceID = serviceID
         self.workspaceID = workspaceID
         _inspectorVM = State(initialValue: ServiceInspectorViewModel(
             serviceID: serviceID,
             workspaceID: workspaceID,
-            serviceRepository: serviceRepository
+            serviceRepository: serviceRepository,
+            stateStore: stateStore
         ))
     }
 
@@ -31,7 +34,7 @@ public struct ServiceInspectorView: View {
                 InspectorStatusHeader(
                     service: service,
                     provider: inspectorVM.activeProvider,
-                    runtime: ServiceRuntimeState(status: isRunning ? .running : .stopped, isLoading: false),
+                    runtime: ServiceRuntimeState(executionState: inspectorVM.executionState),
                     isViewingLogs: isViewingLogs,
                     onToggle: {
                         inspectorVM.toggleRunning()
@@ -63,102 +66,17 @@ public struct ServiceInspectorView: View {
                             removal: .opacity.combined(with: .move(edge: .trailing))
                         ))
                     } else {
-                        // Single Unified Scrollable Configuration View
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 18) {
-                                // Running State / Lock Banner with Live Logs CTA
-                                InspectorRunningBanner(
-                                    runtime: ServiceRuntimeState(status: isRunning ? .running : .stopped, isLoading: false),
-                                    isDisabled: service.isDisabled,
-                                    onViewLogs: {
-                                        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                                            inspectorVM.isViewingLogs = true
-                                        }
-                                    }
-                                )
-
-                                // 1. General Identification Form
-                                ServiceGeneralSettingsView(
-                                    name: Binding(
-                                        get: { inspectorVM.service?.name ?? "" },
-                                        set: {
-                                            inspectorVM.service?.name = $0
-                                            inspectorVM.scheduleAutoSave()
-                                        }
-                                    ),
-                                    serviceDescription: Binding(
-                                        get: { inspectorVM.service?.description ?? "" },
-                                        set: {
-                                            inspectorVM.service?.description = $0.isEmpty ? nil : $0
-                                            inspectorVM.scheduleAutoSave()
-                                        }
-                                    ),
-                                    placeholder: "Postgres DB",
-                                    icon: "info.circle",
-                                    subtitle: "Service name and purpose"
-                                )
-                                .disabled(isLocked)
-
-                                // 2. Providers Section (Selector + Inline Add/Edit)
-                                ServiceProvidersSectionView(
-                                    serviceID: serviceID,
-                                    providers: inspectorVM.providers,
-                                    activeProviderID: inspectorVM.activeProviderID,
-                                    isLocked: isLocked,
-                                    onSelectProvider: { newID in
-                                        inspectorVM.switchProvider(to: newID)
-                                    },
-                                    onAddProvider: { newProvider in
-                                        inspectorVM.addProvider(newProvider)
-                                    },
-                                    onUpdateProvider: { updatedProvider in
-                                        inspectorVM.updateProviderDirectly(updatedProvider)
-                                    },
-                                    onDeleteProvider: { provider in
-                                        inspectorVM.deleteProvider(provider)
-                                    }
-                                )
-
-                                // 3. Active Provider Configuration Form
-                                if let activeIndex = inspectorVM.providers.firstIndex(where: { $0.id == inspectorVM.activeProviderID }) {
-                                    InspectorFormSections(
-                                        provider: $inspectorVM.providers[activeIndex],
-                                        ports: $inspectorVM.draftPorts,
-                                        kubeConfigVM: inspectorVM.kubeConfigVM,
-                                        isLocked: isLocked,
-                                        onFieldChanged: {
-                                            inspectorVM.scheduleAutoSave()
-                                        }
-                                    )
-                                    .disabled(isLocked)
-                                }
-
-                                // 4. Options Section (Disable, Delete Service)
-                                InspectorOptionsSection(
-                                    isDisabled: Binding(
-                                        get: { inspectorVM.service?.isDisabled ?? false },
-                                        set: { newValue in
-                                            inspectorVM.toggleDisabled(newValue)
-                                        }
-                                    ),
-                                    isRunning: isRunning,
-                                    isEditing: true,
-                                    onDelete: {
-                                        inspectorVM.showDeleteConfirmation = true
-                                    }
-                                )
-                            }
-                            .padding(KumaSpacing.lg)
-                        }
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .move(edge: .leading)),
-                            removal: .opacity.combined(with: .move(edge: .leading))
-                        ))
+                        InspectorConfigFormStack(
+                            serviceID: serviceID,
+                            isLocked: isLocked,
+                            isRunning: isRunning,
+                            inspectorVM: inspectorVM,
+                            service: service
+                        )
                     }
                 }
                 .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isViewingLogs)
                 .animation(.easeInOut(duration: 0.18), value: isRunning)
-                .animation(.easeInOut(duration: 0.15), value: inspectorVM.activeCategory)
             } else {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
@@ -168,19 +86,36 @@ public struct ServiceInspectorView: View {
             }
         }
         .task(id: serviceID) {
+            inspectorVM.stateStore = serviceStateStore
             await inspectorVM.loadService(id: serviceID)
         }
         .task(id: serviceID) {
-            for await notif in NotificationCenter.default.notifications(named: .kumaServiceStateChanged) {
-                if let changedID = notif.object as? UUID, changedID == serviceID, let state = notif.userInfo?["state"] as? ServiceState {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        inspectorVM.isRunning = state.isOperational
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    for await notif in NotificationCenter.default.notifications(named: .kumaServiceStateChanged) {
+                        if let changedID = notif.object as? UUID, changedID == serviceID, let state = notif.userInfo?["state"] as? ServiceState {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                inspectorVM.isRunning = state.isOperational
+                            }
+                        }
+                    }
+                }
+                group.addTask {
+                    for await notif in NotificationCenter.default.notifications(named: .kumaServiceUpdated) {
+                        if notif.userInfo?["source"] as? String == "inspector" {
+                            continue
+                        }
+                        if let changedID = notif.object as? UUID, changedID == serviceID {
+                            await inspectorVM.loadService(id: serviceID)
+                        }
                     }
                 }
             }
         }
         .onDisappear {
-            inspectorVM.cancelAutoSave()
+            Task {
+                await inspectorVM.flushPendingAutoSave()
+            }
         }
         .confirmationDialog(
             "Delete Service?",

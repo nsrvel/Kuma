@@ -9,6 +9,22 @@ public actor ProcessRegistry {
     public static let shared = ProcessRegistry()
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ProcessRegistry")
 
+    private static let stateLock = NSLock()
+    private static var _cachedActiveServiceIDs: [UUID] = []
+
+    /// Thread-safe synchronous access to active running service IDs from any context (e.g. AppDelegate)
+    public nonisolated static var activeRunningServiceIDs: [UUID] {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return _cachedActiveServiceIDs
+    }
+
+    private static func syncActiveIDs(_ ids: [UUID]) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        _cachedActiveServiceIDs = ids
+    }
+
     public struct ProcessSnapshot: Sendable, Equatable {
         public let serviceID: UUID
         public let pid: pid_t
@@ -18,26 +34,55 @@ public actor ProcessRegistry {
 
     private final class ManagedProcess {
         let serviceID: UUID
+        let serviceName: String
         let process: Process
         let pgid: pid_t
         let startTime: Date
+        let onOutput: (@Sendable (String) -> Void)?
         var stdoutPipe: Pipe?
         var stderrPipe: Pipe?
 
-        init(serviceID: UUID, process: Process, pgid: pid_t, startTime: Date, stdoutPipe: Pipe?, stderrPipe: Pipe?) {
+        init(
+            serviceID: UUID,
+            serviceName: String,
+            process: Process,
+            pgid: pid_t,
+            startTime: Date,
+            stdoutPipe: Pipe?,
+            stderrPipe: Pipe?,
+            onOutput: (@Sendable (String) -> Void)?
+        ) {
             self.serviceID = serviceID
+            self.serviceName = serviceName
             self.process = process
             self.pgid = pgid
             self.startTime = startTime
             self.stdoutPipe = stdoutPipe
             self.stderrPipe = stderrPipe
+            self.onOutput = onOutput
         }
 
-        func cleanupPipes() {
-            stdoutPipe?.fileHandleForReading.readabilityHandler = nil
-            stderrPipe?.fileHandleForReading.readabilityHandler = nil
-            try? stdoutPipe?.fileHandleForReading.close()
-            try? stderrPipe?.fileHandleForReading.close()
+        func cleanupPipes(drainRemaining: Bool = false) {
+            if let stdout = stdoutPipe {
+                stdout.fileHandleForReading.readabilityHandler = nil
+                if drainRemaining {
+                    let remaining = stdout.fileHandleForReading.readDataToEndOfFile()
+                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
+                        onOutput?(text)
+                    }
+                }
+                try? stdout.fileHandleForReading.close()
+            }
+            if let stderr = stderrPipe {
+                stderr.fileHandleForReading.readabilityHandler = nil
+                if drainRemaining {
+                    let remaining = stderr.fileHandleForReading.readDataToEndOfFile()
+                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
+                        onOutput?(text)
+                    }
+                }
+                try? stderr.fileHandleForReading.close()
+            }
             stdoutPipe = nil
             stderrPipe = nil
         }
@@ -50,15 +95,16 @@ public actor ProcessRegistry {
     /// Launches an external executable under an isolated process group.
     public func launch(
         serviceID: UUID,
+        serviceName: String = "Service",
         executable: String,
         arguments: [String],
         workingDirectory: String? = nil,
         environment: [String: String]? = nil,
         onOutput: (@Sendable (String) -> Void)? = nil
-    ) throws -> pid_t {
+    ) async throws -> pid_t {
         // Stop any existing process for this service first
         if activeProcesses[serviceID] != nil {
-            stop(serviceID: serviceID)
+            await stop(serviceID: serviceID)
         }
 
         let process = Process()
@@ -83,80 +129,117 @@ public actor ProcessRegistry {
         process.standardError = stderrPipe
         process.qualityOfService = .userInitiated
 
+        // Setup pipe readability handlers BEFORE run() so early output is never missed
+        setupPipeHandler(pipe: stdoutPipe, serviceID: serviceID, onOutput: onOutput)
+        setupPipeHandler(pipe: stderrPipe, serviceID: serviceID, onOutput: onOutput)
+
         try process.run()
 
         let pid = process.processIdentifier
-        // Assign separate process group to isolate signals
-        setpgid(pid, pid)
+        // Assign separate process group to isolate signals.
+        // On macOS, if the child process exited immediately, setpgid may return -1 with ESRCH or EACCES.
+        if setpgid(pid, pid) != 0 {
+            let err = errno
+            if err != ESRCH && err != EACCES {
+                Self.logger.debug("setpgid failed for PID \(pid): errno \(err)")
+            }
+        }
 
         let managed = ManagedProcess(
             serviceID: serviceID,
+            serviceName: serviceName,
             process: process,
             pgid: pid,
             startTime: Date(),
             stdoutPipe: stdoutPipe,
-            stderrPipe: stderrPipe
+            stderrPipe: stderrPipe,
+            onOutput: onOutput
         )
         activeProcesses[serviceID] = managed
+        Self.syncActiveIDs(Array(activeProcesses.keys))
 
-        Self.logger.info("Launched process for service \(serviceID) (PID: \(pid), PGID: \(pid))")
+        Self.logger.info("Launched process for service \(serviceName) (\(serviceID)) (PID: \(pid), PGID: \(pid))")
 
         // Setup clean termination observer
         process.terminationHandler = { [weak self] proc in
             let exitCode = proc.terminationStatus
             let reason = proc.terminationReason
-            Self.logger.info("Process for service \(serviceID) terminated with code \(exitCode) (reason: \(reason == .exit ? "exit" : "uncaughtSignal"))")
+            Self.logger.info("Process for service \(serviceName) (\(serviceID)) terminated with code \(exitCode) (reason: \(reason == .exit ? "exit" : "uncaughtSignal"))")
 
             Task { [weak self] in
                 await self?.handleProcessTerminated(serviceID: serviceID, exitCode: exitCode)
             }
         }
 
-        // Asynchronously read stdout and stderr via readabilityHandler
-        setupPipeHandler(pipe: stdoutPipe, serviceID: serviceID, onOutput: onOutput)
-        setupPipeHandler(pipe: stderrPipe, serviceID: serviceID, onOutput: onOutput)
-
         return pid
     }
 
-    private func handleProcessTerminated(serviceID: UUID, exitCode: Int32) {
+    private func handleProcessTerminated(serviceID: UUID, exitCode: Int32) async {
         guard let managed = activeProcesses.removeValue(forKey: serviceID) else { return }
-        managed.cleanupPipes()
+        Self.syncActiveIDs(Array(activeProcesses.keys))
+        managed.cleanupPipes(drainRemaining: true)
 
         let state: ServiceState = (exitCode == 0) ? .stopped : .crashed
-        NotificationCenter.default.post(
-            name: .kumaServiceStateChanged,
-            object: serviceID,
-            userInfo: ["state": state]
-        )
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: .kumaServiceStateChanged,
+                object: serviceID,
+                userInfo: ["state": state]
+            )
+        }
+
+        // Send macOS system notification if crashed and notifyOnCrash is enabled
+        if exitCode != 0 && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
+            let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
+            await SystemNotificationCenter.shared.send(
+                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)"),
+                playSound: playSound
+            )
+        }
     }
 
     /// Stops a running service process with progressive signal escalation.
-    public func stop(serviceID: UUID) {
-        guard let managed = activeProcesses.removeValue(forKey: serviceID) else { return }
+    /// Sends SIGINT first, waits up to 1.5s, escalates to SIGTERM, waits 1.0s, and finally SIGKILL.
+    /// Pipes are kept open during shutdown to capture any final exit logs before being closed.
+    public func stop(serviceID: UUID) async {
+        guard let managed = activeProcesses[serviceID] else { return }
         let pgid = managed.pgid
         let process = managed.process
-        managed.cleanupPipes()
 
-        Self.logger.info("Stopping service \(serviceID) (PGID: \(pgid))...")
+        Self.logger.info("Stopping process for service \(serviceID) (PGID: \(pgid))...")
 
-        // 1. SIGINT to process group
+        // 1. Graceful SIGINT to process group
         kill(-pgid, SIGINT)
 
-        Task.detached(priority: .userInitiated) {
-            // Wait 1.5s for clean shutdown
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if process.isRunning {
-                Self.logger.warning("Process \(pgid) still running after SIGINT. Escalating to SIGTERM.")
-                kill(-pgid, SIGTERM)
+        // Wait up to 1.5s for clean exit
+        for _ in 0..<15 {
+            if !process.isRunning { break }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
 
-                // Wait 1.0s more
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if process.isRunning {
-                    Self.logger.error("Process \(pgid) still running after SIGTERM. Sending SIGKILL.")
-                    kill(-pgid, SIGKILL)
-                }
+        // 2. Escalate to SIGTERM if still alive
+        if process.isRunning {
+            Self.logger.warning("Process \(pgid) still running after SIGINT. Escalating to SIGTERM.")
+            kill(-pgid, SIGTERM)
+
+            // Wait up to 1.0s
+            for _ in 0..<10 {
+                if !process.isRunning { break }
+                try? await Task.sleep(nanoseconds: 100_000_000)
             }
+        }
+
+        // 3. Final escalation to SIGKILL if stubborn
+        if process.isRunning {
+            Self.logger.error("Process \(pgid) still running after SIGTERM. Sending SIGKILL.")
+            kill(-pgid, SIGKILL)
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        // Cleanup tracking and pipes
+        if let removed = activeProcesses.removeValue(forKey: serviceID) {
+            Self.syncActiveIDs(Array(activeProcesses.keys))
+            removed.cleanupPipes(drainRemaining: true)
         }
     }
 
@@ -177,14 +260,53 @@ public actor ProcessRegistry {
         )
     }
 
-    /// Terminates all tracked child processes immediately via SIGKILL (app shutdown guard).
+    /// Batch queries execution states for a list of service IDs in a single actor crossing.
+    public func runningStates(for serviceIDs: [UUID]) -> [UUID: ServiceExecutionState] {
+        var result: [UUID: ServiceExecutionState] = [:]
+        result.reserveCapacity(serviceIDs.count)
+
+        for id in serviceIDs {
+            if let managed = activeProcesses[id], managed.process.isRunning {
+                result[id] = .running(pid: managed.process.processIdentifier)
+            } else {
+                result[id] = .idle
+            }
+        }
+        return result
+    }
+
+    /// Returns list of all service IDs currently running active child processes.
+    public func activeRunningServiceIDs() -> [UUID] {
+        activeProcesses.values
+            .filter { $0.process.isRunning }
+            .map { $0.serviceID }
+    }
+
+    /// Gracefully escalates termination for all tracked child processes (SIGTERM -> SIGKILL) and cleans up pipes without blocking.
     public func terminateAll() {
+        // 1. Send SIGTERM first to allow child processes to teardown gracefully
         for (_, managed) in activeProcesses {
             let pgid = managed.pgid
-            managed.cleanupPipes()
-            kill(-pgid, SIGKILL)
+            kill(-pgid, SIGTERM)
+        }
+
+        // 2. Short non-blocking grace period (up to 200ms) for clean exit
+        for _ in 0..<2 {
+            let anyRunning = activeProcesses.values.contains { $0.process.isRunning }
+            if !anyRunning { break }
+            usleep(100_000)
+        }
+
+        // 3. SIGKILL any processes still alive and close pipes immediately without blocking
+        for (_, managed) in activeProcesses {
+            let pgid = managed.pgid
+            if managed.process.isRunning {
+                kill(-pgid, SIGKILL)
+            }
+            managed.cleanupPipes(drainRemaining: false)
         }
         activeProcesses.removeAll()
+        Self.syncActiveIDs([])
     }
 
     private func setupPipeHandler(

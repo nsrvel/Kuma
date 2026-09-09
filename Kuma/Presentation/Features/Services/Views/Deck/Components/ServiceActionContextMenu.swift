@@ -48,27 +48,8 @@ public struct ServiceActionContextMenu: View {
 
     public var body: some View {
         Group {
-            // 1. Start / Stop Service
-            if snapshot.isDisabled {
-                Button {} label: {
-                    Label("Start", systemImage: "play.fill")
-                }
-                .disabled(true)
-            } else if runtime.status == .running || runtime.status == .starting {
-                Button {
-                    onToggle()
-                } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                }
-            } else {
-                Button {
-                    onToggle()
-                } label: {
-                    Label("Start", systemImage: "play.fill")
-                }
-            }
+            executionControlButtons
 
-            // 2. Restart
             Button {
                 onRestart()
             } label: {
@@ -78,76 +59,28 @@ public struct ServiceActionContextMenu: View {
 
             Divider()
 
-            // 3. Open Details
             Button {
                 onSelect()
             } label: {
                 Label("Open Details", systemImage: "sidebar.right")
             }
 
-            // 4. Switch Provider Submenu (Always visible for HIG consistency)
-            Menu {
-                if !snapshot.providerOptions.isEmpty {
-                    ForEach(snapshot.providerOptions) { option in
-                        Button {
-                            onSwitchProvider(option.id)
-                        } label: {
-                            HStack {
-                                Text(option.label)
-                                if option.isActive {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Button {} label: {
-                        HStack {
-                            Text(snapshot.providerCategory.sidebarLabel)
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                    .disabled(true)
-                }
-            } label: {
-                Label("Switch Provider", systemImage: "arrow.triangle.2.circlepath")
-            }
+            ServiceProviderSwitchSubmenu(snapshot: snapshot, onSwitchProvider: onSwitchProvider)
 
-            // 5. Groups (Multi-select Toggle Submenu)
-            if !groups.isEmpty {
-                Menu {
-                    ForEach(groups) { group in
-                        Button {
-                            onToggleGroup(group.id)
-                        } label: {
-                            HStack {
-                                Text(group.name)
-                                if snapshot.groupIDs.contains(group.id) {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Label("Groups", systemImage: "folder")
-                }
-            }
+            ServiceGroupsSubmenu(groups: groups, selectedGroupIDs: snapshot.groupIDs, onToggleGroup: onToggleGroup)
 
-            // 6. Star Toggle
             Button {
                 onToggleStar()
             } label: {
                 Label("Star", systemImage: snapshot.isStarred ? "star.fill" : "star")
             }
 
-            // 7. Duplicate
             Button {
                 onDuplicate()
             } label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             }
 
-            // 8. Copy Config
             Button {
                 onCopyConfig()
             } label: {
@@ -156,22 +89,39 @@ public struct ServiceActionContextMenu: View {
 
             Divider()
 
-            // 9. Disable / Enable
             Button {
                 onToggleDisabled()
             } label: {
-                if snapshot.isDisabled {
-                    Label("Enable", systemImage: "lock.open.fill")
-                } else {
-                    Label("Disable", systemImage: "lock.slash.fill")
-                }
+                Label(snapshot.isDisabled ? "Enable" : "Disable",
+                      systemImage: snapshot.isDisabled ? "lock.open.fill" : "lock.slash.fill")
             }
 
-            // 10. Delete
             Button(role: .destructive) {
                 onDelete()
             } label: {
                 Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var executionControlButtons: some View {
+        if snapshot.isDisabled {
+            Button {} label: {
+                Label("Start", systemImage: "play.fill")
+            }
+            .disabled(true)
+        } else if runtime.status == .running || runtime.status == .starting {
+            Button {
+                onToggle()
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+            }
+        } else {
+            Button {
+                onToggle()
+            } label: {
+                Label("Start", systemImage: "play.fill")
             }
         }
     }

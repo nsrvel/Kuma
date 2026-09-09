@@ -101,6 +101,7 @@ public struct PodmanBrandVector: View {
                     style: StrokeStyle(lineWidth: max(0.9, size.width * 0.05), lineCap: .round)
                 )
             }
+            .drawingGroup()
         }
     }
 }

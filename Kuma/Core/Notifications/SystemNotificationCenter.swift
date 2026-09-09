@@ -43,6 +43,18 @@ public actor SystemNotificationCenter {
         _ type: SystemNotificationType,
         playSound: Bool = true
     ) async {
+        let status = await checkAuthorizationStatus()
+        if status == .notDetermined {
+            let granted = await requestAuthorization()
+            guard granted else {
+                Self.logger.info("Cannot deliver notification because permission was not granted.")
+                return
+            }
+        } else if status == .denied {
+            Self.logger.info("Cannot deliver notification because permission is denied by user.")
+            return
+        }
+
         let content = UNMutableNotificationContent()
 
         switch type {

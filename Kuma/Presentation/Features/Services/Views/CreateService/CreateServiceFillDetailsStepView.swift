@@ -27,7 +27,6 @@ public struct CreateServiceFillDetailsStepView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    // Header Bar with Back Button
                     HStack(spacing: 10) {
                         Button {
                             onBack()
@@ -44,22 +43,30 @@ public struct CreateServiceFillDetailsStepView: View {
                     }
                     .padding(.top, 16)
 
-                    // 1. General Section
                     ServiceGeneralSettingsView(
                         name: $generalDraft.name,
                         serviceDescription: $generalDraft.description,
                         placeholder: placeholderName
                     )
 
-                    // 2. Contextual Provider Settings
-                    providerSettingsSection
+                    CreateServiceContextualFormView(
+                        selectedProvider: selectedProvider,
+                        kubeDraft: $kubeDraft,
+                        kubeConfigVM: kubeConfigVM,
+                        dockerDraft: $dockerDraft,
+                        podmanDraft: $podmanDraft,
+                        shellDraft: $shellDraft,
+                        sshDraft: $sshDraft,
+                        sshAuthType: $sshAuthType,
+                        sshKeyPath: $sshKeyPath,
+                        sshPassword: $sshPassword,
+                        healthCheckDraft: $healthCheckDraft,
+                        tunnelDraft: $tunnelDraft,
+                        monitorDraft: $monitorDraft
+                    )
 
-                    // 3. Port Mappings Section (Shown for Kubernetes and SSH)
                     if selectedProvider == .kubernetes || selectedProvider == .ssh {
-                        KumaFormSection(
-                            icon: "arrow.left.arrow.right",
-                            title: "Ports"
-                        ) {
+                        KumaFormSection(icon: "arrow.left.arrow.right", title: "Ports") {
                             KumaPortMappingEditor(label: "", items: $temporaryPorts)
                         }
                     }
@@ -70,7 +77,6 @@ public struct CreateServiceFillDetailsStepView: View {
 
             Divider().opacity(0.4)
 
-            // Bottom Action Bar
             HStack {
                 Button("Back") { onBack() }
 
@@ -98,92 +104,6 @@ public struct CreateServiceFillDetailsStepView: View {
         case .httpCheck: return "Auth Service Health"
         case .tunnel: return "Webhook Public Tunnel"
         case .processMonitor: return "Redis Server Monitor"
-        }
-    }
-
-    @ViewBuilder
-    private var providerSettingsSection: some View {
-        switch selectedProvider {
-        case .kubernetes:
-            KubeConfigConnectionView(
-                viewModel: kubeConfigVM,
-                isLocked: false,
-                contextToTest: kubeDraft.context,
-                onConfigChanged: {}
-            )
-
-            KumaFormSection(icon: "network", title: "Cluster Connection") {
-                KubeConnectionSettingsView(
-                    kubeNamespace: $kubeDraft.namespace,
-                    kubeContext: $kubeDraft.context,
-                    availableContexts: kubeConfigVM.availableContexts
-                )
-            }
-            .onChange(of: kubeConfigVM.availableContexts, initial: true) { _, contexts in
-                if let active = kubeConfigVM.activeContextName, contexts.contains(active) {
-                    kubeDraft.context = active
-                } else if let first = contexts.first, !contexts.contains(kubeDraft.context) {
-                    kubeDraft.context = first
-                }
-            }
-
-            KumaFormSection(icon: "scope", title: "Target Resource") {
-                KubeTargetSettingsView(
-                    targetName: $kubeDraft.targetName,
-                    targetType: $kubeDraft.targetType,
-                    usePattern: $kubeDraft.usePattern
-                )
-            }
-
-        case .docker:
-            KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
-                VStack(alignment: .leading, spacing: 14) {
-                    DockerComposeSettingsView(yamlConfig: $dockerDraft.yamlConfig)
-                    KumaDivider(opacity: 0.06, verticalPadding: 2)
-                    InitialScriptSettingsView(initialScript: $dockerDraft.initialScript)
-                }
-            }
-
-        case .podman:
-            KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
-                VStack(alignment: .leading, spacing: 14) {
-                    PodmanComposeSettingsView(yamlConfig: $podmanDraft.yamlConfig)
-                    KumaDivider(opacity: 0.06, verticalPadding: 2)
-                    InitialScriptSettingsView(initialScript: $podmanDraft.initialScript)
-                }
-            }
-
-        case .shell:
-            KumaFormSection(icon: "terminal.fill", title: "Shell Command") {
-                ShellScriptSettingsView(runCommand: $shellDraft.runCommand, workingDirectory: $shellDraft.workingDirectory)
-            }
-
-        case .ssh:
-            KumaFormSection(icon: "network", title: "SSH Connection") {
-                SSHSettingsView(
-                    sshHost: $sshDraft.host,
-                    sshPort: $sshDraft.port,
-                    sshUser: $sshDraft.user,
-                    authType: $sshAuthType,
-                    sshKeyPath: $sshKeyPath,
-                    sshPassword: $sshPassword
-                )
-            }
-
-        case .httpCheck:
-            KumaFormSection(icon: "heart.text.square.fill", title: "Health Check") {
-                HealthCheckSettingsView(httpCheckUrl: $healthCheckDraft.url, checkInterval: $healthCheckDraft.interval)
-            }
-
-        case .tunnel:
-            KumaFormSection(icon: "cloud.bolt.fill", title: "Public Tunnel") {
-                TunnelSettingsView(tunnelType: $tunnelDraft.engine, tunnelTargetUrl: $tunnelDraft.targetUrl, ngrokAuthToken: $tunnelDraft.authToken)
-            }
-
-        case .processMonitor:
-            KumaFormSection(icon: "cpu.fill", title: "Process Monitor") {
-                ProcessMonitorSettingsView(monitorProcessName: $monitorDraft.processName, monitorInterval: $monitorDraft.interval)
-            }
         }
     }
 }

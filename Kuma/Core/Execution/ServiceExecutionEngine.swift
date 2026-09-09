@@ -116,6 +116,7 @@ public final class ServiceExecutionEngine: Sendable {
                 targetPattern: targetName,
                 namespace: namespace,
                 context: context,
+                customKubeConfigPath: provider.customKubeConfigPath,
                 serviceID: service.id,
                 serviceName: service.name
             )
@@ -123,6 +124,12 @@ public final class ServiceExecutionEngine: Sendable {
         }
 
         var args = ["port-forward", resolvedTarget]
+
+        // Custom kubeconfig flag
+        if let customConfig = provider.customKubeConfigPath?.trimmingCharacters(in: .whitespacesAndNewlines), !customConfig.isEmpty {
+            args.append("--kubeconfig")
+            args.append(customConfig)
+        }
 
         // Port mappings: local:remote
         for mapping in portMappings {
@@ -151,6 +158,7 @@ public final class ServiceExecutionEngine: Sendable {
 
         _ = try await processRegistry.launch(
             serviceID: serviceID,
+            serviceName: serviceName,
             executable: kubectl,
             arguments: args,
             onOutput: makeLogPipeline(serviceID: serviceID, serviceName: serviceName)
@@ -169,6 +177,7 @@ public final class ServiceExecutionEngine: Sendable {
 
         _ = try await processRegistry.launch(
             serviceID: serviceID,
+            serviceName: serviceName,
             executable: "/bin/zsh",
             arguments: ["-c", runCommand],
             workingDirectory: provider.workingDirectory,
@@ -184,14 +193,35 @@ public final class ServiceExecutionEngine: Sendable {
             throw ServiceExecutionError.binaryNotFound(cmd)
         }
 
+        var composeArgs = ["compose"]
+        var workingDir = provider.workingDirectory
+
+        // If inline yamlConfig is provided, persist it to docker-compose.kuma.yml
+        if let yamlConfig = provider.yamlConfig?.trimmingCharacters(in: .whitespacesAndNewlines), !yamlConfig.isEmpty {
+            let targetDir = (workingDir?.isEmpty == false) ? workingDir! : NSTemporaryDirectory()
+            let composeFilePath = (targetDir as NSString).appendingPathComponent("docker-compose.kuma.yml")
+            do {
+                try yamlConfig.write(toFile: composeFilePath, atomically: true, encoding: .utf8)
+                composeArgs.append(contentsOf: ["-f", composeFilePath])
+                if workingDir == nil || workingDir?.isEmpty == true {
+                    workingDir = targetDir
+                }
+            } catch {
+                throw ServiceExecutionError.processFailed("Failed to write compose YAML: \(error.localizedDescription)")
+            }
+        }
+
+        composeArgs.append("up")
+
         let serviceID = service.id
         let serviceName = service.name
 
         _ = try await processRegistry.launch(
             serviceID: serviceID,
+            serviceName: serviceName,
             executable: binaryPath,
-            arguments: ["compose", "up"],
-            workingDirectory: provider.workingDirectory,
+            arguments: composeArgs,
+            workingDirectory: workingDir,
             onOutput: makeLogPipeline(serviceID: serviceID, serviceName: serviceName)
         )
     }
@@ -207,6 +237,10 @@ public final class ServiceExecutionEngine: Sendable {
         let portMappings = try await serviceRepository.fetchPortMappings(forService: service.id)
 
         var args = ["-N", "-p", "\(port)"]
+        if let keyPath = provider.sshKeyPath?.trimmingCharacters(in: .whitespacesAndNewlines), !keyPath.isEmpty {
+            args.append("-i")
+            args.append(keyPath)
+        }
         for mapping in portMappings {
             args.append("-L")
             args.append("\(mapping.localPort):localhost:\(mapping.remotePort)")
@@ -218,6 +252,7 @@ public final class ServiceExecutionEngine: Sendable {
 
         _ = try await processRegistry.launch(
             serviceID: serviceID,
+            serviceName: serviceName,
             executable: "/usr/bin/ssh",
             arguments: args,
             onOutput: makeLogPipeline(serviceID: serviceID, serviceName: serviceName)
@@ -241,6 +276,7 @@ public final class ServiceExecutionEngine: Sendable {
         targetPattern: String,
         namespace: String?,
         context: String?,
+        customKubeConfigPath: String? = nil,
         serviceID: UUID,
         serviceName: String
     ) async throws -> String {
@@ -252,6 +288,11 @@ public final class ServiceExecutionEngine: Sendable {
         )
 
         var listArgs = ["get", "pods", "-o", "jsonpath={range .items[?(@.status.phase==\"Running\")]}{.metadata.name}{\"\\n\"}{end}"]
+
+        if let customConfig = customKubeConfigPath?.trimmingCharacters(in: .whitespacesAndNewlines), !customConfig.isEmpty {
+            listArgs.append("--kubeconfig")
+            listArgs.append(customConfig)
+        }
 
         if let namespace, !namespace.isEmpty {
             listArgs.append("-n")

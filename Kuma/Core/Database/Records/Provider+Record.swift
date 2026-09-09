@@ -17,6 +17,7 @@ extension Provider: FetchableRecord, PersistableRecord {
 
         let kubeConfigStr: String? = row["kubeConfigID"]
         let kubeConfigID = kubeConfigStr.flatMap(UUID.init)
+        let customKubeConfigPath: String? = row["customKubeConfigPath"]
         let kubeContext: String? = row["kubeContext"]
         let kubeNamespace: String? = row["kubeNamespace"]
         let targetName: String? = row["targetName"]
@@ -33,13 +34,27 @@ extension Provider: FetchableRecord, PersistableRecord {
         let sshUser: String? = row["sshUser"]
         let sshPort: Int? = row["sshPort"]
         let sshKeyPath: String? = row["sshKeyPath"]
-        let sshPassword: String? = row["sshPassword"]
+        let rawSshPassword: String? = row["sshPassword"]
+        let sshPassword: String?
+        if let rawSshPassword, !rawSshPassword.isEmpty {
+            // Decrypt if stored as encrypted vault string, otherwise maintain plaintext backward-compat
+            sshPassword = (try? CryptoVault.shared.decrypt(cipherText: rawSshPassword)) ?? rawSshPassword
+        } else {
+            sshPassword = nil
+        }
 
         let httpCheckUrl: String? = row["httpCheckUrl"]
         let httpCheckInterval: Int? = row["httpCheckInterval"]
         let tunnelType: String? = row["tunnelType"]
         let tunnelTargetUrl: String? = row["tunnelTargetUrl"]
-        let ngrokAuthToken: String? = row["ngrokAuthToken"]
+        let rawNgrokToken: String? = row["ngrokAuthToken"]
+        let ngrokAuthToken: String?
+        if let rawNgrokToken, !rawNgrokToken.isEmpty {
+            // Decrypt if stored as encrypted vault string, otherwise maintain plaintext backward-compat
+            ngrokAuthToken = (try? CryptoVault.shared.decrypt(cipherText: rawNgrokToken)) ?? rawNgrokToken
+        } else {
+            ngrokAuthToken = nil
+        }
 
         let monitorProcessName: String? = row["monitorProcessName"]
         let monitorInterval: Int? = row["monitorInterval"]
@@ -53,6 +68,7 @@ extension Provider: FetchableRecord, PersistableRecord {
             type: type,
             label: label,
             kubeConfigID: kubeConfigID,
+            customKubeConfigPath: customKubeConfigPath,
             kubeContext: kubeContext,
             kubeNamespace: kubeNamespace,
             targetName: targetName,
@@ -85,6 +101,7 @@ extension Provider: FetchableRecord, PersistableRecord {
         container["type"] = type.rawValue
         container["label"] = label
         container["kubeConfigID"] = kubeConfigID?.uuidString
+        container["customKubeConfigPath"] = customKubeConfigPath
         container["kubeContext"] = kubeContext
         container["kubeNamespace"] = kubeNamespace
         container["targetName"] = targetName
@@ -98,12 +115,25 @@ extension Provider: FetchableRecord, PersistableRecord {
         container["sshUser"] = sshUser
         container["sshPort"] = sshPort
         container["sshKeyPath"] = sshKeyPath
-        container["sshPassword"] = sshPassword
+
+        // Secure encryption for sensitive credentials before persisting to SQLite
+        if let pass = sshPassword, !pass.isEmpty {
+            container["sshPassword"] = (try? CryptoVault.shared.encrypt(plainText: pass)) ?? pass
+        } else {
+            container["sshPassword"] = nil
+        }
+
         container["httpCheckUrl"] = httpCheckUrl
         container["httpCheckInterval"] = httpCheckInterval
         container["tunnelType"] = tunnelType
         container["tunnelTargetUrl"] = tunnelTargetUrl
-        container["ngrokAuthToken"] = ngrokAuthToken
+
+        if let token = ngrokAuthToken, !token.isEmpty {
+            container["ngrokAuthToken"] = (try? CryptoVault.shared.encrypt(plainText: token)) ?? token
+        } else {
+            container["ngrokAuthToken"] = nil
+        }
+
         container["monitorProcessName"] = monitorProcessName
         container["monitorInterval"] = monitorInterval
         container["createdAt"] = createdAt

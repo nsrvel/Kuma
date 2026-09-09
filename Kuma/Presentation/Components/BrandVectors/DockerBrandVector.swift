@@ -148,6 +148,7 @@ public struct DockerBrandVector: View {
                     with: .color(.black.opacity(0.4))
                 )
             }
+            .drawingGroup()
         }
     }
 }

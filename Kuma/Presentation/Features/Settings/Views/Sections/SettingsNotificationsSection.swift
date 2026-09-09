@@ -23,14 +23,6 @@ public struct SettingsNotificationsSection: View {
                 .onChange(of: viewModel.notifyOnCrash) { _, newValue in
                     handleNotifyOnCrashToggle(newValue: newValue)
                 }
-
-                Divider().opacity(0.3)
-
-                KumaToggleField(
-                    label: "Notify on Health Check Failure",
-                    value: $viewModel.notifyOnHealthFailure,
-                    description: "Send alerts when a monitored endpoint or socket stops responding."
-                )
             }
         }
         .alert("Notification Permission Required", isPresented: $showPermissionAlert) {

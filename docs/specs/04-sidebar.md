@@ -1,6 +1,6 @@
 # Feature Spec 04: Sidebar Navigation, Tree Hierarchy & Service Groups
 
-> **Status:** Draft / Pending Review  
+> **Status:** Implemented & Verified (100% Pass)  
 > **Target Version:** macOS 14+ (SwiftUI, Swift 6 Concurrency)  
 > **Source Files:**  
 > - `Kuma/Domain/Models/ServiceGroup.swift`  
@@ -10,9 +10,10 @@
 > - `Kuma/Presentation/Features/Sidebar/Models/SidebarModel.swift`  
 > - `Kuma/Presentation/Features/Sidebar/ViewModels/SidebarViewModel.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/SidebarView.swift`  
-> - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarRowView.swift`  
+> - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarFooterView.swift` (NEW: Extracted Footer)  
+> - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarRowView.swift` (MOD: Streamlined <130 lines, trailing padding guard)  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarRowInlineEditor.swift`  
-> - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarRowActionButtons.swift`  
+> - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarRowActionButtons.swift` (MOD: Uses SidebarActionButton)  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarActionButton.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarChevron.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarDropIndicator.swift`  
@@ -26,9 +27,9 @@
 > - `SidebarInitialStateTests.swift` (Kategori A: Baseline Structure, Stable UUIDs, Default Expansion)  
 > - `SidebarValidationAndSecurityTests.swift` (Kategori B: Group Name Sanitization, Boundary Limits, Drag-Drop Payload Validation)  
 > - `SidebarPersistenceAndReorderTests.swift` (Kategori C: GRDB CRUD, Workspace Scoping, Batch SortOrder Reordering, Concurrency)  
-> - `SidebarRuntimeAndNotificationTests.swift` (Kategori D: NotificationCenter Bus, Workspace Switch Reload, Optimistic Updates)  
-> - `SidebarEdgeCasesAndErrorTests.swift` (Kategori E: Rapid Keyboard Traversal, Missing/Corrupt Groups, Cascade Deletions)  
-> - `SidebarVisualAndAccessibilityTests.swift` (Kategori F: Headless SwiftUI Hierarchy, Line Limits <150, HIG Accessibility & VoiceOver)  
+> - `SidebarRuntimeAndNotificationTests.swift` (Kategori D: NotificationCenter Bus, Workspace Switch Reload, Debounced Race Elimination)  
+> - `SidebarEdgeCasesAndErrorTests.swift` (Kategori E: Rapid Keyboard Traversal, Missing/Corrupt Groups, Selection Fallback)  
+> - `SidebarVisualAndAccessibilityTests.swift` (Kategori F: Headless SwiftUI Hierarchy, Strict File Line Limit <150, Dead-Code Elimination)  
 > - `KumaTests/Harness/SidebarTestHarness.swift` (Shared In-Memory SQLite & Test Harness for Sidebar/Groups)  
 
 ---
@@ -37,7 +38,7 @@
 
 ```mermaid
 graph TD
-    User([User in Sidebar]) --> List[SidebarView: Native Inset List]
+    User([User in Sidebar]) --> List[SidebarView: Native Inset List <120 lines]
 
     subgraph HeaderSection [Workspace Header & Quick Action]
         List --> WRow[SidebarWorkspaceRow: Active Workspace & Popover Switcher]
@@ -54,21 +55,23 @@ graph TD
     subgraph DynamicGroups [Service Groups Section]
         List --> GroupsHeader[Groups Header: UUID.stable 'groups' with Expand/Collapse & '+' Action]
         GroupsHeader -->|Expanded & Empty| EmptyPlaceholder[SidebarEmptyPlaceholderRow: 'No groups']
-        GroupsHeader -->|Expanded & Non-empty| GroupRows[SidebarRowView: ServiceGroup List]
+        GroupsHeader -->|Expanded & Non-empty| GroupRows[SidebarRowView: ServiceGroup List <130 lines]
     end
 
     subgraph RowInteractions [Row Interactions & Inline Management]
-        GroupRows -->|Hover / Context Menu| RowActions[SidebarRowActionButtons: Rename, Move Up/Down, Delete]
+        GroupRows -->|Hover / Context Menu| RowActions[SidebarRowActionButtons -> uses SidebarActionButton]
         GroupRows -->|Drag & Drop| DragModifier[GroupDragDropModifier: Reorder Drop Destination]
         GroupRows -->|Double Click / Rename Action| InlineEditor[SidebarRowInlineEditor: TextField Auto-focus & Commit]
     end
 
-    subgraph FooterSection [Sticky Footer]
+    subgraph FooterSection [Modular Sticky Footer]
         List --> Div2[KumaDivider]
-        List --> Footer[SidebarFooterButton: Settings ⌘, & External Help Link]
+        List --> FooterView[SidebarFooterView: Extracted Module <80 lines]
+        FooterView --> FooterBtn1[SidebarFooterButton: Settings ⌘, with Active Highlight]
+        FooterView --> FooterBtn2[SidebarFooterButton: Help Docs]
     end
 
-    subgraph StateAndStore [State Management & Persistence]
+    subgraph StateAndStore [State Management & Concurrency]
         List --> VM[SidebarViewModel: @Observable @MainActor]
         VM -->|Optimistic in-memory update 0ms| VM
         VM -->|Background Task Async| Repo[ServiceGroupRepository: SQLite 'service_group']
@@ -88,12 +91,12 @@ graph TD
 | :--- | :--- | :--- | :--- | :--- |
 | **Default Boot** | App launches / `SidebarViewModel.init()` | None | **Fixed Nodes Loaded** | `selectedID = .stable("all-services")`, `expandedIDs` contains `.stable("groups")`. |
 | **Node Selected ($N_A$)** | User clicks node $N_B$ | $N_B \in \text{flattenedRows}$ and navigable | **Node Selected ($N_B$)** | `selectedID = N_B.id`. Details view updates (Deck filter or Settings/LiveLogs). |
-| **Node Selected ($N_A$)** | User triggers ⌘, (Settings) | None | **Node Selected (Settings)** | `selectedID = .stable("settings")`. Detail switches to `SettingsView`. |
+| **Node Selected ($N_A$)** | User triggers ⌘, (Settings) | None | **Node Selected (Settings)** | `selectedID = .stable("settings")`. Detail switches to `SettingsView`. Footer button highlighted. |
 | **Any State** | Keyboard `Down` arrow | Current index < max navigable | **Next Row Selected** | `selectedID` moves down 1 position with spring animation. |
 | **Any State** | Keyboard `Up` arrow | Current index > 0 | **Previous Row Selected** | `selectedID` moves up 1 position with spring animation. |
 | **Any State** | Keyboard `Left` arrow | Selected node has children & is expanded | **Node Collapsed** | `expandedIDs.remove(selectedID)`. Children rows hidden. |
 | **Any State** | Keyboard `Right` arrow | Selected node has children & is collapsed | **Node Expanded** | `expandedIDs.insert(selectedID)`. Children rows shown. |
-| **Workspace Changed** | `workspaceStore.activeWorkspace.id` changes | Valid new workspace UUID | **Groups Reloaded** | `loadGroups(workspaceID:)` fetches groups for new workspace, rebuilds entries. |
+| **Workspace Changed** | `workspaceStore.activeWorkspace.id` changes | Valid new workspace UUID | **Groups Reloaded (Debounced)** | `loadGroups(workspaceID:)` cancels in-flight reload task, fetches groups for new workspace, rebuilds entries. |
 
 ### B. Service Groups CRUD & Reordering State
 
@@ -130,10 +133,15 @@ graph TD
    - Group names must be trimmed of leading and trailing whitespace. If a submitted name is empty, it must default gracefully to `"Untitled Group"`.
 7. **`[INV-SIDEBAR-07]` Keyboard Traversal & Navigation Completeness**:
    - The sidebar must support full keyboard accessibility via `.onMoveCommand`: `Up`/`Down` for selection traversal, and `Left`/`Right` for collapsing and expanding hierarchical groups.
-8. **`[INV-SIDEBAR-08]` View Modularity Limit (< 150 Lines)**:
-   - Every SwiftUI view in the Sidebar feature MUST strictly adhere to the ~150 lines limit. All subcomponents (`SidebarRowView`, `SidebarRowActionButtons`, `SidebarRowInlineEditor`, `SidebarFooterButton`, etc.) must remain separate and modular.
-9. **`[INV-SIDEBAR-09]` HIG Compliance & VoiceOver Accessibility**:
-   - Icon-only action buttons (add group, expand/collapse chevron, footer settings/help) MUST specify explicit accessibility labels (`.accessibilityLabel`) and traits (`.isButton`, `.isHeader`).
+8. **`[INV-SIDEBAR-08]` View Modularity & Strict Line Limit (< 150 Lines)**:
+   - Every SwiftUI view in the Sidebar feature MUST strictly adhere to the ~150 lines limit:
+     - `SidebarView.swift` MUST be decomposed; sticky footer must reside in `SidebarFooterView.swift` (< 80 lines).
+     - `SidebarRowView.swift` MUST stay under < 130 lines.
+     - All subcomponents must be isolated in `Views/Components/`.
+9. **`[INV-SIDEBAR-09]` Zero Dead Code & Reusable Action Button Integration**:
+   - `SidebarRowActionButtons` MUST reuse `SidebarActionButton.swift` instead of duplicating button structure or leaving orphaned components.
+10. **`[INV-SIDEBAR-10]` Race-Free Asynchronous Workspace Synchronization**:
+    - Dual `.task` triggers on workspace boot and notification events MUST be coordinated safely (debounced or deduplicated by ID) to prevent concurrent conflicting reads from SQLite.
 
 ---
 
@@ -148,6 +156,15 @@ graph TD
 | **`[INV-SIDEBAR-05]`** | Instant optimistic update, contiguous sortOrder after drag & drop / move | `SidebarPersistenceAndReorderTests` |
 | **`[INV-SIDEBAR-06]`** | Name trimming, empty string fallback to "Untitled Group", special unicode | `SidebarValidationAndSecurityTests` |
 | **`[INV-SIDEBAR-07]`** | Keyboard arrow navigation (`up`, `down`, `left`, `right`), expand/collapse | `SidebarEdgeCasesAndErrorTests` |
-| **`[INV-SIDEBAR-08]`** | View file line limits (< 150 lines) and component decomposition | `SidebarVisualAndAccessibilityTests` |
-| **`[INV-SIDEBAR-09]`** | HIG button traits, accessibility labels, tooltips, contrast | `SidebarVisualAndAccessibilityTests` |
-| **`[INV-SIDEBAR-10]`** | NotificationCenter event broadcasting (`.kumaGroupsUpdated`) sync | `SidebarRuntimeAndNotificationTests` |
+| **`[INV-SIDEBAR-08]`** | Strict file line limits check (< 150 lines per view file, decomposition verified) | `SidebarVisualAndAccessibilityTests` |
+| **`[INV-SIDEBAR-09]`** | Zero dead code verification (`SidebarActionButton` reused in `SidebarRowActionButtons`) | `SidebarVisualAndAccessibilityTests` |
+| **`[INV-SIDEBAR-10]`** | NotificationCenter event broadcasting (`.kumaGroupsUpdated`) & race-free task sync | `SidebarRuntimeAndNotificationTests` |
+
+---
+
+## 5. Drag-and-Drop Visual Design (Pill Capsule Highlight)
+
+Garis tipis (2px insertion line) telah dirombak total menjadi **Pill Capsule Highlight**:
+- **Target Surface**: Seluruh row target diselimuti capsule rounded surface dengan subtle accent fill (`accentColor.opacity(0.12)`) dan hairline border (`accentColor.opacity(0.45)`).
+- **Scale Lift**: Row target membesar secara halus (`scaleEffect(1.02)`) dengan animasi spring native (`response: 0.22, dampingFraction: 0.82`).
+- **Hit Testing**: Drop indicator menggunakan `.allowsHitTesting(false)` sehingga tidak mengganggu deteksi kursor dan drop event.

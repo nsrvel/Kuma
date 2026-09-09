@@ -55,12 +55,12 @@ public final class ServicesDeckViewModel {
 
     public var runtimeStates: [UUID: ServiceRuntimeState] = [:]
 
-    public var runningServiceCount: Int {
-        snapshots.filter { runtimeStates[$0.id]?.status.isOperational == true }.count
+    public var canStartAll: Bool {
+        snapshots.contains { !$0.isDisabled && runtimeStates[$0.id]?.status.isOperational != true }
     }
 
-    public var stoppedServiceCount: Int {
-        snapshots.filter { !($0.isDisabled) && runtimeStates[$0.id]?.status.isOperational != true }.count
+    public var canStopAll: Bool {
+        snapshots.contains { runtimeStates[$0.id]?.status.isOperational == true }
     }
 
     // MARK: - Groups Data
@@ -68,16 +68,22 @@ public final class ServicesDeckViewModel {
 
     private let serviceRepository: any ServiceRepositoryProtocol
     private let groupRepository: any ServiceGroupRepositoryProtocol
+    public var stateStore: ServiceStateStore?
+    private let userDefaults: UserDefaults
     private var loadTask: Task<Void, Never>? = nil
 
     public init(
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
         groupRepository: any ServiceGroupRepositoryProtocol = ServiceGroupRepository(),
+        stateStore: ServiceStateStore? = nil,
+        userDefaults: UserDefaults = .standard,
         isStarredOnly: Bool = false,
         filterGroupID: UUID? = nil
     ) {
         self.serviceRepository = serviceRepository
         self.groupRepository = groupRepository
+        self.stateStore = stateStore
+        self.userDefaults = userDefaults
         self.isStarredOnly = isStarredOnly
         self.filterGroupID = filterGroupID
     }
@@ -170,21 +176,104 @@ public final class ServicesDeckViewModel {
             let (loaded, groups) = try await (loadedSnapshots, loadedGroups)
             guard !Task.isCancelled else { return }
 
-            // Seed or refresh live runtime states from ProcessRegistry
-            for snapshot in loaded {
-                let isProcessActive = await ProcessRegistry.shared.isRunning(serviceID: snapshot.id)
-                let currentStatus = self.runtimeStates[snapshot.id]?.status ?? (isProcessActive ? .running : .stopped)
-                self.runtimeStates[snapshot.id] = ServiceRuntimeState(status: isProcessActive ? .running : (currentStatus == .running ? .stopped : currentStatus), isLoading: false)
+            // Batch seed or refresh live runtime states from ProcessRegistry in 1 call (PERF-01)
+            let serviceIDs = loaded.map(\.id)
+            if let store = self.stateStore {
+                await store.refreshProcessStates(for: serviceIDs)
+                for id in serviceIDs {
+                    self.runtimeStates[id] = store.runtime(for: id)
+                }
+            } else {
+                let processStates = await ProcessRegistry.shared.runningStates(for: serviceIDs)
+                for (id, state) in processStates {
+                    self.runtimeStates[id] = ServiceRuntimeState(executionState: state)
+                }
             }
 
+            let isFirstLoad = !self.hasInitialLoaded
             self.groups = groups
             self.snapshots = loaded
             self.hasInitialLoaded = true
+
+            // Auto-start services if enabled and there are saved active service IDs from previous session
+            if isFirstLoad && KumaSettingsKey.bool(forKey: KumaSettingsKey.autoResumeServices, defaultValue: true, defaults: self.userDefaults) {
+                resumeServicesIfNeeded(loadedSnapshots: loaded)
+            }
         } catch {
             guard !Task.isCancelled else { return }
             Self.logger.error("Failed to load workspace \(workspaceID): \(error.localizedDescription)")
             self.snapshots = []
             self.hasInitialLoaded = true
+        }
+    }
+
+    private func resumeServicesIfNeeded(loadedSnapshots: [ServiceCardSnapshot]) {
+        guard let savedStrings = userDefaults.stringArray(forKey: KumaSettingsKey.activeServiceIDsBeforeQuit),
+              !savedStrings.isEmpty else { return }
+
+        let savedUUIDs = Set(savedStrings.compactMap(UUID.init))
+        let candidates = loadedSnapshots.filter { !($0.isDisabled) && savedUUIDs.contains($0.id) }
+        guard !candidates.isEmpty else { return }
+
+        // Remove matched IDs from saved list so they aren't restarted repeatedly
+        let remaining = savedUUIDs.subtracting(candidates.map(\.id))
+        userDefaults.set(remaining.map(\.uuidString), forKey: KumaSettingsKey.activeServiceIDsBeforeQuit)
+
+        Task {
+            // Gentle stagger between auto-started services
+            for snapshot in candidates {
+                guard runtimeStates[snapshot.id]?.status.isOperational != true else { continue }
+                stateStore?.setExecutionState(.starting, for: snapshot.id)
+                runtimeStates[snapshot.id] = ServiceRuntimeState(status: .starting, isLoading: true)
+                NotificationCenter.default.post(
+                    name: .kumaServiceStateChanged,
+                    object: snapshot.id,
+                    userInfo: ["state": ServiceState.starting]
+                )
+                do {
+                    try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
+                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
+                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
+                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
+                    NotificationCenter.default.post(
+                        name: .kumaServiceStateChanged,
+                        object: snapshot.id,
+                        userInfo: ["state": ServiceState.running]
+                    )
+                } catch {
+                    Self.logger.error("Auto-start failed for '\(snapshot.name)': \(error.localizedDescription)")
+                    stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
+                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .crashed, isLoading: false)
+                    NotificationCenter.default.post(
+                        name: .kumaServiceStateChanged,
+                        object: snapshot.id,
+                        userInfo: ["state": ServiceState.crashed]
+                    )
+                }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+        }
+    }
+
+    /// Granular single-service snapshot refresh to avoid full workspace reload (SYNC-03 / PERF-04)
+    public func refreshSingleServiceSnapshot(id: UUID) async {
+        do {
+            if let updated = try await serviceRepository.fetchSnapshot(serviceID: id) {
+                if let idx = snapshots.firstIndex(where: { $0.id == id }) {
+                    snapshots[idx] = updated
+                } else {
+                    snapshots.append(updated)
+                }
+            } else {
+                snapshots.removeAll(where: { $0.id == id })
+                runtimeStates.removeValue(forKey: id)
+            }
+            if let store = stateStore {
+                await store.refreshProcessStates(for: [id])
+                runtimeStates[id] = store.runtime(for: id)
+            }
+        } catch {
+            Self.logger.error("Failed to reload single service snapshot \(id): \(error.localizedDescription)")
         }
     }
 
@@ -198,16 +287,25 @@ public final class ServicesDeckViewModel {
         let wasRunning = (runtimeStates[id] ?? .idle).status.isOperational
 
         if wasRunning {
+            stateStore?.setExecutionState(.stopping, for: id)
             runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
             await ServiceExecutionEngine.shared.stop(serviceID: id)
+            stateStore?.setExecutionState(.idle, for: id)
             runtimeStates[id] = ServiceRuntimeState(status: .stopped, isLoading: false)
         } else {
+            stateStore?.setExecutionState(.starting, for: id)
             runtimeStates[id] = ServiceRuntimeState(status: .starting, isLoading: true)
             do {
                 try await ServiceExecutionEngine.shared.start(serviceID: id)
+                if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: id) {
+                    stateStore?.setExecutionState(.running(pid: proc.pid), for: id)
+                } else {
+                    stateStore?.setExecutionState(.running(pid: 0), for: id)
+                }
                 runtimeStates[id] = ServiceRuntimeState(status: .running, isLoading: false)
             } catch {
                 Self.logger.error("Failed to start service \(id): \(error.localizedDescription)")
+                stateStore?.setExecutionState(.crashed(exitCode: 1), for: id)
                 runtimeStates[id] = ServiceRuntimeState(status: .crashed, isLoading: false)
             }
         }

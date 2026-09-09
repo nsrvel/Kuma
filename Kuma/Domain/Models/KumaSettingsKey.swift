@@ -9,7 +9,9 @@ public enum KumaSettingsKey {
     // MARK: - General & App Settings
     public static let launchAtLogin = "kuma.settings.launchAtLogin"
     public static let autoResumeServices = "kuma.settings.autoResumeServices"
+    public static let activeServiceIDsBeforeQuit = "kuma.settings.activeServiceIDsBeforeQuit"
     public static let confirmBeforeQuit = "kuma.settings.confirmBeforeQuit"
+    public static let quitBehavior = "kuma.settings.quitBehavior"
     public static let appearance = "kuma.settings.appearance"
 
     // MARK: - Engine & CLI Binary Paths
@@ -29,7 +31,6 @@ public enum KumaSettingsKey {
     // MARK: - Notifications & Safety
     public static let notifyOnCrash = "kuma.settings.notifyOnCrash"
     public static let notifySound = "kuma.settings.notifySound"
-    public static let notifyOnHealthFailure = "kuma.settings.notifyOnHealthFailure"
     public static let warnOnPortCollision = "kuma.settings.warnOnPortCollision"
     public static let portConflictPolicy = "kuma.settings.portConflictPolicy"
     public static let promptGracefulShutdown = "kuma.settings.promptGracefulShutdown"
