@@ -3,7 +3,7 @@ import GRDB
 
 // MARK: - Workspace GRDB Record Conformance
 
-extension Workspace: @preconcurrency FetchableRecord, @preconcurrency PersistableRecord {
+nonisolated extension Workspace: FetchableRecord, PersistableRecord {
     public nonisolated static let databaseTableName = "workspace"
 
     public nonisolated init(row: Row) throws {

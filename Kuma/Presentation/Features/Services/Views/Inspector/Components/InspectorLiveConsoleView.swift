@@ -51,54 +51,13 @@ public struct InspectorLiveConsoleView: View {
                 .padding(KumaSpacing.lg)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 3.5) {
-                            ForEach(logs) { item in
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text(item.timestamp)
-                                        .foregroundStyle(Color.secondary.opacity(0.6))
-                                        .frame(width: 55, alignment: .leading)
-
-                                    Text(item.level)
-                                        .foregroundStyle(levelColor(for: item.level))
-                                        .frame(width: 34, alignment: .leading)
-
-                                    Text(item.message)
-                                        .foregroundStyle(Color.primary.opacity(0.92))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .font(.system(size: 11, design: .monospaced))
-                                .id(item.id)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                    }
-                    .textSelection(.enabled)
-                    .onChange(of: logs.count) { _, _ in
-                        if isAutoScroll, let last = logs.last {
-                            withAnimation(.easeOut(duration: 0.12)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                }
+                KumaLogConsoleView(
+                    entries: logs,
+                    isAutoScroll: isAutoScroll,
+                    emptyPlaceholder: "Awaiting service logs..."
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func levelColor(for level: String) -> Color {
-        switch level.uppercased() {
-        case "ERR", "ERROR":
-            return Color.red
-        case "WARN", "WARNING":
-            return Color.orange
-        case "OK", "SUCCESS":
-            return Color.green
-        default:
-            return Color.cyan.opacity(0.85)
-        }
     }
 }

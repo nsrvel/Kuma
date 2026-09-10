@@ -44,9 +44,33 @@ public struct KubeConfigInlineEditorView: View {
             KumaTextField(label: "Config Name", value: $viewModel.newKubeConfigName, placeholder: "Staging Cluster")
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Kubeconfig Content (YAML)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Kubeconfig Content (YAML)")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        let panel = NSOpenPanel()
+                        panel.title = "Select Kubeconfig File"
+                        panel.canChooseFiles = true
+                        panel.canChooseDirectories = false
+                        panel.allowsMultipleSelection = false
+                        panel.showsHiddenFiles = true
+                        if panel.runModal() == .OK, let url = panel.url {
+                            if let content = try? String(contentsOf: url, encoding: .utf8) {
+                                viewModel.newKubeConfigContent = content
+                                if viewModel.newKubeConfigName.isEmpty {
+                                    viewModel.newKubeConfigName = url.deletingPathExtension().lastPathComponent
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Import File", systemImage: "doc.badge.plus")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
+                }
 
                 TextEditor(text: $viewModel.newKubeConfigContent)
                     .font(.system(.body, design: .monospaced))

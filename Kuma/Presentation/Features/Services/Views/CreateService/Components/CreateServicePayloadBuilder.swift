@@ -7,7 +7,7 @@ public enum CreateServicePayloadBuilder {
     public static func buildPayload(
         workspaceID: UUID,
         inputs: DraftInputs
-    ) async throws -> (Service, Provider, [ServicePortMapping]) {
+    ) throws -> (Service, Provider, [ServicePortMapping]) {
         let serviceID = UUID()
         let service = Service(
             id: serviceID,
@@ -24,14 +24,14 @@ public enum CreateServicePayloadBuilder {
 
         if inputs.selectedProvider == .ssh {
             if inputs.sshAuthType == .password && !inputs.sshPassword.isEmpty {
-                encryptedPassword = try await CryptoVault.shared.encrypt(plainText: inputs.sshPassword.trimmingCharacters(in: .whitespacesAndNewlines))
+                encryptedPassword = try CryptoVault.shared.encrypt(plainText: inputs.sshPassword.trimmingCharacters(in: .whitespacesAndNewlines))
             } else if inputs.sshAuthType == .key && !inputs.sshKeyPath.isEmpty {
-                encryptedKeyPath = try await CryptoVault.shared.encrypt(plainText: inputs.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines))
+                encryptedKeyPath = try CryptoVault.shared.encrypt(plainText: inputs.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines))
             }
         } else if inputs.selectedProvider == .tunnel {
             let trimmedToken = inputs.tunnelDraft.authToken.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedToken.isEmpty {
-                encryptedPassword = try await CryptoVault.shared.encrypt(plainText: trimmedToken)
+                encryptedPassword = try CryptoVault.shared.encrypt(plainText: trimmedToken)
             }
         }
 
@@ -89,7 +89,7 @@ public enum CreateServicePayloadBuilder {
     }
 
     private static func healthCheckDraftUrl(_ url: String) -> String {
-        url.trimmingCharacters(in: .whitespacesAndNewlines)
+        URLNormalizer.normalize(url) ?? url.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public static func isFormValid(inputs: DraftInputs) -> Bool {

@@ -175,7 +175,7 @@ public final class SettingsViewModel {
         self.userDefaults = userDefaults
 
         self.launchAtLogin = userDefaults.bool(forKey: Keys.launchAtLogin)
-        self.autoResumeServices = KumaSettingsKey.bool(forKey: Keys.autoResumeServices, defaultValue: true, defaults: userDefaults)
+        self.autoResumeServices = KumaSettingsKey.bool(forKey: Keys.autoResumeServices, defaultValue: false, defaults: userDefaults)
         self.confirmBeforeQuit = KumaSettingsKey.bool(forKey: Keys.confirmBeforeQuit, defaultValue: true, defaults: userDefaults)
 
         let rawAppearance = userDefaults.string(forKey: Keys.appearance) ?? KumaAppearance.system.rawValue
@@ -334,7 +334,7 @@ public final class SettingsViewModel {
 
         // Re-assign default values to in-memory properties
         self.launchAtLogin = false
-        self.autoResumeServices = true
+        self.autoResumeServices = false
         self.confirmBeforeQuit = true
         self.appearance = .system
         self.customPathOverride = ""

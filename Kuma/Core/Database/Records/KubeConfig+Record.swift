@@ -3,7 +3,7 @@ import GRDB
 
 // MARK: - KubeConfig GRDB Record Conformance
 
-extension KubeConfig: @preconcurrency FetchableRecord, @preconcurrency PersistableRecord {
+nonisolated extension KubeConfig: FetchableRecord, PersistableRecord {
     public nonisolated static let databaseTableName = "kube_config"
 
     public nonisolated init(row: Row) throws {

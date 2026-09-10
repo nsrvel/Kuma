@@ -133,7 +133,7 @@ public struct CreateServiceSheet: View {
 
         Task {
             do {
-                let (service, provider, portMappings) = try await CreateServicePayloadBuilder.buildPayload(
+                let (service, provider, portMappings) = try CreateServicePayloadBuilder.buildPayload(
                     workspaceID: workspaceID,
                     inputs: inputs
                 )

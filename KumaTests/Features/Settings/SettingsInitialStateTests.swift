@@ -15,7 +15,7 @@ struct SettingsInitialStateTests {
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
         #expect(viewModel.launchAtLogin == false)
-        #expect(viewModel.autoResumeServices == true)
+        #expect(viewModel.autoResumeServices == false)
         #expect(viewModel.confirmBeforeQuit == true)
     }
 

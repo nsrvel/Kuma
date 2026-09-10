@@ -118,7 +118,12 @@ public actor EnvironmentPathResolver {
         let stderrPipe = Pipe()
 
         process.executableURL = executableURL
-        process.arguments = isFish ? ["-c", "echo $PATH"] : ["-lc", "echo $PATH"]
+        if isFish {
+            process.arguments = ["-c", "echo $PATH"]
+        } else {
+            let bootstrap = "[ -f ~/.zprofile ] && source ~/.zprofile 2>/dev/null; [ -f ~/.zshrc ] && source ~/.zshrc 2>/dev/null; [ -f ~/.bash_profile ] && source ~/.bash_profile 2>/dev/null; echo $PATH"
+            process.arguments = ["-c", bootstrap]
+        }
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
@@ -160,9 +165,30 @@ public actor EnvironmentPathResolver {
         for dir in customPaths { appendIfNew(dir) }
         let sniffedComponents = sniffed.split(separator: ":").map(String.init)
         for dir in sniffedComponents { appendIfNew(dir) }
+        for dir in Self.discoverNodeAndToolDirectories() { appendIfNew(dir) }
         for dir in Self.fallbackDirectories { appendIfNew(dir) }
 
         return orderedDirectories.joined(separator: ":")
+    }
+
+    private static func discoverNodeAndToolDirectories() -> [String] {
+        var results: [String] = []
+        let home = NSHomeDirectory()
+
+        // 1. Dynamically scan all installed NVM node versions
+        let nvmVersions = URL(fileURLWithPath: "\(home)/.nvm/versions/node")
+        if let dirs = try? FileManager.default.contentsOfDirectory(at: nvmVersions, includingPropertiesForKeys: nil) {
+            for dir in dirs {
+                results.append(dir.appendingPathComponent("bin").path(percentEncoded: false))
+            }
+        }
+
+        // 2. Additional developer tool paths
+        results.append("\(home)/Library/pnpm")
+        results.append("\(home)/.bun/bin")
+        results.append("\(home)/go/bin")
+
+        return results
     }
 
     private func isExecutableFile(atPath path: String, fileManager: FileManager) -> Bool {

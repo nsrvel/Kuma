@@ -77,20 +77,19 @@ struct SidebarRuntimeAndNotificationTests {
         let vm = SidebarViewModel(groupRepository: harness.repository)
         vm.addGroup(name: "G0", workspaceID: harness.workspaceID)
         vm.addGroup(name: "G1", workspaceID: harness.workspaceID)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        for _ in 0..<20 {
+            if vm.groups.count >= 2 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        let notificationStream = NotificationCenter.default.notifications(named: .kumaGroupsUpdated)
+        vm.moveGroups(fromOffsets: IndexSet(integer: 0), toOffset: 2)
 
         var notificationFired = false
-        let token = NotificationCenter.default.addObserver(
-            forName: .kumaGroupsUpdated,
-            object: nil,
-            queue: .main
-        ) { _ in
+        for await _ in notificationStream {
             notificationFired = true
+            break
         }
-        defer { NotificationCenter.default.removeObserver(token) }
-
-        vm.moveGroups(fromOffsets: IndexSet(integer: 0), toOffset: 2)
-        try? await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(notificationFired == true)
     }

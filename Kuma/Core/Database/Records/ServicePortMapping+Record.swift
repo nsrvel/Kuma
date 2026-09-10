@@ -3,7 +3,7 @@ import GRDB
 
 // MARK: - ServicePortMapping GRDB Record Conformance
 
-extension ServicePortMapping: @preconcurrency FetchableRecord, @preconcurrency PersistableRecord {
+nonisolated extension ServicePortMapping: FetchableRecord, PersistableRecord {
     public nonisolated static let databaseTableName = "portMapping"
 
     public nonisolated init(row: Row) throws {

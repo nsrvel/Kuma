@@ -203,13 +203,13 @@ public final class ServiceInspectorViewModel {
         }
     }
 
-    /// Schedules an auto-commit with debouncing (300ms) for high-frequency text editing.
+    /// Schedules an auto-commit with debouncing (800ms) for high-frequency text editing.
     public func scheduleAutoSave() {
         autoSaveTask?.cancel()
         let targetServiceID = self.serviceID
         autoSaveTask = Task { [weak self] in
             do {
-                try await Task.sleep(nanoseconds: 300_000_000)
+                try await Task.sleep(nanoseconds: 800_000_000)
                 guard !Task.isCancelled, let self, self.serviceID == targetServiceID else { return }
                 await self.commitChanges()
             } catch is CancellationError {
@@ -238,20 +238,6 @@ public final class ServiceInspectorViewModel {
         }
 
         do {
-            // Handle secure field encryption if applicable
-            if activeProv.type == .ssh {
-                if let key = activeProv.sshKeyPath, !key.isEmpty && !key.starts(with: "vault:") {
-                    activeProv.sshKeyPath = try await CryptoVault.shared.encrypt(plainText: key)
-                }
-                if let pass = activeProv.sshPassword, !pass.isEmpty && !pass.starts(with: "vault:") {
-                    activeProv.sshPassword = try await CryptoVault.shared.encrypt(plainText: pass)
-                }
-            } else if activeProv.type == .tunnel {
-                if let token = activeProv.ngrokAuthToken, !token.isEmpty && !token.starts(with: "vault:") {
-                    activeProv.ngrokAuthToken = try await CryptoVault.shared.encrypt(plainText: token)
-                }
-            }
-
             try await serviceRepository.updateService(srv)
             try await serviceRepository.updateProvider(activeProv)
             try await serviceRepository.savePortMappings(realPorts, forService: serviceID)

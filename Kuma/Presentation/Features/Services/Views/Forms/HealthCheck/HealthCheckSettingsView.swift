@@ -35,7 +35,7 @@ public struct HealthCheckSettingsView: View {
             KumaTextField(
                 label: "Target Health URL",
                 value: $httpCheckUrl,
-                placeholder: "http://localhost:3000/health"
+                placeholder: "google.com, https://..., or localhost:3000"
             )
 
             KumaRowPickerField(

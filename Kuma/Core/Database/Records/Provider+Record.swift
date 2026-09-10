@@ -3,7 +3,7 @@ import GRDB
 
 // MARK: - Provider GRDB Record Conformance
 
-extension Provider: @preconcurrency FetchableRecord, @preconcurrency PersistableRecord {
+nonisolated extension Provider: FetchableRecord, PersistableRecord {
     public nonisolated static let databaseTableName = "provider"
 
     public nonisolated init(row: Row) throws {

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// Real-time live log message model
-public struct LiveLogEntry: Identifiable, Sendable, Equatable {
+public nonisolated struct LiveLogEntry: Identifiable, Sendable, Equatable {
     public let id: UUID
     public let serviceID: UUID
     public let serviceName: String
@@ -10,7 +10,7 @@ public struct LiveLogEntry: Identifiable, Sendable, Equatable {
     public let level: String
     public let message: String
 
-    public init(
+    public nonisolated init(
         id: UUID = UUID(),
         serviceID: UUID,
         serviceName: String,
@@ -62,6 +62,23 @@ public final class LogAggregator {
         }
         entriesByService[serviceID] = serviceList
 
+        if entries.count > maxTotalEntries {
+            entries.removeFirst(entries.count - maxTotalEntries)
+        }
+    }
+
+    /// Appends multiple log entries in a single transaction to prevent UI thrashing.
+    public func appendBatch(_ newEntries: [LiveLogEntry]) {
+        guard !newEntries.isEmpty else { return }
+        entries.append(contentsOf: newEntries)
+        for entry in newEntries {
+            entriesByService[entry.serviceID, default: []].append(entry)
+        }
+        for (serviceID, list) in entriesByService {
+            if list.count > maxEntriesPerService {
+                entriesByService[serviceID] = Array(list.suffix(maxEntriesPerService))
+            }
+        }
         if entries.count > maxTotalEntries {
             entries.removeFirst(entries.count - maxTotalEntries)
         }

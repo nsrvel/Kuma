@@ -57,6 +57,15 @@ public final class ServiceStateStore {
             if existing == .stopping && state.isOperational {
                 continue
             }
+            if state == .idle {
+                // Check if actively managed by non-process runner (HealthCheck / ProcessMonitor)
+                if await ServiceExecutionEngine.shared.isServiceRunning(serviceID: id) {
+                    if !existing.isOperational {
+                        executionStates[id] = .running(pid: 0)
+                    }
+                    continue
+                }
+            }
             executionStates[id] = state
         }
     }

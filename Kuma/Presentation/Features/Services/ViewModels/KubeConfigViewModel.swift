@@ -95,7 +95,7 @@ public final class KubeConfigViewModel {
             for config in customConfigs {
                 var decrypted = config
                 do {
-                    let plain = try await CryptoVault.shared.decrypt(cipherText: config.configContent)
+                    let plain = try CryptoVault.shared.decrypt(cipherText: config.configContent)
                     decrypted.configContent = plain
                 } catch {
                     logger.error("Failed to decrypt config '\(config.name)': \(error.localizedDescription)")
@@ -176,7 +176,7 @@ public final class KubeConfigViewModel {
 
         do {
             // Encrypt content using AES-256-GCM MasterKey before writing to database
-            let encryptedContent = try await CryptoVault.shared.encrypt(plainText: plainContent)
+            let encryptedContent = try CryptoVault.shared.encrypt(plainText: plainContent)
 
             let savedID: UUID
             if let editID = editingKubeConfigID {

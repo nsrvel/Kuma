@@ -43,6 +43,23 @@ public actor LogFileWriter {
         }
     }
 
+    /// Appends multiple log lines directly to the cold storage buffer.
+    public func appendBatch(serviceID: UUID, items: [(level: String, message: String)]) {
+        guard !items.isEmpty else { return }
+        let now = Date()
+        for item in items {
+            buffer.append(QueuedLog(serviceID: serviceID, timestamp: now, level: item.level, message: item.message))
+        }
+
+        if buffer.count >= maxBufferSize {
+            flushTask?.cancel()
+            flushTask = nil
+            flushBuffer()
+        } else if flushTask == nil {
+            scheduleFlush()
+        }
+    }
+
     private func scheduleFlush() {
         flushTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: self?.flushIntervalNanoseconds ?? 250_000_000)

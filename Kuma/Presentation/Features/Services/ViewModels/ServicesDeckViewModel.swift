@@ -10,8 +10,18 @@ public final class ServicesDeckViewModel {
     // MARK: - Filter Inputs (each triggers recompute on change)
 
     public var searchText: String = "" {
-        didSet { if oldValue != searchText { recomputeFilteredSnapshots() } }
+        didSet {
+            if oldValue != searchText {
+                searchDebounceTask?.cancel()
+                searchDebounceTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    guard !Task.isCancelled, let self else { return }
+                    self.recomputeFilteredSnapshots()
+                }
+            }
+        }
     }
+    private var searchDebounceTask: Task<Void, Never>? = nil
     public var selectedStatuses: Set<ServiceStatusFilterOption> = [] {
         didSet { if oldValue != selectedStatuses { recomputeFilteredSnapshots() } }
     }
@@ -196,7 +206,7 @@ public final class ServicesDeckViewModel {
             self.hasInitialLoaded = true
 
             // Auto-start services if enabled and there are saved active service IDs from previous session
-            if isFirstLoad && KumaSettingsKey.bool(forKey: KumaSettingsKey.autoResumeServices, defaultValue: true, defaults: self.userDefaults) {
+            if isFirstLoad && KumaSettingsKey.bool(forKey: KumaSettingsKey.autoResumeServices, defaultValue: false, defaults: self.userDefaults) {
                 resumeServicesIfNeeded(loadedSnapshots: loaded)
             }
         } catch {
@@ -318,17 +328,29 @@ public final class ServicesDeckViewModel {
 
     public func startAllServices() {
         Task {
-            let targetSnapshots = snapshots.filter { !($0.isDisabled) && runtimeStates[$0.id]?.status.isOperational != true }
+            let targetSnapshots = snapshots.filter { snapshot in
+                let isAlreadyRunning = (stateStore?.state(for: snapshot.id).isOperational == true) ||
+                                       (runtimeStates[snapshot.id]?.status.isOperational == true)
+                return !snapshot.isDisabled && !isAlreadyRunning
+            }
             
             // Staggered launch: starts services sequentially with a 150ms delay between each
             // to avoid extreme spikes in CPU, network socket binds, or OS process limits.
             for snapshot in targetSnapshots {
+                let isAlreadyRunning = (stateStore?.state(for: snapshot.id).isOperational == true) ||
+                                       (runtimeStates[snapshot.id]?.status.isOperational == true)
+                guard !isAlreadyRunning else { continue }
+
+                stateStore?.setExecutionState(.starting, for: snapshot.id)
                 runtimeStates[snapshot.id] = ServiceRuntimeState(status: .starting, isLoading: true)
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
+                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
+                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
                     runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
                 } catch {
                     Self.logger.error("Failed to start service \(snapshot.name): \(error.localizedDescription)")
+                    stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
                     runtimeStates[snapshot.id] = ServiceRuntimeState(status: .crashed, isLoading: false)
                 }
                 
@@ -346,16 +368,21 @@ public final class ServicesDeckViewModel {
         Task {
             let runningIDs = snapshots
                 .map(\.id)
-                .filter { runtimeStates[$0]?.status.isOperational == true }
+                .filter { id in
+                    (stateStore?.state(for: id).isOperational == true) ||
+                    (runtimeStates[id]?.status.isOperational == true)
+                }
             
             // Mark all as stopping immediately for UI responsiveness
             for id in runningIDs {
+                stateStore?.setExecutionState(.stopping, for: id)
                 runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
             }
             
             // Stop services cleanly
             for id in runningIDs {
                 await ServiceExecutionEngine.shared.stop(serviceID: id)
+                stateStore?.setExecutionState(.idle, for: id)
                 runtimeStates[id] = ServiceRuntimeState(status: .stopped, isLoading: false)
             }
             

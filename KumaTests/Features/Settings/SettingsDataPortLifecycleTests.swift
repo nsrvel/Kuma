@@ -121,13 +121,13 @@ struct SettingsDataPortLifecycleTests {
         #expect(viewModel.customKubectlPath == "")
         #expect(viewModel.defaultShell == "/bin/zsh")
         #expect(viewModel.portConflictPolicy == .warnAndBlock)
-        #expect(viewModel.autoResumeServices == true)
+        #expect(viewModel.autoResumeServices == false)
 
         let reloadedViewModel = SettingsViewModel(userDefaults: harness.userDefaults)
         #expect(reloadedViewModel.customKubectlPath == "")
         #expect(reloadedViewModel.defaultShell == "/bin/zsh")
         #expect(reloadedViewModel.portConflictPolicy == .warnAndBlock)
-        #expect(reloadedViewModel.autoResumeServices == true)
+        #expect(reloadedViewModel.autoResumeServices == false)
 
         // 5. Verify database records are STILL INTACT (NOT deleted)
         let savedWorkspacesAfter = try await wsRepo.fetchAll()
