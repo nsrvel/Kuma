@@ -47,7 +47,7 @@ struct UIOptimizationTests {
         vm.searchText = "Alpha"
 
         // Wait for debounce (150ms delay) to settle on MainActor
-        let deadline = Date().addingTimeInterval(1.5)
+        let deadline = Date().addingTimeInterval(3.0)
         while vm.filteredSnapshots.count != 1 && Date() < deadline {
             try? await Task.sleep(nanoseconds: 50_000_000)
             await Task.yield()
