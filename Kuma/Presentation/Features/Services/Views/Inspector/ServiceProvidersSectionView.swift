@@ -41,8 +41,7 @@ public struct ServiceProvidersSectionView: View {
     public var body: some View {
         KumaFormSection(
             icon: "square.stack.3d.down.right.fill",
-            title: "Providers",
-            subtitle: "Select runner configuration"
+            title: "Providers"
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 if providers.isEmpty && !showInlineForm {
@@ -68,14 +67,14 @@ public struct ServiceProvidersSectionView: View {
                 isPresented: $showDeleteConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("Delete Provider", role: .destructive) {
+                Button("Delete", role: .destructive) {
                     if let provider = providerToDelete {
                         onDeleteProvider(provider)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Are you sure you want to delete '\(providerToDelete?.displayName ?? "this provider")'?")
+                Text("‘\(providerToDelete?.displayName ?? "This provider")’ and its settings will be deleted.")
             }
             .onChange(of: isLocked) { _, locked in
                 if locked && showInlineForm {
@@ -89,8 +88,8 @@ public struct ServiceProvidersSectionView: View {
 
     private var emptyStateView: some View {
         VStack(alignment: .center, spacing: 8) {
-            Text("No providers configured yet.").font(.caption).foregroundStyle(.secondary)
-            Button { openAddForm() } label: { Label("Add First Provider", systemImage: "plus") }
+            Text("No providers configured.").font(.caption).foregroundStyle(.secondary)
+            Button { openAddForm() } label: { Label("Add Provider", systemImage: "plus") }
                 .buttonStyle(.bordered).disabled(isLocked)
         }
         .frame(maxWidth: .infinity, alignment: .center)

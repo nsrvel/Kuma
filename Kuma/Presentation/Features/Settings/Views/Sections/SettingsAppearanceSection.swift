@@ -14,7 +14,7 @@ public struct SettingsAppearanceSection: View {
             title: "Appearance"
         ) {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
-                Text("Choose how Kuma looks. Select a theme or let it follow your system setting.")
+                Text("Choose an appearance theme for Kuma.")
                     .font(KumaFont.caption)
                     .foregroundStyle(.secondary)
 

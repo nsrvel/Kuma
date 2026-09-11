@@ -18,7 +18,7 @@ public struct SettingsNotificationsSection: View {
                 KumaToggleField(
                     label: "Notify on Service Failure",
                     value: $viewModel.notifyOnCrash,
-                    description: "Send a macOS system notification when a service crashes or exits unexpectedly."
+                    description: "Notify when a service fails or exits unexpectedly."
                 )
                 .onChange(of: viewModel.notifyOnCrash) { _, newValue in
                     handleNotifyOnCrashToggle(newValue: newValue)

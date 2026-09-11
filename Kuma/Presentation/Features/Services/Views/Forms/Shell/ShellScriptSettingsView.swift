@@ -15,7 +15,7 @@ public struct ShellScriptSettingsView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             KumaFilePickerField(
-                label: "Working Directory (Optional)",
+                label: "Working Directory",
                 path: $workingDirectory,
                 placeholder: "~/Projects/my-app",
                 chooseFiles: false,

@@ -37,6 +37,7 @@ public struct ImportPreviewFooterView: View {
 
             Text("\(selectedCount) of \(totalCount) selected\(filteredCount != totalCount ? " (\(filteredCount) matching)" : "")")
                 .font(.system(size: 11.5))
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
 
             Button("Cancel") {
@@ -44,7 +45,7 @@ public struct ImportPreviewFooterView: View {
             }
             .keyboardShortcut(.cancelAction)
 
-            Button("Import Selected") {
+            Button("Import") {
                 onImport()
             }
             .buttonStyle(.borderedProminent)

@@ -19,7 +19,7 @@ public struct KubeTargetSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             KumaRowPickerField(
                 label: "Target Type",
-                description: "Kubernetes resource type to port-forward to.",
+                description: "Resource type to port-forward.",
                 options: KubeTargetType.allCases,
                 selection: $targetType,
                 titleResolver: { $0.label }
@@ -30,7 +30,7 @@ public struct KubeTargetSettingsView: View {
             KumaToggleField(
                 label: "Pattern Matching",
                 value: $usePattern,
-                description: "Match target resource using fuzzy or substring pattern."
+                description: "Match resources using substring pattern."
             )
 
             Divider().opacity(0.3)

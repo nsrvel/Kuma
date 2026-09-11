@@ -87,7 +87,7 @@ public struct DependencyStatusRowView: View {
                     }
                     .padding(.trailing, 2)
                 } else if onBrowse != nil {
-                    Button("Browse…") {
+                    Button("Browse") {
                         isFileImporterPresented = true
                     }
                     .font(KumaFont.subheadline)

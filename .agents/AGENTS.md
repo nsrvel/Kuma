@@ -73,6 +73,13 @@ Kuma/
 - **Accessibility & HIG**:
   - Icon-only buttons must provide an `.accessibilityLabel(...)`.
   - Animated transitions must respect spring physics (`response: 0.2-0.35`, `dampingFraction: 0.7-0.88`).
+  - **Button Wording & Ellipsis (`…`) Standard**:
+    - **No Trailing Ellipsis on In-App Push Buttons**: Push buttons, form buttons, cards, and modal actions MUST NOT use trailing ellipsis (`…` or `...`). Use clean, confident verbs/nouns (e.g., `New Workspace`, `Delete Workspace`, `Export`, `Import`, `Browse`, `Reset Settings`).
+    - **Permitted Ellipsis Exceptions**:
+      1. Global macOS Menu Bar items (`KumaCommands.swift`, e.g. `Settings… ⌘,`).
+      2. In-flight / asynchronous progress states (e.g. `Scanning…`, `Connecting…`, `Starting Process…`).
+      3. Search field prompt placeholders (e.g. `Search services…`).
+  - **Avatar & Media Pickers**: Keep avatar canvases clean and unencumbered. Avoid visual redundancy (never display two camera icons simultaneously). Use a single hover affordance, a top-trailing `xmark` remove badge only when custom media is set, and native context menus. Avoid adding nested drop destinations that could collide with window-level handlers.
 
 ---
 

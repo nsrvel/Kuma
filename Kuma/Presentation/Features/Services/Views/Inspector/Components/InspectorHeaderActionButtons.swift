@@ -77,6 +77,7 @@ public struct InspectorHeaderActionButton: View {
         let tintColor: Color = isRunning ? .red : .green
 
         Button {
+            KumaHapticManager.shared.tap()
             onToggle()
         } label: {
             HStack(spacing: 5) {

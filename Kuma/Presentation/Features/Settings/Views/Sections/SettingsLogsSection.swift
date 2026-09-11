@@ -10,12 +10,12 @@ public struct SettingsLogsSection: View {
     public var body: some View {
         KumaFormSection(
             icon: "doc.text.fill",
-            title: "Logs & Buffer"
+            title: "Logs"
         ) {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 KumaRowPickerField(
-                    label: "Max Log Buffer in Memory",
-                    description: "Maximum memory buffer kept per running service inspector.",
+                    label: "Log Buffer Limit",
+                    description: "Maximum log lines retained in memory per service.",
                     options: LogRetentionLimit.allCases,
                     selection: $viewModel.logRetentionLimit,
                     titleResolver: { $0.title }
@@ -24,9 +24,9 @@ public struct SettingsLogsSection: View {
                 Divider().opacity(0.3)
 
                 KumaToggleField(
-                    label: "Clear Buffer on Service Restart",
+                    label: "Clear Logs on Restart",
                     value: $viewModel.clearLogsOnSwitch,
-                    description: "Flush previous console output when triggering a service restart."
+                    description: "Flush console output when a service restarts."
                 )
             }
         }

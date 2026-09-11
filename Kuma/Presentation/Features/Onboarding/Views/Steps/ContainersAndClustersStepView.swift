@@ -15,7 +15,7 @@ public struct ContainersAndClustersStepView: View {
                     .font(KumaFont.stepTitle)
                     .foregroundStyle(.primary)
 
-                Text("CLI tools detected on your Mac. You only need the ones you plan to use.")
+                Text("CLI tools detected on your system. Only configure what you need.")
                     .font(KumaFont.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

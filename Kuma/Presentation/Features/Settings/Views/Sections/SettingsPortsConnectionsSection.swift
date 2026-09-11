@@ -14,7 +14,7 @@ public struct SettingsPortsConnectionsSection: View {
         ) {
             KumaRowPickerField(
                 label: "Port Conflict Action",
-                description: "Determine behavior when a service port is already in use by another process.",
+                description: "Action when a configured port is already in use.",
                 options: PortConflictPolicy.allCases.map(\.rawValue),
                 selection: Binding(
                     get: { viewModel.portConflictPolicy.rawValue },

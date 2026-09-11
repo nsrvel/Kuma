@@ -33,14 +33,14 @@ public struct HealthCheckSettingsView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             KumaTextField(
-                label: "Target Health URL",
+                label: "Target URL",
                 value: $httpCheckUrl,
-                placeholder: "google.com, https://..., or localhost:3000"
+                placeholder: "https://api.example.com/health"
             )
 
             KumaRowPickerField(
                 label: "Polling Interval",
-                description: "Frequency of background HTTP status checks.",
+                description: "Frequency of health check requests.",
                 options: HealthCheckIntervalOption.allCases,
                 selection: $checkInterval,
                 titleResolver: { $0.title }

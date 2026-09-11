@@ -37,7 +37,7 @@ public struct SettingsDataSection: View {
                 onReset: { resetData() },
                 onResetSettings: {
                     viewModel.resetSettingsToDefault()
-                    alertMessage = "All preferences and binary paths have been reset to factory defaults."
+                    alertMessage = "All preferences have been reset to defaults."
                 }
             )
         }
@@ -56,7 +56,7 @@ public struct SettingsDataSection: View {
                 }
             )
         }
-        .alert("Database Operation", isPresented: Binding(
+        .alert("Backup & Restore", isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
@@ -84,7 +84,7 @@ public struct SettingsDataSection: View {
                 let data = try DataPortService.encodeBackup(backup)
                 try data.write(to: url, options: .atomic)
                 isProcessing = false
-                alertMessage = "Backup successfully exported to \(url.lastPathComponent)."
+                alertMessage = "Backup exported to \(url.lastPathComponent)."
             } catch {
                 isProcessing = false
                 alertMessage = "Failed to export data: \(error.localizedDescription)"
@@ -130,7 +130,7 @@ public struct SettingsDataSection: View {
 
                 workspaceStore.loadFromDatabase()
                 isProcessing = false
-                alertMessage = "Backup successfully imported (\(selectedWorkspaces.count) workspaces, \(selectedServices.count) services restored)!"
+                alertMessage = "Backup imported (\(selectedWorkspaces.count) workspaces, \(selectedServices.count) services restored)."
             } catch {
                 isProcessing = false
                 alertMessage = "Failed to import backup: \(error.localizedDescription)"

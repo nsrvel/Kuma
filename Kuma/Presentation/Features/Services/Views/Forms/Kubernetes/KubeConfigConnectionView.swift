@@ -22,7 +22,7 @@ public struct KubeConfigConnectionView: View {
     }
 
     public var body: some View {
-        KumaFormSection(icon: "server.rack", title: "Kube Config", subtitle: "Select cluster credentials") {
+        KumaFormSection(icon: "server.rack", title: "Kube Config") {
             VStack(alignment: .leading, spacing: 12) {
                 if viewModel.availableKubeConfigs.isEmpty && !viewModel.showInlineNewConfigForm {
                     emptyStateView
@@ -36,8 +36,8 @@ public struct KubeConfigConnectionView: View {
                     )
                 }
             }
-            .confirmationDialog("Are you sure you want to delete this Kube Config?", isPresented: $viewModel.showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Delete Config", role: .destructive) {
+            .confirmationDialog("Delete Kubeconfig?", isPresented: $viewModel.showDeleteConfirmation, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
                     Task {
                         await viewModel.deleteConfig()
                         onConfigChanged()
@@ -57,7 +57,7 @@ public struct KubeConfigConnectionView: View {
 
     private var emptyStateView: some View {
         VStack(alignment: .center, spacing: 8) {
-            Text("No Kube Config files registered yet.")
+            Text("No kubeconfigs registered.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -69,7 +69,7 @@ public struct KubeConfigConnectionView: View {
                     viewModel.showInlineNewConfigForm = true
                 }
             } label: {
-                Label("Register First Config", systemImage: "plus")
+                Label("Add Kubeconfig", systemImage: "plus")
             }
             .buttonStyle(.bordered)
         }
@@ -129,13 +129,13 @@ public struct KubeConfigConnectionView: View {
                     viewModel.showInlineNewConfigForm = true
                 }
             } label: {
-                Text("Add new config")
+                Text("Add Kubeconfig")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(isAddHovered ? Color.primary : Color.secondary)
             }
             .buttonStyle(.plain)
             .onHover { isAddHovered = $0 }
-            .help("Add new config")
+            .help("Add Kubeconfig")
             .offset(y: 24)
             .padding(.horizontal, 4)
         }

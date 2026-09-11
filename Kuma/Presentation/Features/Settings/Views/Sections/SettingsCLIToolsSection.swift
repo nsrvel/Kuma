@@ -45,7 +45,7 @@ public struct SettingsCLIToolsSection: View {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 // Kubectl
                 VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("Kubectl Binary")
+                    Text("Kubectl (kubectl)")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
 
@@ -64,7 +64,7 @@ public struct SettingsCLIToolsSection: View {
 
                 // Default Kubeconfig Path
                 VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("Default Kubeconfig Path")
+                    Text("Default Kubeconfig")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
 
@@ -82,7 +82,7 @@ public struct SettingsCLIToolsSection: View {
 
                 // Docker
                 VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("Docker Binary")
+                    Text("Docker (docker)")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
 
@@ -101,7 +101,7 @@ public struct SettingsCLIToolsSection: View {
 
                 // Podman
                 VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("Podman Binary")
+                    Text("Podman (podman)")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
 
@@ -121,7 +121,7 @@ public struct SettingsCLIToolsSection: View {
                 // Default Shell
                 KumaRowPickerField(
                     label: "Default Shell",
-                    description: "The shell to use when executing custom shell processes.",
+                    description: "Shell used to execute custom scripts.",
                     options: DefaultShell.allCases.map(\.rawValue),
                     selection: $viewModel.defaultShell,
                     titleResolver: { (DefaultShell(rawValue: $0) ?? .zsh).label }

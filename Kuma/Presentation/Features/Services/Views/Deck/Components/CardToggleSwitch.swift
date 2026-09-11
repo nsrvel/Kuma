@@ -25,7 +25,10 @@ public struct CardToggleSwitch: View {
             let isRunning = runtime.status == .running || runtime.status == .starting
             Toggle("", isOn: Binding<Bool>(
                 get: { isRunning },
-                set: { _ in onToggle() }
+                set: { _ in
+                    KumaHapticManager.shared.tap()
+                    onToggle()
+                }
             ))
             .toggleStyle(.switch)
             .controlSize(.small)

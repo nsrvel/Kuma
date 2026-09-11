@@ -34,12 +34,12 @@ public struct SettingsDangerZoneSection: View {
                         Text("Reset Settings to Default")
                             .font(KumaFont.body)
                             .foregroundStyle(.primary)
-                        Text("Restore preferences and tool paths without affecting your workspaces.")
+                        Text("Restore preferences without affecting workspaces.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Reset Settings…") {
+                    Button("Reset") {
                         showResetSettingsConfirmation = true
                     }
                     .buttonStyle(.bordered)
@@ -54,12 +54,12 @@ public struct SettingsDangerZoneSection: View {
                         Text("Reset All Data")
                             .font(KumaFont.body)
                             .foregroundStyle(.red)
-                        Text("Permanently delete all workspaces, services, and app data.")
+                        Text("Permanently delete all workspaces and services.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Reset All…") {
+                    Button("Reset All") {
                         showResetConfirmation = true
                     }
                     .buttonStyle(.bordered)
@@ -69,28 +69,28 @@ public struct SettingsDangerZoneSection: View {
             }
         }
         .confirmationDialog(
-            "Reset Settings to Default?",
+            "Reset Settings?",
             isPresented: $showResetSettingsConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Reset to Defaults", role: .destructive) {
+            Button("Reset Settings", role: .destructive) {
                 onResetSettings()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will restore all preferences, appearance, and tool paths to their default values. Your configured workspaces, services, and credentials will not be deleted.")
+            Text("All preferences and tool paths will be reset to defaults. Workspaces and services will not be affected.")
         }
         .confirmationDialog(
             "Reset All Data?",
             isPresented: $showResetConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Reset Everything", role: .destructive) {
+            Button("Reset All Data", role: .destructive) {
                 onReset()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This action cannot be undone. All your configured workspaces and services will be permanently deleted.")
+            Text("This action cannot be undone. All workspaces, services, and data will be permanently deleted.")
         }
     }
 }

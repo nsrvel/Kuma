@@ -97,6 +97,11 @@ public struct SidebarRowView: View {
         .accessibilityLabel(node.title)
         .accessibilityAddTraits(node.isSpecialHeader ? .isHeader : .isButton)
         .modifier(GroupDragDropModifier(isGroupRow: node.isGroupRow, nodeID: node.id, onReorder: onReorderGroup, isTargeted: $isDropTargeted))
+        .onChange(of: isDropTargeted) { _, targeted in
+            if targeted {
+                KumaHapticManager.shared.alignment()
+            }
+        }
     }
 
     private var contentRow: some View {
@@ -124,19 +129,14 @@ public struct SidebarRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            if node.isSpecialHeader {
-                onToggleExpand()
-            } else {
-                onSelect()
-            }
+            if node.isSpecialHeader { onToggleExpand() } else { onSelect() }
         }
     }
 
     private var rowBackground: some ShapeStyle {
         if node.isSpecialHeader { return AnyShapeStyle(Color.clear) }
         if isSelected { return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.selectedBgOpacity)) }
-        if isHovering { return AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.hoverBgOpacity)) }
-        return AnyShapeStyle(Color.clear)
+        return isHovering ? AnyShapeStyle(Color.secondary.opacity(KumaTheme.Sidebar.hoverBgOpacity)) : AnyShapeStyle(Color.clear)
     }
 
     private var rowForeground: some ShapeStyle {

@@ -79,4 +79,28 @@ struct WorkspaceVisualTests {
         #expect(sheet.mode == .edit(ws2))
         #expect(store.workspaces.count > 1)
     }
+
+    // MARK: - [TC-F06] WorkspaceAvatarPickerView & Badges
+    @Test("TC-F06: WorkspaceAvatarPickerView and its badges instantiate and render headlessly")
+    func testWorkspaceAvatarPickerViewHeadless() {
+        var path: String? = "/tmp/test.png"
+        var url: URL? = URL(fileURLWithPath: "/tmp/test.png")
+        let pathBinding = Binding(get: { path }, set: { path = $0 })
+        let urlBinding = Binding(get: { url }, set: { url = $0 })
+
+        let pickerView = WorkspaceAvatarPickerView(
+            name: "Platform Engineering",
+            selectedImagePath: pathBinding,
+            selectedImageURL: urlBinding
+        )
+        _ = pickerView.body
+
+        var removed = false
+        let removeBadge = WorkspaceAvatarRemoveBadge {
+            removed = true
+        }
+        _ = removeBadge.body
+
+        #expect(!removed)
+    }
 }

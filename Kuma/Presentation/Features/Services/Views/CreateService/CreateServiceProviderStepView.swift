@@ -20,7 +20,7 @@ public struct CreateServiceProviderStepView: View {
             VStack(spacing: 4) {
                 Text("Select Provider")
                     .font(.system(size: 16, weight: .bold))
-                Text("Choose how this service will be configured on your Mac")
+                Text("Choose how this service will run")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }

@@ -78,7 +78,7 @@ public struct WorkspaceFormSheet: View {
                         isPresented = false
                         AlertService.shared.confirmDelete(
                             title: "Delete Workspace?",
-                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
+                            message: "“\(ws.name)” and all its services will be permanently deleted.",
                             confirmTitle: "Delete"
                         ) {
                             store.deleteWorkspace(ws)

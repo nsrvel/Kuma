@@ -110,7 +110,7 @@ public struct SidebarView: View {
                     onDelete: {
                         AlertService.shared.confirmDelete(
                             title: "Delete Group?",
-                            message: "Are you sure you want to delete “\(node.title)”? Services in this group will remain in your workspace.",
+                            message: "Services in “\(node.title)” will remain in your workspace.",
                             confirmTitle: "Delete"
                         ) {
                             withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {

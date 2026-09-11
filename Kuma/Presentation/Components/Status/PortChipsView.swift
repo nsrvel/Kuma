@@ -23,6 +23,7 @@ public struct PortChipsView: View {
                 ForEach(ports.prefix(limit), id: \.self) { port in
                     Text("\(port)")
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .padding(.horizontal, 6)
@@ -37,6 +38,7 @@ public struct PortChipsView: View {
                 if overflow > 0 {
                     Text("+\(overflow)")
                         .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        .monospacedDigit()
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 3)
                         .fixedSize()

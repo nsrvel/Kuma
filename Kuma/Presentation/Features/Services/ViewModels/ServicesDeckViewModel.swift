@@ -414,6 +414,7 @@ public final class ServicesDeckViewModel {
     }
 
     public func toggleStarred(id: UUID, workspaceID: UUID) {
+        KumaHapticManager.shared.tap()
         // 1. Optimistic zero-latency UI update (struct copy, no searchKey recompute)
         if let idx = snapshots.firstIndex(where: { $0.id == id }) {
             snapshots[idx] = snapshots[idx].toggling(starred: !snapshots[idx].isStarred)
@@ -631,9 +632,9 @@ public final class ServicesDeckViewModel {
         }
     }
 
-    public func selectService(_ id: UUID) {
+    public func selectService(_ id: UUID?) {
         self.selectedServiceID = id
-        self.isInspectorPresented = true
+        self.isInspectorPresented = (id != nil)
     }
 
     /// Batch apply runtime updates from background actor without invalidating static snapshot array

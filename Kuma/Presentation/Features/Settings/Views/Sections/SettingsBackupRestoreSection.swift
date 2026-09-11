@@ -18,19 +18,19 @@ public struct SettingsBackupRestoreSection: View {
     public var body: some View {
         KumaFormSection(
             icon: "internaldrive.fill",
-            title: "Data Backup & Restore"
+            title: "Backup & Restore"
         ) {
             VStack(alignment: .leading, spacing: KumaSpacing.md) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Export Configuration Backup")
+                        Text("Export Backup")
                             .font(KumaFont.body)
-                        Text("Export all workspaces, services, providers, and port mappings to a JSON file.")
+                        Text("Export workspaces, services, and configuration to JSON.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Export…") {
+                    Button("Export") {
                         onExport()
                     }
                     .buttonStyle(.borderedProminent)
@@ -41,14 +41,14 @@ public struct SettingsBackupRestoreSection: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Import Configuration Backup")
+                        Text("Import Backup")
                             .font(KumaFont.body)
-                        Text("Restore configuration data from a Kuma JSON backup file.")
+                        Text("Restore workspaces and configuration from a JSON backup.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Import…") {
+                    Button("Import") {
                         onImport()
                     }
                     .buttonStyle(.bordered)

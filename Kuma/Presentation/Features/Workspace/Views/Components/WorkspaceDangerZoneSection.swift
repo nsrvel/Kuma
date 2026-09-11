@@ -22,14 +22,14 @@ public struct WorkspaceDangerZoneSection: View {
                     Text("Delete Workspace")
                         .font(KumaFont.body)
                         .foregroundStyle(.red)
-                    Text("Permanently remove this workspace and its services.")
+                    Text("Permanently remove this workspace and all services.")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Button("Delete…") {
+                Button("Delete") {
                     onDeleteRequest()
                 }
                 .buttonStyle(.bordered)

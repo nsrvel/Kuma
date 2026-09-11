@@ -30,7 +30,7 @@ public struct SettingsTunnelingToolsSection: View {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 // Cloudflare Tunnel
                 VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("Cloudflare Tunnel Binary (cloudflared)")
+                    Text("Cloudflare Tunnel (cloudflared)")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
 
@@ -49,7 +49,7 @@ public struct SettingsTunnelingToolsSection: View {
 
                 // ngrok Tunnel
                 VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("ngrok Binary")
+                    Text("ngrok")
                         .font(KumaFont.caption)
                         .foregroundStyle(.secondary)
 

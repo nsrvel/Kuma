@@ -67,7 +67,7 @@ public struct KumaFilePickerField: View {
                             )
                     )
 
-                Button("Browse…") {
+                Button("Browse") {
                     let panel = NSOpenPanel()
                     panel.allowsMultipleSelection = false
                     panel.canChooseFiles = chooseFiles

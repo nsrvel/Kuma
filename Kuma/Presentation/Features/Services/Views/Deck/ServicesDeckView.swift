@@ -77,14 +77,14 @@ public struct ServicesDeckView: View {
             ),
             titleVisibility: .visible
         ) {
-            Button("Delete Service", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 viewModel.confirmDeletePendingService(workspaceID: workspaceID)
             }
             Button("Cancel", role: .cancel) {
                 viewModel.servicePendingDeletion = nil
             }
         } message: {
-            Text("This action cannot be undone. '\(viewModel.servicePendingDeletion?.name ?? "Service")' and all associated runner configurations will be permanently deleted.")
+            Text("‘\(viewModel.servicePendingDeletion?.name ?? "Service")’ and its configurations will be permanently deleted.")
         }
         .inspector(isPresented: $viewModel.isInspectorPresented) {
             if let selectedID = viewModel.selectedServiceID {
@@ -109,6 +109,32 @@ public struct ServicesDeckView: View {
                     max: KumaTheme.Inspector.widthMax
                 )
             }
+        }
+        .background {
+            Group {
+                Button("") {
+                    if let id = viewModel.selectedServiceID {
+                        viewModel.toggleService(id: id)
+                    }
+                }
+                .keyboardShortcut(KumaShortcuts.toggleService.key, modifiers: KumaShortcuts.toggleService.modifiers)
+
+                Button("") {
+                    if let id = viewModel.selectedServiceID {
+                        viewModel.restartService(id: id)
+                    }
+                }
+                .keyboardShortcut(KumaShortcuts.restartService.key, modifiers: KumaShortcuts.restartService.modifiers)
+
+                Button("") {
+                    if viewModel.selectedServiceID != nil {
+                        viewModel.selectService(nil)
+                    }
+                }
+                .keyboardShortcut(KumaShortcuts.dismiss.key, modifiers: KumaShortcuts.dismiss.modifiers)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
         }
     }
 

@@ -75,7 +75,7 @@ public struct InactiveWorkspaceRow: View {
             Button {
                 onEdit()
             } label: {
-                Label("Settings…", systemImage: "gearshape")
+                Label("Workspace Settings", systemImage: "gearshape")
             }
 
             if canDelete {

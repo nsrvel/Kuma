@@ -66,7 +66,10 @@ struct SidebarRuntimeAndNotificationTests {
         defer { NotificationCenter.default.removeObserver(token) }
 
         vm.deleteGroup(id: groupID)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        let deadline = Date().addingTimeInterval(1.0)
+        while !notificationFired && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
 
         #expect(notificationFired == true)
     }

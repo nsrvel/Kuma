@@ -124,12 +124,12 @@ public struct ServiceInspectorView: View {
             isPresented: $inspectorVM.showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Service", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 inspectorVM.deleteService()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This action cannot be undone. '\(inspectorVM.service?.name ?? "Service")' and all associated runner configurations will be permanently deleted.")
+            Text("‘\(inspectorVM.service?.name ?? "Service")’ and its configurations will be permanently deleted.")
         }
     }
 }

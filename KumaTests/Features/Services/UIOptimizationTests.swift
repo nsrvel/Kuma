@@ -8,36 +8,35 @@ struct UIOptimizationTests {
     @Test("TC-UI01: Deck search debouncing updates filtered results asynchronously")
     @MainActor
     func testDeckSearchDebouncing() async throws {
-        let repo = MockServiceRepository()
-        let groupRepo = MockServiceGroupRepository()
+        let suiteName = "test-deck-debounce-\(UUID().uuidString)"
+        let ud = UserDefaults(suiteName: suiteName)!
+        ud.removePersistentDomain(forName: suiteName)
         let vm = ServicesDeckViewModel(
-            serviceRepository: repo,
-            groupRepository: groupRepo,
-            userDefaults: UserDefaults(suiteName: "test-deck-debounce")!
+            userDefaults: ud
         )
 
         let s1 = ServiceCardSnapshot(
             id: UUID(),
             name: "Alpha Service",
-            serviceDescription: "",
-            isStarred: false,
-            isDisabled: false,
             groupIDs: [],
+            isDisabled: false,
+            isStarred: false,
+            subtitle: "nginx:latest",
             providerCategory: .docker,
-            targetDisplay: "nginx:latest",
             portDisplays: [],
+            providerOptions: [],
             createdAt: Date()
         )
         let s2 = ServiceCardSnapshot(
             id: UUID(),
             name: "Beta Worker",
-            serviceDescription: "",
-            isStarred: false,
-            isDisabled: false,
             groupIDs: [],
+            isDisabled: false,
+            isStarred: false,
+            subtitle: "worker.sh",
             providerCategory: .shell,
-            targetDisplay: "worker.sh",
             portDisplays: [],
+            providerOptions: [],
             createdAt: Date()
         )
 
@@ -47,9 +46,12 @@ struct UIOptimizationTests {
         // Type search query
         vm.searchText = "Alpha"
 
-        // Before debounce fires (0ms), filtered snapshots should not have churned immediately
-        // Wait 250ms for debounce (150ms delay) to settle
-        try? await Task.sleep(nanoseconds: 250_000_000)
+        // Wait for debounce (150ms delay) to settle on MainActor
+        let deadline = Date().addingTimeInterval(1.5)
+        while vm.filteredSnapshots.count != 1 && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            await Task.yield()
+        }
 
         #expect(vm.filteredSnapshots.count == 1)
         #expect(vm.filteredSnapshots.first?.name == "Alpha Service")

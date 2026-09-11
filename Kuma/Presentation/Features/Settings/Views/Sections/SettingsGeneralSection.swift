@@ -16,7 +16,7 @@ public struct SettingsGeneralSection: View {
                 KumaToggleField(
                     label: "Launch at Login",
                     value: $viewModel.launchAtLogin,
-                    description: "Automatically open Kuma when you log into your Mac."
+                    description: "Open Kuma automatically at login."
                 )
 
                 Divider().opacity(0.3)
@@ -24,7 +24,7 @@ public struct SettingsGeneralSection: View {
                 KumaToggleField(
                     label: "Auto-start Services",
                     value: $viewModel.autoResumeServices,
-                    description: "Automatically resume services that were active when Kuma was last quit."
+                    description: "Resume active services when Kuma launches."
                 )
 
                 Divider().opacity(0.3)
@@ -32,20 +32,20 @@ public struct SettingsGeneralSection: View {
                 KumaToggleField(
                     label: "Confirm Before Quitting",
                     value: $viewModel.confirmBeforeQuit,
-                    description: "Show a confirmation prompt when quitting Kuma while services are running."
+                    description: "Prompt before quitting when services are active."
                 )
 
                 if viewModel.confirmBeforeQuit && UserDefaults.standard.string(forKey: KumaSettingsKey.quitBehavior) != nil {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Remembered Quit Choice")
+                            Text("Saved Quit Preference")
                                 .font(KumaFont.subheadline)
-                            Text("Reset saved quit behavior preference to prompt every time.")
+                            Text("Clear saved preference and prompt on quit.")
                                 .font(KumaFont.caption)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Button("Reset Choice") {
+                        Button("Reset") {
                             UserDefaults.standard.removeObject(forKey: KumaSettingsKey.quitBehavior)
                         }
                         .controlSize(.small)

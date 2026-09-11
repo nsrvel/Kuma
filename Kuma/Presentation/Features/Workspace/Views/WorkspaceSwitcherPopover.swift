@@ -29,6 +29,7 @@ public struct WorkspaceSwitcherPopover: View {
                                 shortcutIndex: fullIndex <= 9 ? fullIndex : nil,
                                 canDelete: store.workspaces.count > 1,
                                 onSelect: {
+                                    KumaHapticManager.shared.levelChange()
                                     store.selectWorkspace(ws)
                                     isPresented = false
                                 },
@@ -118,7 +119,7 @@ public struct WorkspaceSwitcherPopover: View {
                 isPresented = false
                 store.workspaceToEdit = activeWS
             } label: {
-                Label("Settings…", systemImage: "gearshape")
+                Label("Workspace Settings", systemImage: "gearshape")
             }
 
             if store.workspaces.count > 1 {
