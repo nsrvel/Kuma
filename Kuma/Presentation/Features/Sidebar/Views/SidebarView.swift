@@ -62,12 +62,9 @@ public struct SidebarView: View {
                 await viewModel.loadGroups(workspaceID: wsID)
             }
         }
-        .task {
-            for await _ in NotificationCenter.default.notifications(named: .kumaGroupsUpdated) {
-                if let wsID = workspaceStore.activeWorkspace?.id {
-                    await viewModel.loadGroups(workspaceID: wsID)
-                }
-            }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaGroupsUpdated)) { _ in
+            guard let wsID = workspaceStore.activeWorkspace?.id else { return }
+            Task { await viewModel.loadGroups(workspaceID: wsID) }
         }
     }
 

@@ -33,8 +33,11 @@ public actor SystemNotificationCenter {
     }
 
     public func checkAuthorizationStatus() async -> UNAuthorizationStatus {
-        let settings = await center.notificationSettings()
-        return settings.authorizationStatus
+        await withCheckedContinuation { continuation in
+            center.getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
     }
 
     // MARK: - Dispatch Notification
