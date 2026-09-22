@@ -448,6 +448,7 @@ public nonisolated enum DataPortService {
 
     // MARK: - Factory Reset & Relaunch
 
+    @MainActor
     public static func resetAllAppStorage(defaults: UserDefaults = .standard) async {
         // 0. Terminate all running service processes / tunnels cleanly
         await ProcessRegistry.shared.terminateAll()
