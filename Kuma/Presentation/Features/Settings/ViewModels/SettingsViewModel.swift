@@ -271,17 +271,12 @@ public final class SettingsViewModel {
     /// Requests UNUserNotificationCenter authorization asynchronously with coordinated state updates.
     /// Returns true if an external macOS System Settings prompt dialog should be shown to the user.
     public func requestNotificationAuthorization() async -> Bool {
-        let center = UNUserNotificationCenter.current()
-        let status = await withCheckedContinuation { continuation in
-            center.getNotificationSettings { settings in
-                continuation.resume(returning: settings.authorizationStatus)
-            }
-        }
+        let status = await SystemNotificationCenter.shared.checkAuthorizationStatus()
 
         switch status {
         case .notDetermined:
             do {
-                let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
                 self.notifyOnCrash = granted
                 return !granted
             } catch {
