@@ -90,7 +90,6 @@ public struct KubeConfigConnectionView: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
                             viewModel.selectedKubeConfigID = config.id
                         }
-                        viewModel.testConnection(context: contextToTest)
                         onConfigChanged()
                     },
                     onEdit: {
@@ -107,7 +106,6 @@ public struct KubeConfigConnectionView: View {
                     },
                     onRefresh: {
                         viewModel.selectedKubeConfigID = config.id
-                        viewModel.testConnection(context: contextToTest)
                         onConfigChanged()
                     }
                 )

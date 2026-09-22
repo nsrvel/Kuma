@@ -19,11 +19,8 @@ public final class ServiceInspectorViewModel {
     public var draftPorts: [KumaPortMappingItem] = []
 
     // MARK: - UI & State Flags
-    public var isLoadingData: Bool = false
     public var isViewingLogs: Bool = false
     public var showDeleteConfirmation: Bool = false
-    public var showDeleteProviderConfirmation: Bool = false
-    public var providerPendingDeletion: Provider? = nil
 
     public var stateStore: ServiceStateStore?
 
@@ -178,9 +175,7 @@ public final class ServiceInspectorViewModel {
                 self.isRunning = await ProcessRegistry.shared.isRunning(serviceID: id)
             }
 
-            if self.activeCategory == .kubernetes && self.kubeConfigVM == nil {
-                self.kubeConfigVM = KubeConfigViewModel()
-            }
+            await syncKubeConfigSelectionFromActiveProvider()
         } catch {
             Self.logger.error("Failed to load service details for \(id): \(error.localizedDescription)")
         }
@@ -229,6 +224,10 @@ public final class ServiceInspectorViewModel {
 
         guard var activeProv = activeProvider else { return }
         activeProv.updatedAt = Date()
+        if activeProv.type == .kubernetes, let kubeVM = kubeConfigVM {
+            activeProv.kubeConfigID = kubeVM.selectedKubeConfigID
+            activeProv.kubeContext = kubeVM.sanitizedProviderContext(storedProviderContext: activeProv.kubeContext)
+        }
 
         let realPorts = draftPorts.compactMap { item -> ServicePortMapping? in
             let localStr = item.local.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -269,8 +268,8 @@ public final class ServiceInspectorViewModel {
             self.service = srv
         }
 
-        if let prov = providers.first(where: { $0.id == providerID }), prov.type == .kubernetes && kubeConfigVM == nil {
-            self.kubeConfigVM = KubeConfigViewModel()
+        Task {
+            await syncKubeConfigSelectionFromActiveProvider()
         }
 
         Task {
@@ -388,5 +387,14 @@ public final class ServiceInspectorViewModel {
                 Self.logger.error("Failed to delete service \(self.serviceID): \(error.localizedDescription)")
             }
         }
+    }
+
+    private func syncKubeConfigSelectionFromActiveProvider() async {
+        guard let provider = activeProvider, provider.type == .kubernetes else { return }
+        if kubeConfigVM == nil {
+            kubeConfigVM = KubeConfigViewModel()
+        }
+        let preferred = provider.kubeConfigID ?? KubeConfig.defaultID
+        await kubeConfigVM?.loadConfigs(preferredSelectionID: preferred)
     }
 }

@@ -10,7 +10,6 @@ public struct WorkspaceAvatarPickerView: View {
     @Binding public var selectedImageURL: URL?
 
     @State private var isHoveringAvatar = false
-    @State private var isHoveringRemove = false
 
     private var hasCustomPhoto: Bool {
         selectedImageURL != nil || selectedImagePath != nil

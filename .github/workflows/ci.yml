@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve Swift packages
+        run: xcodebuild -scheme Kuma -resolvePackageDependencies -clonedSourcePackagesDirPath .spm
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -scheme Kuma \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath .spm \
+            -derivedDataPath build/DerivedData \
+            build
+
+      - name: Test
+        run: |
+          xcodebuild \
+            -scheme Kuma \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath .spm \
+            -derivedDataPath build/DerivedData \
+            test

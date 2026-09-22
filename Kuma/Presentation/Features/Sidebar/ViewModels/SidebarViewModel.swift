@@ -211,17 +211,6 @@ public final class SidebarViewModel {
         moveGroups(fromOffsets: IndexSet(integer: fromIndex), toOffset: destination)
     }
 
-    public var fixedRows: [FlattenedRow] {
-        flattenedRows.filter { row in
-            guard case .item(let node) = row.entry else { return true }
-            return node.id != .stable("groups") && !node.isGroupRow && !row.isPlaceholder
-        }
-    }
-
-    public var groupsHeaderRow: FlattenedRow? {
-        flattenedRows.first { $0.id == .stable("groups") }
-    }
-
     private func rebuildEntries() {
         let groupChildren: [SidebarEntry] = groups.map { group in
             .item(SidebarNode(

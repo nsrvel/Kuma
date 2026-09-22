@@ -13,7 +13,14 @@ public struct InspectorKubernetesFormSection: View {
                     viewModel: kubeConfigVM,
                     isLocked: isLocked,
                     contextToTest: provider.kubeContext ?? "",
-                    onConfigChanged: onFieldChanged
+                    onConfigChanged: {
+                        let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: provider.kubeContext)
+                        if provider.kubeContext != sanitized {
+                            provider.kubeContext = sanitized
+                        }
+                        kubeConfigVM.testConnection(storedProviderContext: provider.kubeContext)
+                        onFieldChanged()
+                    }
                 )
                 .disabled(isLocked)
 
@@ -30,6 +37,13 @@ public struct InspectorKubernetesFormSection: View {
                         availableContexts: kubeConfigVM.availableContexts
                     )
                     .disabled(isLocked)
+                    .onChange(of: kubeConfigVM.availableContexts) { _, _ in
+                        let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: provider.kubeContext)
+                        if provider.kubeContext != sanitized {
+                            provider.kubeContext = sanitized
+                            onFieldChanged()
+                        }
+                    }
                 }
             }
 

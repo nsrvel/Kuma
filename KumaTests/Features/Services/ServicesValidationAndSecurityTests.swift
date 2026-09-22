@@ -86,6 +86,92 @@ struct ServicesValidationAndSecurityTests {
         #expect(fetchedProviders.first?.customKubeConfigPath == customPath)
     }
 
+    // MARK: - [TC-B04] KubeConfig ID Materializes For kubectl
+    @Test("TC-B04: Provider kubeConfigID resolves to on-disk kubeconfig for execution")
+    func testKubeConfigIDMaterializesForExecution() async throws {
+        let harness = ServicesTestHarness()
+        let configID = UUID()
+        let yaml = "apiVersion: v1\nkind: Config\n"
+        let encrypted = try CryptoVault.shared.encrypt(plainText: yaml)
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(
+            KubeConfig(id: configID, name: "Staging", configContent: encrypted)
+        )
+
+        let provider = Provider(serviceID: UUID(), type: .kubernetes, kubeConfigID: configID)
+        let path = try await KubeConfigMaterializer.kubectlKubeconfigPath(for: provider, repo: kubeRepo)
+        #expect(path != nil)
+        let content = try String(contentsOfFile: path!, encoding: .utf8)
+        #expect(content.contains("apiVersion: v1"))
+    }
+
+    // MARK: - [TC-B05a] Stale Kube Context Dropped At Runtime Parse
+    @Test("TC-B05a: YAML parser drops stored context that is absent from kubeconfig file")
+    func testYAMLParserDropsStaleProviderContext() {
+        let yaml = """
+        apiVersion: v1
+        kind: Config
+        current-context: staging
+        contexts:
+        - name: staging
+          context:
+            cluster: staging
+        """
+        #expect(KubeConfigYAMLParser.resolveContextName(stored: "c1-ins-abc-prod", in: yaml) == "staging")
+    }
+
+    // MARK: - [TC-B05b] Stale Kube Context Dropped On Config Switch
+    @Test("TC-B05b: Validation context resets when provider context is not in selected kubeconfig")
+    func testResolvedValidationContextDropsStaleProviderContext() {
+        let harness = ServicesTestHarness()
+        let vm = KubeConfigViewModel(repo: KubeConfigRepository(dbWriter: harness.databaseQueue))
+        let configID = UUID()
+        let yaml = """
+        current-context: staging
+        contexts:
+        - name: staging
+        - name: prod
+        """
+        vm.availableKubeConfigs = [KubeConfig(id: configID, name: "Test", configContent: yaml)]
+        vm.selectedKubeConfigID = configID
+
+        #expect(vm.resolvedValidationContext(storedProviderContext: "docker-desktop") == "staging")
+        #expect(vm.resolvedValidationContext(storedProviderContext: "prod") == "prod")
+        #expect(vm.sanitizedProviderContext(storedProviderContext: "docker-desktop") == "staging")
+    }
+
+    // MARK: - [TC-B05] Inspector Persists Selected KubeConfig ID
+    @Test("TC-B05: Inspector commit persists kubeConfigID from KubeConfigViewModel")
+    func testInspectorPersistsSelectedKubeConfigID() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "K8s Service",
+            providerType: .kubernetes
+        )
+
+        let selectedID = UUID()
+        let encrypted = try CryptoVault.shared.encrypt(plainText: "apiVersion: v1\n")
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(
+            KubeConfig(id: selectedID, name: "Prod", configContent: encrypted)
+        )
+
+        let vm = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await vm.loadService(id: service.id)
+        vm.kubeConfigVM = KubeConfigViewModel(repo: kubeRepo)
+        await vm.kubeConfigVM?.loadConfigs(preferredSelectionID: selectedID)
+        vm.kubeConfigVM?.selectedKubeConfigID = selectedID
+
+        await vm.commitChanges()
+
+        let providers = try await harness.serviceRepository.fetchProviders(forService: service.id)
+        #expect(providers.first?.kubeConfigID == selectedID)
+    }
+
     // MARK: - [TC-E01] Auto-Save Flushed On Disappear
     @Test("TC-E01: Inspector auto-save flush immediately persists changes")
     func testInspectorAutoSaveFlushImmediatelyPersists() async throws {

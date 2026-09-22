@@ -21,7 +21,6 @@ public final class WorkspaceStore {
     }
     public var showCreateSheet: Bool = false
     public var workspaceToEdit: Workspace? = nil
-    public var workspaceToDelete: Workspace? = nil
 
     public var activeWorkspace: Workspace? {
         workspaces.first(where: { $0.id == selectedWorkspaceId }) ?? workspaces.first

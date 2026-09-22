@@ -16,13 +16,7 @@ public struct KubeConnectionSettingsView: View {
     }
 
     private var contextOptions: [String] {
-        if availableContexts.isEmpty {
-            return kubeContext.isEmpty ? [""] : [kubeContext]
-        }
-        if !kubeContext.isEmpty && !availableContexts.contains(kubeContext) {
-            return [kubeContext] + availableContexts
-        }
-        return availableContexts
+        availableContexts.isEmpty ? [""] : availableContexts
     }
 
     public var body: some View {

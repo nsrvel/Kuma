@@ -36,8 +36,10 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
         let targetType = provider.kubeTargetType ?? "pod"
         let namespace = provider.kubeNamespace?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let context = provider.kubeContext?.trimmingCharacters(in: .whitespacesAndNewlines)
         let usePattern = provider.usePattern ?? true
+        let execConfig = try await KubeConfigExecutionResolver.resolve(for: provider)
+        let kubeconfigPath = execConfig.kubeconfigPath
+        let context = execConfig.context?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         var resolvedTarget = "\(targetType)/\(targetName)"
 
@@ -48,7 +50,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
                 targetPattern: targetName,
                 namespace: namespace,
                 context: context,
-                customKubeConfigPath: provider.customKubeConfigPath,
+                kubeconfigPath: kubeconfigPath,
                 serviceID: service.id,
                 serviceName: service.name,
                 pipeline: pipeline
@@ -58,9 +60,9 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
         var args = ["port-forward", resolvedTarget]
 
-        if let customConfig = provider.customKubeConfigPath?.trimmingCharacters(in: .whitespacesAndNewlines), !customConfig.isEmpty {
+        if let kubeconfigPath, !kubeconfigPath.isEmpty {
             args.append("--kubeconfig")
-            args.append(customConfig)
+            args.append(kubeconfigPath)
         }
 
         for mapping in portMappings {
@@ -106,7 +108,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         targetPattern: String,
         namespace: String?,
         context: String?,
-        customKubeConfigPath: String?,
+        kubeconfigPath: String?,
         serviceID: UUID,
         serviceName: String,
         pipeline: ServiceLogPipeline
@@ -115,9 +117,9 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
         var listArgs = ["get", "pods", "-o", "jsonpath={range .items[?(@.status.phase==\"Running\")]}{.metadata.name}{\"\\n\"}{end}"]
 
-        if let customConfig = customKubeConfigPath?.trimmingCharacters(in: .whitespacesAndNewlines), !customConfig.isEmpty {
+        if let kubeconfigPath, !kubeconfigPath.isEmpty {
             listArgs.append("--kubeconfig")
-            listArgs.append(customConfig)
+            listArgs.append(kubeconfigPath)
         }
 
         if let namespace, !namespace.isEmpty {
