@@ -275,14 +275,14 @@ public final class SettingsViewModel {
 
         switch status {
         case .notDetermined:
-            do {
-                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-                self.notifyOnCrash = granted
-                return !granted
-            } catch {
+            // Headless XCTest hosts cannot present the system permission sheet; avoid trapping on CI.
+            if SingleInstanceGuard.isTestingEnvironment {
                 self.notifyOnCrash = false
-                return false
+                return true
             }
+            let granted = await SystemNotificationCenter.shared.requestAuthorization()
+            self.notifyOnCrash = granted
+            return !granted
         case .denied:
             self.notifyOnCrash = false
             return true

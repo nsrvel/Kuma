@@ -30,15 +30,7 @@ public final class SystemNotificationCenter {
     }
 
     public func checkAuthorizationStatus() async -> UNAuthorizationStatus {
-        await withCheckedContinuation { continuation in
-            UNUserNotificationCenter.current().getNotificationSettings { settings in
-                let status = settings.authorizationStatus
-                // UN callbacks run on an arbitrary queue; resume on MainActor for @MainActor type safety (Swift 6).
-                Task { @MainActor in
-                    continuation.resume(returning: status)
-                }
-            }
-        }
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
     // MARK: - Dispatch Notification
