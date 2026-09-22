@@ -42,4 +42,5 @@ jobs:
             -destination 'platform=macOS' \
             -clonedSourcePackagesDirPath .spm \
             -derivedDataPath build/DerivedData \
+            -parallel-testing-enabled NO \
             test
