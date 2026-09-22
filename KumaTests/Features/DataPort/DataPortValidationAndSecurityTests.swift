@@ -55,6 +55,28 @@ struct DataPortValidationAndSecurityTests {
         #expect(parsed.services.first?.workspaceID == targetWS)
     }
 
+    // MARK: - [TC-B07] ExportKubeConfig encrypted field round-trip
+    @Test("TC-B07: ExportKubeConfig round-trips encryptedConfigContent in backup JSON")
+    func testExportKubeConfigEncryptedFieldRoundTrip() throws {
+        let kube = DataPortService.ExportKubeConfig(
+            id: UUID(),
+            name: "staging",
+            encryptedConfigContent: "nonce:tag:ciphertext",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_100)
+        )
+        let backup = DataPortService.KumaBackup(
+            services: [],
+            providers: [],
+            portMappings: [],
+            kubeConfigs: [kube]
+        )
+        let data = try DataPortService.encodeBackup(backup)
+        let decoded = try DataPortService.decodeBackup(from: data)
+        #expect(decoded.kubeConfigs.count == 1)
+        #expect(decoded.kubeConfigs[0].encryptedConfigContent == "nonce:tag:ciphertext")
+    }
+
     // MARK: - [TC-B04] Corrupted JSON Decoding Failure
     @Test("TC-B04: parseAnyBackup melempar error saat menerima data acak bukan format JSON")
     func testCorruptedJSONDecodingFailure() {

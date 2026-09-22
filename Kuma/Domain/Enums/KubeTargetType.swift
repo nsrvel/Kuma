@@ -21,13 +21,29 @@ public enum KubeTargetType: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    public var prefix: String {
+    /// Resource kind passed to `kubectl port-forward <kind>/<name>`.
+    public var portForwardKind: String { rawValue }
+
+    /// Plural resource name for `kubectl get <resource>`.
+    public var listResource: String {
         switch self {
-        case .pod: return "pod/"
-        case .service: return "svc/"
-        case .deployment: return "deploy/"
+        case .pod: return "pods"
+        case .service: return "services"
+        case .deployment: return "deployments"
         }
     }
+
+    /// `jsonpath` expression listing candidate resource names in the active namespace.
+    public var listNameJSONPath: String {
+        switch self {
+        case .pod:
+            return "{range .items[?(@.status.phase==\"Running\")]}{.metadata.name}{\"\\n\"}{end}"
+        case .service, .deployment:
+            return "{range .items[*]}{.metadata.name}{\"\\n\"}{end}"
+        }
+    }
+
+    public var displayLabel: String { label.lowercased() }
 
     public var placeholder: String {
         switch self {

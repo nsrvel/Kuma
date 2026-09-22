@@ -7,6 +7,7 @@ enum KubeConfigMaterializer {
         repo: any KubeConfigRepositoryProtocol = KubeConfigRepository(),
         userDefaults: UserDefaults = .standard
     ) async throws -> String? {
+        // ponytail: customKubeConfigPath is legacy import-only; UI writes kubeConfigID instead.
         if let legacy = provider.customKubeConfigPath?.trimmingCharacters(in: .whitespacesAndNewlines),
            !legacy.isEmpty {
             let expanded = NSString(string: legacy).expandingTildeInPath

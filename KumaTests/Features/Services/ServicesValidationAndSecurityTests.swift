@@ -105,6 +105,24 @@ struct ServicesValidationAndSecurityTests {
         #expect(content.contains("apiVersion: v1"))
     }
 
+    // MARK: - [TC-B04b] Kube target name pattern matching
+    @Test("TC-B04b: KubeTargetNameMatcher resolves wildcard and exact names")
+    func testKubeTargetNameMatcher() {
+        let names = ["mongo-svc-prod", "mongo-svc-staging", "redis-svc"]
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "mongo-svc-*", in: names) == "mongo-svc-prod")
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "redis-svc", in: names) == "redis-svc")
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "missing-*", in: names) == nil)
+    }
+
+    @Test("TC-B04c: KubeTargetType maps to kubectl port-forward kinds")
+    func testKubeTargetTypePortForwardKinds() {
+        #expect(KubeTargetType.pod.portForwardKind == "pod")
+        #expect(KubeTargetType.service.portForwardKind == "service")
+        #expect(KubeTargetType.deployment.portForwardKind == "deployment")
+        #expect(KubeTargetType.service.listResource == "services")
+        #expect(KubeTargetType.deployment.listResource == "deployments")
+    }
+
     // MARK: - [TC-B05a] Stale Kube Context Dropped At Runtime Parse
     @Test("TC-B05a: YAML parser drops stored context that is absent from kubeconfig file")
     func testYAMLParserDropsStaleProviderContext() {
@@ -219,6 +237,96 @@ struct ServicesValidationAndSecurityTests {
 
         #expect(!aggregator.entries.contains(where: { $0.serviceID == serviceA }), "Service A logs must be cleared")
         #expect(aggregator.entries.contains(where: { $0.serviceID == serviceB }), "Service B logs must remain intact")
+    }
+
+    // MARK: - [TC-B06b] Kubeconfig not exported as plaintext YAML
+    @Test("TC-B06b: DataPort kube export keeps YAML encrypted in backup JSON")
+    func testDataPortKubeConfigNotPlaintext() async throws {
+        let harness = ServicesTestHarness()
+        let plainYAML = "apiVersion: v1\nkind: Config\nclusters:\n"
+        let kubeID = UUID()
+        let cipher = try CryptoVault.shared.encrypt(plainText: plainYAML)
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(KubeConfig(id: kubeID, name: "Prod", configContent: cipher))
+
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "K8s Prod",
+            providerType: .kubernetes,
+            kubeConfigID: kubeID,
+            targetName: "api"
+        )
+
+        let dataPortRepo = DataPortRepository(dbWriter: harness.databaseQueue)
+        let backup = try await dataPortRepo.exportData(scope: .service(service.id))
+
+        let exportedKube = backup.kubeConfigs.first(where: { $0.id == kubeID })
+        #expect(exportedKube != nil)
+        #expect(exportedKube?.encryptedConfigContent == cipher)
+        #expect(exportedKube?.encryptedConfigContent?.contains("apiVersion:") == false)
+    }
+
+    // MARK: - [TC-B08] Create K8s form validation
+    @Test("TC-B08: Create Kubernetes form requires kubeconfig, context, ports, and target")
+    func testCreateKubernetesFormValidation() {
+        let baseInputs = CreateServiceDraftInputs(
+            selectedProvider: .kubernetes,
+            generalDraft: ServiceGeneralDraft(name: "DB"),
+            kubeDraft: ServiceKubernetesDraft(
+                context: "minikube",
+                targetName: "postgres-svc"
+            ),
+            selectedKubeConfigID: KubeConfig.defaultID,
+            dockerDraft: ServiceComposeDraft(),
+            podmanDraft: ServiceComposeDraft(),
+            shellDraft: ServiceShellDraft(),
+            sshDraft: ServiceSSHDraft(),
+            sshAuthType: .key,
+            sshKeyPath: "",
+            sshPassword: "",
+            healthCheckDraft: ServiceHealthCheckDraft(),
+            tunnelDraft: ServiceTunnelDraft(),
+            monitorDraft: ServiceProcessMonitorDraft(),
+            temporaryPorts: [KumaPortMappingItem(local: "5432", remote: "5432")]
+        )
+        #expect(CreateServicePayloadBuilder.isFormValid(inputs: baseInputs))
+
+        let missingConfig = CreateServiceDraftInputs(
+            selectedProvider: .kubernetes,
+            generalDraft: ServiceGeneralDraft(name: "DB"),
+            kubeDraft: ServiceKubernetesDraft(context: "minikube", targetName: "postgres-svc"),
+            selectedKubeConfigID: nil,
+            dockerDraft: ServiceComposeDraft(),
+            podmanDraft: ServiceComposeDraft(),
+            shellDraft: ServiceShellDraft(),
+            sshDraft: ServiceSSHDraft(),
+            sshAuthType: .key,
+            sshKeyPath: "",
+            sshPassword: "",
+            healthCheckDraft: ServiceHealthCheckDraft(),
+            tunnelDraft: ServiceTunnelDraft(),
+            monitorDraft: ServiceProcessMonitorDraft(),
+            temporaryPorts: [KumaPortMappingItem(local: "5432", remote: "5432")]
+        )
+        #expect(!CreateServicePayloadBuilder.isFormValid(inputs: missingConfig))
+
+        let missingPort = CreateServiceDraftInputs(
+            selectedProvider: .kubernetes,
+            generalDraft: ServiceGeneralDraft(name: "DB"),
+            kubeDraft: ServiceKubernetesDraft(context: "minikube", targetName: "postgres-svc"),
+            selectedKubeConfigID: KubeConfig.defaultID,
+            dockerDraft: ServiceComposeDraft(),
+            podmanDraft: ServiceComposeDraft(),
+            shellDraft: ServiceShellDraft(),
+            sshDraft: ServiceSSHDraft(),
+            sshAuthType: .key,
+            sshKeyPath: "",
+            sshPassword: "",
+            healthCheckDraft: ServiceHealthCheckDraft(),
+            tunnelDraft: ServiceTunnelDraft(),
+            monitorDraft: ServiceProcessMonitorDraft(),
+            temporaryPorts: [KumaPortMappingItem()]
+        )
+        #expect(!CreateServicePayloadBuilder.isFormValid(inputs: missingPort))
     }
 
     // MARK: - [TC-B06] DataPort Export Credential Encryption

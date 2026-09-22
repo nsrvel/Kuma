@@ -303,4 +303,57 @@ struct DataPortPersistenceAndSyncTests {
         #expect(exportedB.providers.first?.resolvedTarget == "postgres:15")
         #expect(exportedB.portMappings.first?.localPort == 5432)
     }
+
+    // MARK: - [TC-C20] Export includes referenced kube_config rows
+    @Test("TC-C20: exportData(scope: .service) includes encrypted kube_config referenced by provider")
+    func testExportIncludesReferencedKubeConfigs() async throws {
+        let harness = DataPortTestHarness()
+        defer { harness.cleanup() }
+
+        let kubeID = UUID()
+        let plainYAML = "apiVersion: v1\nkind: Config\n"
+        let cipher = try CryptoVault.shared.encrypt(plainText: plainYAML)
+        try harness.seedKubeConfig(id: kubeID, name: "Remote", encryptedContent: cipher)
+
+        let svcID = UUID()
+        let provID = UUID()
+        try harness.seedService(id: svcID, workspaceID: harness.defaultWorkspaceID, name: "K8s API", activeProviderID: provID)
+        try harness.seedProvider(id: provID, serviceID: svcID, type: "kubernetes", kubeConfigID: kubeID, kubeContext: "ctx-a", targetName: "api-svc")
+        try harness.seedPortMapping(serviceID: svcID, localPort: 8080, remotePort: 80)
+
+        let backup = try await harness.repository.exportData(scope: .service(svcID))
+
+        #expect(backup.kubeConfigs.contains(where: { $0.id == kubeID }))
+        let exported = backup.kubeConfigs.first(where: { $0.id == kubeID })
+        #expect(exported?.encryptedConfigContent == cipher)
+        #expect(exported?.encryptedConfigContent != plainYAML)
+    }
+
+    // MARK: - [TC-C21] Import restores kube_config rows
+    @Test("TC-C21: importData restores kube_config so provider kubeConfigID resolves")
+    func testImportRestoresKubeConfigs() async throws {
+        let harnessA = DataPortTestHarness()
+        defer { harnessA.cleanup() }
+
+        let kubeID = UUID()
+        let cipher = try CryptoVault.shared.encrypt(plainText: "apiVersion: v1\nkind: Config\n")
+        try harnessA.seedKubeConfig(id: kubeID, name: "Remote", encryptedContent: cipher)
+
+        let svcID = UUID()
+        let provID = UUID()
+        try harnessA.seedService(id: svcID, workspaceID: harnessA.defaultWorkspaceID, name: "K8s API", activeProviderID: provID)
+        try harnessA.seedProvider(id: provID, serviceID: svcID, type: "kubernetes", kubeConfigID: kubeID, kubeContext: "ctx-a", targetName: "api-svc")
+
+        let backup = try await harnessA.repository.exportData(scope: .service(svcID))
+
+        let harnessB = DataPortTestHarness()
+        defer { harnessB.cleanup() }
+        try harnessB.seedWorkspace(id: harnessA.defaultWorkspaceID, name: "Default Space")
+        try await harnessB.repository.importData(backup: backup, strategy: .preserveOrMerge)
+
+        let kubeRepo = KubeConfigRepository(dbWriter: harnessB.databaseQueue)
+        let row = try await kubeRepo.fetch(id: kubeID)
+        #expect(row != nil)
+        #expect(row?.name == "Remote")
+    }
 }

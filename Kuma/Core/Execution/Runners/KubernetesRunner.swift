@@ -34,29 +34,29 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             throw ServiceExecutionError.invalidConfiguration("Target resource name is required (e.g. my-app-service or pod pattern).")
         }
 
-        let targetType = provider.kubeTargetType ?? "pod"
+        let kubeTarget = KubeTargetType(rawValue: provider.kubeTargetType ?? "") ?? .pod
         let namespace = provider.kubeNamespace?.trimmingCharacters(in: .whitespacesAndNewlines)
         let usePattern = provider.usePattern ?? true
         let execConfig = try await KubeConfigExecutionResolver.resolve(for: provider)
         let kubeconfigPath = execConfig.kubeconfigPath
         let context = execConfig.context?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        var resolvedTarget = "\(targetType)/\(targetName)"
-
-        // Dynamic pod pattern resolution
-        if usePattern && (targetType == "pod" || targetType.isEmpty) {
-            let matchedPod = try await resolveDynamicPod(
+        let resolvedName: String
+        if usePattern {
+            resolvedName = try await resolveDynamicResourceName(
                 kubectlPath: kubectl,
+                targetType: kubeTarget,
                 targetPattern: targetName,
                 namespace: namespace,
                 context: context,
                 kubeconfigPath: kubeconfigPath,
-                serviceID: service.id,
-                serviceName: service.name,
                 pipeline: pipeline
             )
-            resolvedTarget = "pod/\(matchedPod)"
+        } else {
+            resolvedName = targetName
         }
+
+        let resolvedTarget = "\(kubeTarget.portForwardKind)/\(resolvedName)"
 
         var args = ["port-forward", resolvedTarget]
 
@@ -79,10 +79,11 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             args.append(context)
         }
 
-        // Release local ports from orphaned processes
         for mapping in portMappings {
             await killProcessOccupying(port: mapping.localPort, pipeline: pipeline)
         }
+
+        await pipeline.emit(level: "INFO", message: "Starting port-forward to \(resolvedTarget)...")
 
         _ = try await processRegistry.launch(
             serviceID: service.id,
@@ -101,21 +102,26 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         await processRegistry.isRunning(serviceID: serviceID)
     }
 
-    // MARK: - Dynamic Pod Discovery
+    // MARK: - Dynamic resource discovery (pod / service / deployment)
 
-    private func resolveDynamicPod(
+    private func resolveDynamicResourceName(
         kubectlPath: String,
+        targetType: KubeTargetType,
         targetPattern: String,
         namespace: String?,
         context: String?,
         kubeconfigPath: String?,
-        serviceID: UUID,
-        serviceName: String,
         pipeline: ServiceLogPipeline
     ) async throws -> String {
-        await pipeline.emit(level: "INFO", message: "Discovering active pods matching pattern '\(targetPattern)'...")
+        await pipeline.emit(
+            level: "INFO",
+            message: "Discovering \(targetType.displayLabel) resources matching pattern '\(targetPattern)'..."
+        )
 
-        var listArgs = ["get", "pods", "-o", "jsonpath={range .items[?(@.status.phase==\"Running\")]}{.metadata.name}{\"\\n\"}{end}"]
+        var listArgs = [
+            "get", targetType.listResource,
+            "-o", "jsonpath=\(targetType.listNameJSONPath)",
+        ]
 
         if let kubeconfigPath, !kubeconfigPath.isEmpty {
             listArgs.append("--kubeconfig")
@@ -143,10 +149,9 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         do {
             try process.run()
         } catch {
-            throw ServiceExecutionError.processFailed("Failed to execute pod discovery query: \(error.localizedDescription)")
+            throw ServiceExecutionError.processFailed("Failed to list \(targetType.listResource): \(error.localizedDescription)")
         }
 
-        // Read pipe concurrently to prevent buffer deadlocks if output exceeds 64KB
         async let stdoutData = Task.detached {
             stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         }.value
@@ -165,37 +170,33 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         let data = await stdoutData
         try? stdoutPipe.fileHandleForReading.close()
         let output = String(data: data, encoding: .utf8) ?? ""
-        let podNames = output.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        let resourceNames = output
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
 
-        if podNames.isEmpty {
+        if resourceNames.isEmpty {
             let errBytes = await stderrData
             try? stderrPipe.fileHandleForReading.close()
             let errMsg = String(data: errBytes, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let errMsg, !errMsg.isEmpty {
-                throw ServiceExecutionError.processFailed("Kubectl pod discovery error: \(errMsg)")
-            } else {
-                throw ServiceExecutionError.processFailed("No running pods found in namespace '\(namespace ?? "default")'.")
+                throw ServiceExecutionError.processFailed("Kubectl \(targetType.listResource) discovery error: \(errMsg)")
             }
+            let emptyHint = targetType == .pod ? "No running pods found" : "No \(targetType.listResource) found"
+            throw ServiceExecutionError.processFailed("\(emptyHint) in namespace '\(namespace ?? "default")'.")
         } else {
             _ = await stderrData
             try? stderrPipe.fileHandleForReading.close()
         }
 
-        let cleanedPattern = targetPattern.replacingOccurrences(of: "*", with: "")
-        let matched = podNames.first { name in
-            if targetPattern.contains("*") {
-                return name.localizedCaseInsensitiveContains(cleanedPattern)
-            } else {
-                return name == targetPattern || name.hasPrefix(targetPattern) || name.localizedCaseInsensitiveContains(targetPattern)
-            }
+        guard let matched = KubeTargetNameMatcher.firstMatch(pattern: targetPattern, in: resourceNames) else {
+            throw ServiceExecutionError.processFailed(
+                "Found \(resourceNames.count) \(targetType.listResource), but none matched pattern '\(targetPattern)'. Available: \(resourceNames.prefix(3).joined(separator: ", "))"
+            )
         }
 
-        guard let targetPod = matched else {
-            throw ServiceExecutionError.processFailed("Found \(podNames.count) running pods, but none matched pattern '\(targetPattern)'. Available: \(podNames.prefix(3).joined(separator: ", "))")
-        }
-
-        await pipeline.emit(level: "INFO", message: "Matched active pod: '\(targetPod)'. Starting port-forward...")
-        return targetPod
+        await pipeline.emit(level: "INFO", message: "Matched \(targetType.displayLabel): '\(matched)'.")
+        return matched
     }
 
     private func killProcessOccupying(port: Int, pipeline: ServiceLogPipeline) async {

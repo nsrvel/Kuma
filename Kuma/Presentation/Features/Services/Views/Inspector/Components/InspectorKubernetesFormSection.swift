@@ -32,7 +32,11 @@ public struct InspectorKubernetesFormSection: View {
                         ),
                         kubeContext: Binding(
                             get: { provider.kubeContext ?? "" },
-                            set: { provider.kubeContext = $0.isEmpty ? nil : $0; onFieldChanged() }
+                            set: { newValue in
+                                provider.kubeContext = newValue.isEmpty ? nil : newValue
+                                onFieldChanged()
+                                kubeConfigVM.testConnection(storedProviderContext: provider.kubeContext)
+                            }
                         ),
                         availableContexts: kubeConfigVM.availableContexts
                     )

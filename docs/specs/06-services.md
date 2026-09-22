@@ -52,12 +52,8 @@
 
 ## 3. CRITICAL: Data Loss & Schema Desync
 
-### DATA-01: `customKubeConfigPath` Silently Dropped
-- **Location**: [`Provider.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Domain/Models/Provider.swift) declares `public var customKubeConfigPath: String?`
-- **Detail**: 
-  1. `AppDatabase.swift` migration `v1_production_schema` **never created** a `customKubeConfigPath` column in the `provider` table.
-  2. `Provider+Record.swift` silently omits `customKubeConfigPath` in both `init(row:)` and `encode(to:)`.
-- **Impact**: Any user setting a custom kubeconfig path has their path **permanently lost** on persist/reload.
+### DATA-01: `customKubeConfigPath` (legacy)
+- **Status**: Column exists via migration `v4_provider_custom_kubeconfig`; `Provider+Record` persists the field. **No UI** writes this value — prefer `kubeConfigID` + Settings default kube path. `KubeConfigMaterializer` still honors legacy path on import/migration for backward compatibility.
 
 ### DATA-02: Uncommitted Text Discarded on Inspector Dismiss
 - **Location**: [`ServiceInspectorView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift) — `onDisappear`

@@ -120,6 +120,11 @@ public struct CreateServiceSheet: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: currentStep)
+        .onChange(of: currentStep) { _, step in
+            if step == .fillDetails && selectedProvider == .kubernetes {
+                Task { await kubeConfigVM.loadConfigs(preferredSelectionID: kubeConfigVM.selectedKubeConfigID) }
+            }
+        }
         .frame(
             width: currentStep == .selectProvider ? 520 : 500,
             height: currentStep == .selectProvider ? 440 : 580
@@ -129,6 +134,12 @@ public struct CreateServiceSheet: View {
     private func createService() {
         isSaving = true
         let repo = self.serviceRepository
+        if selectedProvider == .kubernetes {
+            let stored = kubeDraft.context.isEmpty ? nil : kubeDraft.context
+            if let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: stored) {
+                kubeDraft.context = sanitized
+            }
+        }
         let inputs = currentDraftInputs
 
         Task {

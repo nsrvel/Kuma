@@ -200,12 +200,36 @@ public final class DataPortTestHarness {
         type: String = "docker",
         label: String? = nil,
         yamlConfig: String? = nil,
-        runCommand: String? = nil
+        runCommand: String? = nil,
+        kubeConfigID: UUID? = nil,
+        kubeContext: String? = nil,
+        targetName: String? = nil
     ) throws {
         try databaseQueue.write { db in
             try db.execute(
-                sql: "INSERT OR REPLACE INTO provider (id, serviceID, type, label, yamlConfig, runCommand, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                arguments: [id.uuidString, serviceID.uuidString, type, label, yamlConfig, runCommand, Date(), Date()]
+                sql: """
+                INSERT OR REPLACE INTO provider (
+                    id, serviceID, type, label, yamlConfig, runCommand,
+                    kubeConfigID, kubeContext, targetName, createdAt, updatedAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    id.uuidString, serviceID.uuidString, type, label, yamlConfig, runCommand,
+                    kubeConfigID?.uuidString, kubeContext, targetName, Date(), Date()
+                ]
+            )
+        }
+    }
+
+    public func seedKubeConfig(
+        id: UUID = UUID(),
+        name: String,
+        encryptedContent: String
+    ) throws {
+        try databaseQueue.write { db in
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO kube_config (id, name, configContent, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
+                arguments: [id.uuidString, name, encryptedContent, Date(), Date()]
             )
         }
     }
