@@ -9,7 +9,8 @@ public enum SystemNotificationType: Sendable {
     case custom(title: String, body: String)
 }
 
-public actor SystemNotificationCenter {
+@MainActor
+public final class SystemNotificationCenter {
     public static let shared = SystemNotificationCenter()
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SystemNotificationCenter")
 
