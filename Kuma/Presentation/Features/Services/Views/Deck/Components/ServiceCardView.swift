@@ -23,14 +23,6 @@ public struct ServiceCardView: View, Equatable {
         self.workspaceID = workspaceID
     }
 
-    // MARK: - Extreme Limit: Equatable bypass for zero redundant body evaluation
-    public static func == (lhs: ServiceCardView, rhs: ServiceCardView) -> Bool {
-        lhs.snapshot == rhs.snapshot &&
-        lhs.runtime == rhs.runtime &&
-        lhs.isSelected == rhs.isSelected &&
-        lhs.workspaceID == rhs.workspaceID
-    }
-
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // Header Row: Provider Icon + Name/Target Subtitle + Native Toggle
@@ -145,5 +137,15 @@ public struct ServiceCardView: View, Equatable {
             return snapshot.subtitle
         }
         return snapshot.providerCategory.sidebarLabel
+    }
+}
+
+extension ServiceCardView {
+    nonisolated public static func == (lhs: ServiceCardView, rhs: ServiceCardView) -> Bool {
+        lhs.snapshot == rhs.snapshot &&
+        lhs.runtime.status == rhs.runtime.status &&
+        lhs.runtime.isLoading == rhs.runtime.isLoading &&
+        lhs.isSelected == rhs.isSelected &&
+        lhs.workspaceID == rhs.workspaceID
     }
 }
