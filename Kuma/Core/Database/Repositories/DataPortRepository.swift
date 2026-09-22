@@ -73,7 +73,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         let exportPorts = ports.map { p in
             DataPortService.ExportPortMapping(
                 id: p.id,
-                providerID: svc.activeProviderID ?? svc.id,
+                providerID: p.providerID ?? svc.activeProviderID ?? svc.id,
                 localPort: p.localPort,
                 remotePort: p.remotePort
             )
@@ -142,7 +142,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
                 return DataPortService.ExportPortMapping(
                     id: pm.id,
-                    providerID: associatedProviderID,
+                    providerID: pm.providerID ?? associatedProviderID,
                     localPort: pm.localPort,
                     remotePort: pm.remotePort
                 )
@@ -256,16 +256,20 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
                 if let targetServiceID {
                     try db.execute(
                         sql: """
-                        INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(id) DO UPDATE SET localPort=excluded.localPort, remotePort=excluded.remotePort
+                        INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType, providerID)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            localPort=excluded.localPort,
+                            remotePort=excluded.remotePort,
+                            providerID=excluded.providerID
                         """,
                         arguments: [
                             exportPort.id.uuidString,
                             targetServiceID.uuidString,
                             exportPort.localPort,
                             exportPort.remotePort,
-                            "TCP"
+                            "TCP",
+                            exportPort.providerID.uuidString
                         ]
                     )
                 }
@@ -376,7 +380,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
                 return DataPortService.ExportPortMapping(
                     id: pm.id,
-                    providerID: associatedProviderID,
+                    providerID: pm.providerID ?? associatedProviderID,
                     localPort: pm.localPort,
                     remotePort: pm.remotePort
                 )
@@ -704,7 +708,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         let exportPorts = ports.map { p in
             DataPortService.ExportPortMapping(
                 id: p.id,
-                providerID: svc.activeProviderID ?? svc.id,
+                providerID: p.providerID ?? svc.activeProviderID ?? svc.id,
                 localPort: p.localPort,
                 remotePort: p.remotePort
             )

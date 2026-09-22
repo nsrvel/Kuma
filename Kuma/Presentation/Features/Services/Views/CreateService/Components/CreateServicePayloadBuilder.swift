@@ -43,7 +43,9 @@ public enum CreateServicePayloadBuilder {
             encryptedScript = inputs.podmanDraft.initialScript.isEmpty ? nil : inputs.podmanDraft.initialScript
         }
 
+        let providerID = UUID()
         let provider = Provider(
+            id: providerID,
             serviceID: serviceID,
             type: inputs.selectedProvider,
             kubeConfigID: inputs.selectedProvider == .kubernetes ? inputs.selectedKubeConfigID : nil,
@@ -77,6 +79,7 @@ public enum CreateServicePayloadBuilder {
                 return ServicePortMapping(
                     id: item.id,
                     serviceID: serviceID,
+                    providerID: providerID,
                     localPort: local,
                     remotePort: remote
                 )

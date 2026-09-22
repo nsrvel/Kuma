@@ -20,7 +20,7 @@ struct DataPortPersistenceAndSyncTests {
         let provID = UUID()
         try harness.seedService(id: svcID, workspaceID: wsID, name: "Auth Service", activeProviderID: provID, groupIDs: [groupID])
         try harness.seedProvider(id: provID, serviceID: svcID, type: "docker", label: "Auth Runner")
-        try harness.seedPortMapping(serviceID: svcID, localPort: 8080, remotePort: 80)
+        try harness.seedPortMapping(serviceID: svcID, providerID: provID, localPort: 8080, remotePort: 80)
 
         let backup = try await harness.repository.exportData(scope: .all)
 
@@ -223,7 +223,7 @@ struct DataPortPersistenceAndSyncTests {
         let provID = UUID()
         try harness.seedService(id: svcID, workspaceID: wsID, name: "Shared API Service", activeProviderID: provID)
         try harness.seedProvider(id: provID, serviceID: svcID, type: "docker", yamlConfig: "image: api:v1")
-        try harness.seedPortMapping(serviceID: svcID, localPort: 4000, remotePort: 4000)
+        try harness.seedPortMapping(serviceID: svcID, providerID: provID, localPort: 4000, remotePort: 4000)
 
         // 1. Entry Point 1 & 2: Global Scope (Settings / DnD)
         let globalBackup = try await harness.repository.exportData(scope: .all)
@@ -283,9 +283,10 @@ struct DataPortPersistenceAndSyncTests {
         try harness.seedWorkspace(id: wsB, name: "Workspace B")
 
         let svcID = UUID()
-        try harness.seedService(id: svcID, workspaceID: wsA, name: "Database Service")
-        try harness.seedProvider(serviceID: svcID, type: "docker", yamlConfig: "image: postgres:15")
-        try harness.seedPortMapping(serviceID: svcID, localPort: 5432, remotePort: 5432)
+        let provID = UUID()
+        try harness.seedService(id: svcID, workspaceID: wsA, name: "Database Service", activeProviderID: provID)
+        try harness.seedProvider(id: provID, serviceID: svcID, type: "docker", yamlConfig: "image: postgres:15")
+        try harness.seedPortMapping(serviceID: svcID, providerID: provID, localPort: 5432, remotePort: 5432)
 
         // Copy config dari Service di wsA
         let copiedJSON = try await harness.repository.exportSingleServiceJSON(serviceID: svcID)
@@ -319,7 +320,7 @@ struct DataPortPersistenceAndSyncTests {
         let provID = UUID()
         try harness.seedService(id: svcID, workspaceID: harness.defaultWorkspaceID, name: "K8s API", activeProviderID: provID)
         try harness.seedProvider(id: provID, serviceID: svcID, type: "kubernetes", kubeConfigID: kubeID, kubeContext: "ctx-a", targetName: "api-svc")
-        try harness.seedPortMapping(serviceID: svcID, localPort: 8080, remotePort: 80)
+        try harness.seedPortMapping(serviceID: svcID, providerID: provID, localPort: 8080, remotePort: 80)
 
         let backup = try await harness.repository.exportData(scope: .service(svcID))
 

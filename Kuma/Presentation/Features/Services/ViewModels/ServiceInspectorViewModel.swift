@@ -233,13 +233,20 @@ public final class ServiceInspectorViewModel {
             let localStr = item.local.trimmingCharacters(in: .whitespacesAndNewlines)
             let remoteStr = item.remote.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let local = Int(localStr), let remote = Int(remoteStr), local > 0, remote > 0 else { return nil }
-            return ServicePortMapping(id: item.id, serviceID: self.serviceID, localPort: local, remotePort: remote, protocolType: "TCP")
+            return ServicePortMapping(
+                id: item.id,
+                serviceID: self.serviceID,
+                providerID: activeProv.id,
+                localPort: local,
+                remotePort: remote,
+                protocolType: "TCP"
+            )
         }
 
         do {
             try await serviceRepository.updateService(srv)
             try await serviceRepository.updateProvider(activeProv)
-            try await serviceRepository.savePortMappings(realPorts, forService: serviceID)
+            try await serviceRepository.savePortMappings(realPorts, forService: serviceID, providerID: activeProv.id)
 
             // Update in-memory providers list
             if let idx = providers.firstIndex(where: { $0.id == activeProv.id }) {
@@ -259,23 +266,47 @@ public final class ServiceInspectorViewModel {
     // MARK: - Discrete Provider Operations
 
     public func switchProvider(to providerID: UUID) {
-        guard var srv = service else { return }
-        
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-            self.activeProviderID = providerID
-            srv.activeProviderID = providerID
-            srv.updatedAt = Date()
-            self.service = srv
-        }
+        guard providerID != activeProviderID else { return }
 
         Task {
-            await syncKubeConfigSelectionFromActiveProvider()
-        }
+            let wasRunning = isRunning
+            await flushPendingAutoSave()
 
-        Task {
+            guard var srv = service else { return }
+
+            if wasRunning {
+                stateStore?.setExecutionState(.stopping, for: serviceID)
+                await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
+            }
+
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
+                self.activeProviderID = providerID
+                srv.activeProviderID = providerID
+                srv.updatedAt = Date()
+                self.service = srv
+            }
+
             do {
                 try await serviceRepository.updateService(srv)
+                await reloadDraftPortsForActiveProvider()
+                await syncKubeConfigSelectionFromActiveProvider()
                 postUpdatedNotification()
+
+                if wasRunning {
+                    stateStore?.setExecutionState(.starting, for: serviceID)
+                    try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
+                    if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID) {
+                        stateStore?.setExecutionState(.running(pid: proc.pid), for: serviceID)
+                    } else {
+                        stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
+                    }
+                    self.isRunning = true
+                    NotificationCenter.default.post(
+                        name: .kumaServiceStateChanged,
+                        object: serviceID,
+                        userInfo: ["state": ServiceState.running]
+                    )
+                }
             } catch {
                 Self.logger.error("Failed to switch active provider for service \(srv.id): \(error.localizedDescription)")
             }
@@ -296,6 +327,12 @@ public final class ServiceInspectorViewModel {
 
         if provider.type == .kubernetes && kubeConfigVM == nil {
             self.kubeConfigVM = KubeConfigViewModel()
+        }
+
+        if provider.type == .kubernetes || provider.type == .ssh {
+            draftPorts = [KumaPortMappingItem()]
+        } else {
+            draftPorts = []
         }
 
         // 2. Background async persistence
@@ -386,6 +423,25 @@ public final class ServiceInspectorViewModel {
             } catch {
                 Self.logger.error("Failed to delete service \(self.serviceID): \(error.localizedDescription)")
             }
+        }
+    }
+
+    private func reloadDraftPortsForActiveProvider() async {
+        guard let providerID = activeProviderID else {
+            draftPorts = []
+            return
+        }
+        do {
+            let portList = try await serviceRepository.fetchPortMappings(forService: serviceID, providerID: providerID)
+            if portList.isEmpty && (activeCategory == .kubernetes || activeCategory == .ssh) {
+                draftPorts = [KumaPortMappingItem()]
+            } else {
+                draftPorts = portList.map {
+                    KumaPortMappingItem(id: $0.id, local: "\($0.localPort)", remote: "\($0.remotePort)")
+                }
+            }
+        } catch {
+            Self.logger.error("Failed to load port mappings for provider \(providerID): \(error.localizedDescription)")
         }
     }
 

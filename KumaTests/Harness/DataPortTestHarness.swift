@@ -133,6 +133,12 @@ public final class DataPortTestHarness {
             }
         }
 
+        migrator.registerMigration("v5_port_mapping_provider") { db in
+            try db.alter(table: "portMapping") { t in
+                t.add(column: "providerID", .text).references("provider", onDelete: .cascade)
+            }
+        }
+
         try! migrator.migrate(queue)
 
         // Seed default workspace
@@ -237,13 +243,17 @@ public final class DataPortTestHarness {
     public func seedPortMapping(
         id: UUID = UUID(),
         serviceID: UUID,
+        providerID: UUID? = nil,
         localPort: Int,
         remotePort: Int
     ) throws {
         try databaseQueue.write { db in
             try db.execute(
-                sql: "INSERT OR REPLACE INTO portMapping (id, serviceID, localPort, remotePort, protocolType) VALUES (?, ?, ?, ?, ?)",
-                arguments: [id.uuidString, serviceID.uuidString, localPort, remotePort, "TCP"]
+                sql: """
+                INSERT OR REPLACE INTO portMapping (id, serviceID, providerID, localPort, remotePort, protocolType)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [id.uuidString, serviceID.uuidString, providerID?.uuidString, localPort, remotePort, "TCP"]
             )
         }
     }

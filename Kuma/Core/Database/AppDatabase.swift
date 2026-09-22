@@ -244,6 +244,35 @@ public nonisolated final class AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v5_port_mapping_provider") { db in
+            try db.alter(table: "portMapping") { t in
+                t.add(column: "providerID", .text).references("provider", onDelete: .cascade)
+            }
+
+            let rows = try Row.fetchAll(db, sql: "SELECT id, serviceID FROM portMapping WHERE providerID IS NULL")
+            for row in rows {
+                let portID: String = row["id"]
+                let serviceID: String = row["serviceID"]
+                if let providerID = try String.fetchOne(
+                    db,
+                    sql: """
+                    SELECT COALESCE(
+                        (SELECT activeProviderID FROM service WHERE id = ?),
+                        (SELECT id FROM provider WHERE serviceID = ? ORDER BY createdAt ASC LIMIT 1)
+                    )
+                    """,
+                    arguments: [serviceID, serviceID]
+                ) {
+                    try db.execute(
+                        sql: "UPDATE portMapping SET providerID = ? WHERE id = ?",
+                        arguments: [providerID, portID]
+                    )
+                }
+            }
+
+            try db.create(index: "idx_port_provider", on: "portMapping", columns: ["providerID"])
+        }
+
         return migrator
     }
 }

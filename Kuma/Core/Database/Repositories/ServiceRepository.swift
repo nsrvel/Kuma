@@ -8,13 +8,14 @@ public protocol ServiceRepositoryProtocol: Sendable {
     func fetchServiceDetail(id: UUID) async throws -> (service: Service, providers: [Provider], portMappings: [ServicePortMapping])?
     func fetchProviders(forService serviceID: UUID) async throws -> [Provider]
     func fetchPortMappings(forService serviceID: UUID) async throws -> [ServicePortMapping]
+    func fetchPortMappings(forService serviceID: UUID, providerID: UUID) async throws -> [ServicePortMapping]
     func fetchAllPortMappings() async throws -> [ServicePortMapping]
     func insertService(_ service: Service, defaultProvider: Provider?, portMappings: [ServicePortMapping]) async throws
     func updateService(_ service: Service) async throws
     func insertProvider(_ provider: Provider) async throws
     func updateProvider(_ provider: Provider) async throws
     func deleteProvider(id: UUID) async throws
-    func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID) async throws
+    func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID, providerID: UUID) async throws
     func toggleStarred(serviceID: UUID) async throws -> Bool
     func toggleGroupMembership(serviceID: UUID, groupID: UUID) async throws -> Set<UUID>
     func deleteService(id: UUID) async throws
@@ -68,10 +69,14 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
 
             var portsByServiceID: [UUID: [Int]] = [:]
             portsByServiceID.reserveCapacity(services.count)
-            for mapping in allPortMappings {
-                if let sID = mapping.serviceID {
-                    portsByServiceID[sID, default: []].append(mapping.localPort)
-                }
+            for service in services {
+                let activeProvID = service.activeProviderID ?? providersByServiceID[service.id]?.first?.id
+                let ports = Self.localPortsForActiveProvider(
+                    mappings: allPortMappings,
+                    serviceID: service.id,
+                    activeProviderID: activeProvID
+                )
+                portsByServiceID[service.id] = ports
             }
 
             // Batch fetch all group memberships for all services in this workspace in 1 query
@@ -157,6 +162,13 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 .filter(Column("serviceID") == serviceID.uuidString)
                 .fetchAll(db)
 
+            let activeProvID = service.activeProviderID ?? providers.first?.id
+            let activePorts = Self.localPortsForActiveProvider(
+                mappings: portMappings,
+                serviceID: service.id,
+                activeProviderID: activeProvID
+            )
+
             let memberships = try ServiceGroupMembershipRecord
                 .filter(Column("serviceID") == serviceID.uuidString)
                 .fetchAll(db)
@@ -177,9 +189,9 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 subtitle = desc
             }
 
-            let ports = portMappings.map(\.localPort)
+            let ports = activePorts
             let groupIDs = Set(memberships.map(\.groupID))
-            let activeID = service.activeProviderID ?? providers.first?.id
+            let activeID = activeProvID
             let providerOptions = providers.map { p in
                 let displayLabel: String
                 if let lbl = p.label, !lbl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -235,9 +247,16 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 .order(Column("createdAt").asc)
                 .fetchAll(db)
 
-            let portMappings = try ServicePortMapping
+            let allPortMappings = try ServicePortMapping
                 .filter(Column("serviceID") == id.uuidString)
                 .fetchAll(db)
+
+            let activeProvID = service.activeProviderID ?? providers.first?.id
+            let portMappings = Self.portMappingsForActiveProvider(
+                mappings: allPortMappings,
+                serviceID: service.id,
+                activeProviderID: activeProvID
+            )
 
             return (service: service, providers: providers, portMappings: portMappings)
         }
@@ -266,9 +285,33 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
 
     public func fetchPortMappings(forService serviceID: UUID) async throws -> [ServicePortMapping] {
         try await dbWriter.read { db in
-            try ServicePortMapping
+            guard let service = try Service.fetchOne(db, key: serviceID.uuidString) else { return [] }
+            let providers = try Provider
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+            let all = try ServicePortMapping
                 .filter(Column("serviceID") == serviceID.uuidString)
                 .fetchAll(db)
+            let activeProvID = service.activeProviderID ?? providers.first?.id
+            return Self.portMappingsForActiveProvider(
+                mappings: all,
+                serviceID: serviceID,
+                activeProviderID: activeProvID
+            )
+        }
+    }
+
+    public func fetchPortMappings(forService serviceID: UUID, providerID: UUID) async throws -> [ServicePortMapping] {
+        try await dbWriter.read { db in
+            let all = try ServicePortMapping
+                .filter(Column("serviceID") == serviceID.uuidString)
+                .fetchAll(db)
+            return Self.portMappingsForActiveProvider(
+                mappings: all,
+                serviceID: serviceID,
+                activeProviderID: providerID
+            )
         }
     }
 
@@ -286,6 +329,9 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
             }
             for var mapping in portMappings {
                 mapping.serviceID = service.id
+                if mapping.providerID == nil {
+                    mapping.providerID = defaultProvider?.id
+                }
                 try mapping.insert(db)
             }
             for groupID in service.groupIDs {
@@ -328,22 +374,25 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
         }
     }
 
-    public func savePortMappings(_ portMappings: [ServicePortMapping], forService serviceID: UUID) async throws {
+    public func savePortMappings(
+        _ portMappings: [ServicePortMapping],
+        forService serviceID: UUID,
+        providerID: UUID
+    ) async throws {
         try await dbWriter.write { db in
-            // Delete old port mappings for this service
             _ = try ServicePortMapping
-                .filter(Column("serviceID") == serviceID.uuidString)
+                .filter(Column("serviceID") == serviceID.uuidString && Column("providerID") == providerID.uuidString)
                 .deleteAll(db)
 
-            // Deduplicate IDs and insert/save new mappings
             var seenIDs = Set<UUID>()
             for var mapping in portMappings {
                 mapping.serviceID = serviceID
+                mapping.providerID = providerID
                 if seenIDs.contains(mapping.id) {
                     mapping.id = UUID()
                 }
                 seenIDs.insert(mapping.id)
-                try mapping.save(db)
+                try mapping.insert(db)
             }
         }
     }
@@ -402,11 +451,14 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
             newService.updatedAt = Date()
 
             var newActiveProvID: UUID? = nil
+            var providerIDMap: [UUID: UUID] = [:]
             var duplicatedProviders: [Provider] = []
 
             for prov in providers {
                 var newProv = prov
-                newProv.id = UUID()
+                let newProvID = UUID()
+                providerIDMap[prov.id] = newProvID
+                newProv.id = newProvID
                 newProv.serviceID = newID
                 newProv.createdAt = Date()
                 newProv.updatedAt = Date()
@@ -429,11 +481,14 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
                 try prov.insert(db)
             }
 
-            // 3. Insert duplicated port mappings
+            // 3. Insert duplicated port mappings (per provider)
             for p in ports {
+                let targetProvID = p.providerID.flatMap { providerIDMap[$0] } ?? newActiveProvID
+                guard let targetProvID else { continue }
                 let newPort = ServicePortMapping(
                     id: UUID(),
                     serviceID: newID,
+                    providerID: targetProvID,
                     localPort: p.localPort,
                     remotePort: p.remotePort,
                     protocolType: p.protocolType
@@ -449,6 +504,37 @@ public final class ServiceRepository: ServiceRepositoryProtocol, @unchecked Send
 
             return newService
         }
+    }
+
+    private nonisolated static func portMappingsForActiveProvider(
+        mappings: [ServicePortMapping],
+        serviceID: UUID,
+        activeProviderID: UUID?
+    ) -> [ServicePortMapping] {
+        guard let activeProviderID else { return [] }
+        let scoped = mappings.filter { $0.serviceID == serviceID || $0.serviceID == nil }
+        let forProvider = scoped.filter { $0.providerID == activeProviderID }
+        if !forProvider.isEmpty {
+            return forProvider
+        }
+        // Legacy rows without providerID: treat as active provider only when unambiguous.
+        let legacy = scoped.filter { $0.providerID == nil }
+        if legacy.count == scoped.count {
+            return legacy
+        }
+        return []
+    }
+
+    private nonisolated static func localPortsForActiveProvider(
+        mappings: [ServicePortMapping],
+        serviceID: UUID,
+        activeProviderID: UUID?
+    ) -> [Int] {
+        portMappingsForActiveProvider(
+            mappings: mappings,
+            serviceID: serviceID,
+            activeProviderID: activeProviderID
+        ).map(\.localPort)
     }
 }
 

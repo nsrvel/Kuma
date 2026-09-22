@@ -11,6 +11,8 @@ nonisolated extension ServicePortMapping: FetchableRecord, PersistableRecord {
         let id = UUID(uuidString: idStr) ?? UUID()
         let serviceStr: String? = row["serviceID"]
         let serviceID = serviceStr.flatMap(UUID.init)
+        let providerStr: String? = row["providerID"]
+        let providerID = providerStr.flatMap(UUID.init)
         let localPort: Int = row["localPort"]
         let remotePort: Int = row["remotePort"]
         let protocolType: String = row["protocolType"]
@@ -18,6 +20,7 @@ nonisolated extension ServicePortMapping: FetchableRecord, PersistableRecord {
         self.init(
             id: id,
             serviceID: serviceID,
+            providerID: providerID,
             localPort: localPort,
             remotePort: remotePort,
             protocolType: protocolType
@@ -27,6 +30,7 @@ nonisolated extension ServicePortMapping: FetchableRecord, PersistableRecord {
     public nonisolated func encode(to container: inout PersistenceContainer) throws {
         container["id"] = id.uuidString
         container["serviceID"] = serviceID?.uuidString
+        container["providerID"] = providerID?.uuidString
         container["localPort"] = localPort
         container["remotePort"] = remotePort
         container["protocolType"] = protocolType
