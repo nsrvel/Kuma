@@ -13,9 +13,15 @@ concurrency:
 jobs:
   test:
     name: Build & Test (macOS)
-    runs-on: macos-14
+    # objectVersion 77 requires Xcode 16+ (macos-14 images ship Xcode 15.4).
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16'
 
       - name: Resolve Swift packages
         run: xcodebuild -scheme Kuma -resolvePackageDependencies -clonedSourcePackagesDirPath .spm

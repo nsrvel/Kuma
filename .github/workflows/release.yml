@@ -11,13 +11,22 @@ permissions:
 jobs:
   dmg:
     name: Build DMG
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16'
+
+      - name: Resolve Swift packages
+        run: xcodebuild -scheme Kuma -resolvePackageDependencies -clonedSourcePackagesDirPath .spm
 
       - name: Build release DMG
         env:
           DERIVED_DATA_PATH: ${{ github.workspace }}/build/DerivedData
+          CLONED_SOURCE_PACKAGES_DIR: ${{ github.workspace }}/.spm
         run: |
           chmod +x Scripts/make-dmg.sh
           ./Scripts/make-dmg.sh

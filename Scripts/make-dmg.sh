@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DERIVED="${DERIVED_DATA_PATH:-$ROOT/.derivedData}"
+SPM_DIR="${CLONED_SOURCE_PACKAGES_DIR:-$ROOT/.spm}"
 APP="$DERIVED/Build/Products/Release/Kuma.app"
 
 cd "$ROOT"
@@ -12,6 +13,7 @@ xcodebuild \
   -configuration Release \
   -destination 'platform=macOS' \
   -derivedDataPath "$DERIVED" \
+  -clonedSourcePackagesDirPath "$SPM_DIR" \
   build
 
 # Helps Launch Services pick up AppIcon.icns after drag-install from DMG.

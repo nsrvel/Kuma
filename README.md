@@ -43,6 +43,19 @@ chmod +x Scripts/make-dmg.sh
 # Output: dist/Kuma-<version>.dmg
 ```
 
+### Publish a GitHub Release (maintainers)
+
+CI runs on every push/PR to `main` (build + test on **macOS 15** with **Xcode 16**).
+
+To ship a DMG to [Releases](https://github.com/nsrvel/Kuma/releases), push a version tag:
+
+```bash
+git tag v1.0.0   # match CFBundleShortVersionString when possible
+git push origin v1.0.0
+```
+
+The **Release** workflow (`.github/workflows/release.yml`) builds `dist/Kuma-*.dmg` and attaches it to the new GitHub Release with auto-generated notes.
+
 ## Project layout
 
 | Path | Purpose |
