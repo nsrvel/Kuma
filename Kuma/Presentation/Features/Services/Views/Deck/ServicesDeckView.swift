@@ -23,6 +23,11 @@ public struct ServicesDeckView: View {
     }
 
     public var body: some View {
+        applyDeckNotificationHandlers(to: mainDeckContent, workspaceID: workspaceID)
+    }
+
+    @ViewBuilder
+    private var mainDeckContent: some View {
         VStack(spacing: 0) {
             contentBody
         }
@@ -35,7 +40,6 @@ public struct ServicesDeckView: View {
         .task(id: workspaceID) {
             viewModel.stateStore = serviceStateStore
             await viewModel.loadWorkspaceAsync(workspaceID: workspaceID)
-            await handleNotificationStream(workspaceID: workspaceID)
         }
         .onChange(of: isStarredOnly) { _, newStarred in
             withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {

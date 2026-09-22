@@ -144,6 +144,7 @@ public struct KumaLogConsoleView: NSViewRepresentable {
         Coordinator()
     }
 
+    @MainActor
     public final class Coordinator: NSObject {
         var lastRenderedCount: Int = 0
         var lastEntriesID: UUID? = nil
@@ -152,13 +153,10 @@ public struct KumaLogConsoleView: NSViewRepresentable {
         func scrollToBottom(textView: NSTextView, in scrollView: NSScrollView) {
             guard !isScrolling else { return }
             isScrolling = true
-            DispatchQueue.main.async { [weak self, weak textView] in
-                defer { self?.isScrolling = false }
-                guard let textView else { return }
-                let length = textView.string.utf16.count
-                if length > 0 {
-                    textView.scrollRangeToVisible(NSRange(location: length, length: 0))
-                }
+            defer { isScrolling = false }
+            let length = textView.string.utf16.count
+            if length > 0 {
+                textView.scrollRangeToVisible(NSRange(location: length, length: 0))
             }
         }
     }
