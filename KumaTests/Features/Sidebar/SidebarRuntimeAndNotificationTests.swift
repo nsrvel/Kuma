@@ -11,13 +11,18 @@ struct SidebarRuntimeAndNotificationTests {
         let harness = SidebarTestHarness()
         let vm = SidebarViewModel(groupRepository: harness.repository)
 
-        let notificationStream = NotificationCenter.default.notifications(named: .kumaGroupsUpdated)
-        vm.addGroup(name: "New Group", workspaceID: harness.workspaceID)
-
         var notificationFired = false
-        for await _ in notificationStream {
-            notificationFired = true
-            break
+        let token = NotificationCenter.default.addObserver(
+            forName: .kumaGroupsUpdated,
+            object: nil,
+            queue: .main
+        ) { _ in notificationFired = true }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        vm.addGroup(name: "New Group", workspaceID: harness.workspaceID)
+        let deadline = Date().addingTimeInterval(1.0)
+        while !notificationFired && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
         #expect(notificationFired == true)
@@ -31,15 +36,22 @@ struct SidebarRuntimeAndNotificationTests {
         let groupID = vm.groups.first!.id
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        let notificationStream = NotificationCenter.default.notifications(named: .kumaGroupsUpdated)
-        vm.renameGroup(id: groupID, newName: "Renamed G1")
-
         var notificationFired = false
-        for await notif in notificationStream {
+        let token = NotificationCenter.default.addObserver(
+            forName: .kumaGroupsUpdated,
+            object: nil,
+            queue: .main
+        ) { notif in
             if notif.object as? UUID == groupID {
                 notificationFired = true
-                break
             }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        vm.renameGroup(id: groupID, newName: "Renamed G1")
+        let deadline = Date().addingTimeInterval(1.0)
+        while !notificationFired && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
         #expect(notificationFired == true)
@@ -85,13 +97,18 @@ struct SidebarRuntimeAndNotificationTests {
             try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
-        let notificationStream = NotificationCenter.default.notifications(named: .kumaGroupsUpdated)
-        vm.moveGroups(fromOffsets: IndexSet(integer: 0), toOffset: 2)
-
         var notificationFired = false
-        for await _ in notificationStream {
-            notificationFired = true
-            break
+        let token = NotificationCenter.default.addObserver(
+            forName: .kumaGroupsUpdated,
+            object: nil,
+            queue: .main
+        ) { _ in notificationFired = true }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        vm.moveGroups(fromOffsets: IndexSet(integer: 0), toOffset: 2)
+        let deadline = Date().addingTimeInterval(1.0)
+        while !notificationFired && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
         }
 
         #expect(notificationFired == true)
