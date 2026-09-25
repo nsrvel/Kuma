@@ -74,6 +74,24 @@ struct LoggingPipelineTests {
         #expect(logs.contains(where: { $0.message == "Line 2" }))
     }
 
+    @Test("TC-L07: LogAggregator logs(for:) stays consistent after global trim")
+    @MainActor
+    func testAggregatorLogsSubsetOfEntriesAfterTrim() {
+        let aggregator = LogAggregator.shared
+        aggregator.clear()
+        let serviceID = UUID()
+
+        for index in 0..<2_100 {
+            aggregator.append(serviceID: serviceID, serviceName: "TrimTest", level: "INFO", message: "line \(index)")
+        }
+
+        #expect(aggregator.entries.count == 2_000)
+        let serviceLogs = aggregator.logs(for: serviceID)
+        let entryIDs = Set(aggregator.entries.map(\.id))
+        #expect(serviceLogs.allSatisfy { entryIDs.contains($0.id) })
+        aggregator.clear()
+    }
+
     @Test("TC-L06: Pipeline skips LogAggregator without UI subscriber")
     @MainActor
     func testPipelineSkipsAggregatorWithoutSubscriber() async {

@@ -6,31 +6,23 @@ import os
 @Observable
 @MainActor
 public final class ServiceInspectorViewModel {
-    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ServiceInspectorViewModel")
+    static let logger = Logger(subsystem: "lokastudio.kuma", category: "ServiceInspectorViewModel")
 
-    public private(set) var serviceID: UUID
+    public var serviceID: UUID
     public let workspaceID: UUID
-    private let serviceRepository: any ServiceRepositoryProtocol
+    let serviceRepository: any ServiceRepositoryProtocol
 
-    // MARK: - Single Source of Truth (Domain Entities)
     public var service: Service? = nil
     public var providers: [Provider] = []
     public var activeProviderID: UUID? = nil
     public var draftPorts: [KumaPortMappingItem] = []
 
-    // MARK: - UI & State Flags
     public var isViewingLogs: Bool = false
     public var showDeleteConfirmation: Bool = false
-
     public var stateStore: ServiceStateStore?
-
-    // Kubernetes context helper (lazy initialization)
     public var kubeConfigVM: KubeConfigViewModel? = nil
 
-    // Debounce task for continuous text inputs (instant auto-save)
-    private var autoSaveTask: Task<Void, Never>? = nil
-
-    // MARK: - Computed Helpers
+    var autoSaveTask: Task<Void, Never>? = nil
 
     public var executionState: ServiceExecutionState {
         stateStore?.state(for: serviceID) ?? (isRunning ? .running(pid: 0) : .idle)
@@ -65,28 +57,16 @@ public final class ServiceInspectorViewModel {
             let wasRunning = isRunning
             if wasRunning {
                 stateStore?.setExecutionState(.stopping, for: serviceID)
-                NotificationCenter.default.post(
-                    name: .kumaServiceStateChanged,
-                    object: serviceID,
-                    userInfo: ["state": ServiceState.stopping]
-                )
+                ServiceStateNotification.post(serviceID: serviceID, state: .stopping)
                 await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
                 stateStore?.setExecutionState(.idle, for: serviceID)
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                     self.isRunning = false
                 }
-                NotificationCenter.default.post(
-                    name: .kumaServiceStateChanged,
-                    object: serviceID,
-                    userInfo: ["state": ServiceState.stopped]
-                )
+                ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
             } else {
                 stateStore?.setExecutionState(.starting, for: serviceID)
-                NotificationCenter.default.post(
-                    name: .kumaServiceStateChanged,
-                    object: serviceID,
-                    userInfo: ["state": ServiceState.starting]
-                )
+                ServiceStateNotification.post(serviceID: serviceID, state: .starting)
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
                     if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID) {
@@ -97,37 +77,28 @@ public final class ServiceInspectorViewModel {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                         self.isRunning = true
                     }
-                    NotificationCenter.default.post(
-                        name: .kumaServiceStateChanged,
-                        object: serviceID,
-                        userInfo: ["state": ServiceState.running]
-                    )
+                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID)?.pid ?? 0
+                    ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
                 } catch {
                     Self.logger.error("Failed to start service \(self.serviceID): \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: serviceID)
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                         self.isRunning = false
                     }
-                    NotificationCenter.default.post(
-                        name: .kumaServiceStateChanged,
-                        object: serviceID,
-                        userInfo: ["state": ServiceState.crashed]
-                    )
+                    ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: 1)
                 }
             }
             postUpdatedNotification()
         }
     }
 
-    private func postUpdatedNotification() {
+    func postUpdatedNotification() {
         NotificationCenter.default.post(
             name: .kumaServiceUpdated,
             object: serviceID,
             userInfo: ["source": "inspector"]
         )
     }
-
-    // MARK: - Initializer
 
     public init(
         serviceID: UUID,
@@ -139,318 +110,5 @@ public final class ServiceInspectorViewModel {
         self.workspaceID = workspaceID
         self.serviceRepository = serviceRepository
         self.stateStore = stateStore
-    }
-
-    // MARK: - Data Loading
-
-    public func loadService(id: UUID) async {
-        cancelAutoSave()
-        self.serviceID = id
-        do {
-            // PERF-08: Unified single-transaction read query
-            guard let detail = try await serviceRepository.fetchServiceDetail(id: id) else { return }
-            guard self.serviceID == id else { return }
-
-            let srv = detail.service
-            let provs = detail.providers
-            let portList = detail.portMappings
-
-            // In-place atomic update: values morph without destroying UI layout
-            self.service = srv
-            self.providers = provs
-            self.activeProviderID = srv.activeProviderID ?? provs.first?.id
-
-            if portList.isEmpty && (self.activeCategory == .kubernetes || self.activeCategory == .ssh) {
-                self.draftPorts = [KumaPortMappingItem()]
-            } else {
-                self.draftPorts = portList.map {
-                    KumaPortMappingItem(id: $0.id, local: "\($0.localPort)", remote: "\($0.remotePort)")
-                }
-            }
-
-            if let store = stateStore {
-                await store.refreshProcessStates(for: [id])
-                self.isRunning = store.state(for: id).isOperational
-            } else {
-                self.isRunning = await ProcessRegistry.shared.isRunning(serviceID: id)
-            }
-
-            await syncKubeConfigSelectionFromActiveProvider()
-        } catch {
-            Self.logger.error("Failed to load service details for \(id): \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Instant Apply & Auto-Commit Engine
-
-    public func cancelAutoSave() {
-        autoSaveTask?.cancel()
-        autoSaveTask = nil
-    }
-
-    /// Flushes any pending auto-save immediately before teardown or dismissal.
-    public func flushPendingAutoSave() async {
-        let hadPending = autoSaveTask != nil
-        autoSaveTask?.cancel()
-        autoSaveTask = nil
-        if hadPending {
-            await commitChanges()
-        }
-    }
-
-    /// Schedules an auto-commit with debouncing (800ms) for high-frequency text editing.
-    public func scheduleAutoSave() {
-        autoSaveTask?.cancel()
-        let targetServiceID = self.serviceID
-        autoSaveTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 800_000_000)
-                guard !Task.isCancelled, let self, self.serviceID == targetServiceID else { return }
-                await self.commitChanges()
-            } catch is CancellationError {
-                // Expected structured concurrency cancellation on rapid keystrokes
-                return
-            } catch {
-                Self.logger.error("Auto-save task error: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    /// Immediately commits changes to SQLite and broadcasts synchronization event.
-    public func commitChanges() async {
-        guard var srv = service else { return }
-        srv.updatedAt = Date()
-        self.service = srv
-
-        guard var activeProv = activeProvider else { return }
-        activeProv.updatedAt = Date()
-        if activeProv.type == .kubernetes, let kubeVM = kubeConfigVM {
-            activeProv.kubeConfigID = kubeVM.selectedKubeConfigID
-            activeProv.kubeContext = kubeVM.sanitizedProviderContext(storedProviderContext: activeProv.kubeContext)
-        }
-
-        let realPorts = draftPorts.compactMap { item -> ServicePortMapping? in
-            let localStr = item.local.trimmingCharacters(in: .whitespacesAndNewlines)
-            let remoteStr = item.remote.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let local = Int(localStr), let remote = Int(remoteStr), local > 0, remote > 0 else { return nil }
-            return ServicePortMapping(
-                id: item.id,
-                serviceID: self.serviceID,
-                providerID: activeProv.id,
-                localPort: local,
-                remotePort: remote,
-                protocolType: "TCP"
-            )
-        }
-
-        do {
-            try await serviceRepository.updateService(srv)
-            try await serviceRepository.updateProvider(activeProv)
-            try await serviceRepository.savePortMappings(realPorts, forService: serviceID, providerID: activeProv.id)
-
-            // Update in-memory providers list
-            if let idx = providers.firstIndex(where: { $0.id == activeProv.id }) {
-                providers[idx] = activeProv
-            }
-
-            // Broadcast passive notification to notify Deck and surrounding views
-            postUpdatedNotification()
-        } catch is CancellationError {
-            // Structured task was cancelled, ignore
-            return
-        } catch {
-            Self.logger.error("Failed to commit changes for service \(self.serviceID): \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Discrete Provider Operations
-
-    public func switchProvider(to providerID: UUID) {
-        guard providerID != activeProviderID else { return }
-
-        Task {
-            let wasRunning = isRunning
-            await flushPendingAutoSave()
-
-            guard var srv = service else { return }
-
-            if wasRunning {
-                stateStore?.setExecutionState(.stopping, for: serviceID)
-                await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
-            }
-
-            withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-                self.activeProviderID = providerID
-                srv.activeProviderID = providerID
-                srv.updatedAt = Date()
-                self.service = srv
-            }
-
-            do {
-                try await serviceRepository.updateService(srv)
-                await reloadDraftPortsForActiveProvider()
-                await syncKubeConfigSelectionFromActiveProvider()
-                postUpdatedNotification()
-
-                if wasRunning {
-                    stateStore?.setExecutionState(.starting, for: serviceID)
-                    try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
-                    if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID) {
-                        stateStore?.setExecutionState(.running(pid: proc.pid), for: serviceID)
-                    } else {
-                        stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
-                    }
-                    self.isRunning = true
-                    NotificationCenter.default.post(
-                        name: .kumaServiceStateChanged,
-                        object: serviceID,
-                        userInfo: ["state": ServiceState.running]
-                    )
-                }
-            } catch {
-                Self.logger.error("Failed to switch active provider for service \(srv.id): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func addProvider(_ provider: Provider) {
-        // 1. Optimistic immediate state update: insert & select in one render tick
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-            self.providers.append(provider)
-            self.activeProviderID = provider.id
-            if var srv = self.service {
-                srv.activeProviderID = provider.id
-                srv.updatedAt = Date()
-                self.service = srv
-            }
-        }
-
-        if provider.type == .kubernetes && kubeConfigVM == nil {
-            self.kubeConfigVM = KubeConfigViewModel()
-        }
-
-        if provider.type == .kubernetes || provider.type == .ssh {
-            draftPorts = [KumaPortMappingItem()]
-        } else {
-            draftPorts = []
-        }
-
-        // 2. Background async persistence
-        Task {
-            do {
-                try await serviceRepository.insertProvider(provider)
-                if let srv = self.service {
-                    try await serviceRepository.updateService(srv)
-                }
-                postUpdatedNotification()
-            } catch {
-                Self.logger.error("Failed to add provider: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func updateProviderDirectly(_ provider: Provider) {
-        Task {
-            do {
-                try await serviceRepository.updateProvider(provider)
-                if let idx = self.providers.firstIndex(where: { $0.id == provider.id }) {
-                    self.providers[idx] = provider
-                }
-                postUpdatedNotification()
-            } catch {
-                Self.logger.error("Failed to update provider \(provider.id): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func deleteProvider(_ provider: Provider) {
-        Task {
-            do {
-                try await serviceRepository.deleteProvider(id: provider.id)
-                self.providers.removeAll(where: { $0.id == provider.id })
-                if self.activeProviderID == provider.id {
-                    self.activeProviderID = self.providers.first?.id
-                    if var srv = self.service {
-                        srv.activeProviderID = self.activeProviderID
-                        try await self.serviceRepository.updateService(srv)
-                        self.service = srv
-                    }
-                }
-                postUpdatedNotification()
-            } catch {
-                Self.logger.error("Failed to delete provider \(provider.id): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func toggleStarred() {
-        guard var srv = service else { return }
-        srv.isStarred.toggle()
-        srv.updatedAt = Date()
-        self.service = srv
-
-        Task {
-            do {
-                _ = try await serviceRepository.toggleStarred(serviceID: serviceID)
-                postUpdatedNotification()
-            } catch {
-                Self.logger.error("Failed to toggle starred for \(self.serviceID): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func toggleDisabled(_ isDisabled: Bool) {
-        guard var srv = service else { return }
-        srv.isDisabled = isDisabled
-        srv.updatedAt = Date()
-        self.service = srv
-
-        Task {
-            do {
-                try await serviceRepository.updateService(srv)
-                postUpdatedNotification()
-            } catch {
-                Self.logger.error("Failed to toggle disabled state for \(self.serviceID): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    public func deleteService() {
-        Task {
-            do {
-                try await serviceRepository.deleteService(id: serviceID)
-                NotificationCenter.default.post(name: .kumaServiceDeleted, object: serviceID)
-            } catch {
-                Self.logger.error("Failed to delete service \(self.serviceID): \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func reloadDraftPortsForActiveProvider() async {
-        guard let providerID = activeProviderID else {
-            draftPorts = []
-            return
-        }
-        do {
-            let portList = try await serviceRepository.fetchPortMappings(forService: serviceID, providerID: providerID)
-            if portList.isEmpty && (activeCategory == .kubernetes || activeCategory == .ssh) {
-                draftPorts = [KumaPortMappingItem()]
-            } else {
-                draftPorts = portList.map {
-                    KumaPortMappingItem(id: $0.id, local: "\($0.localPort)", remote: "\($0.remotePort)")
-                }
-            }
-        } catch {
-            Self.logger.error("Failed to load port mappings for provider \(providerID): \(error.localizedDescription)")
-        }
-    }
-
-    private func syncKubeConfigSelectionFromActiveProvider() async {
-        guard let provider = activeProvider, provider.type == .kubernetes else { return }
-        if kubeConfigVM == nil {
-            kubeConfigVM = KubeConfigViewModel()
-        }
-        let preferred = provider.kubeConfigID ?? KubeConfig.defaultID
-        await kubeConfigVM?.loadConfigs(preferredSelectionID: preferred)
     }
 }

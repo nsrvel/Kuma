@@ -13,11 +13,9 @@ public struct SidebarView: View {
         VStack(spacing: 0) {
             // Main Navigation List (Pure Apple HIG Native Inset Layout - Tight Margins)
             List {
-                // 1. Workspace Header Row + New Service Button + Divider
+                // 1. Workspace header row + divider
                 VStack(spacing: 0) {
                     SidebarWorkspaceRow(store: workspaceStore)
-
-                    SidebarNewServiceButton()
 
                     KumaDivider(opacity: 0.08, verticalPadding: 6, horizontalPadding: 8)
                 }

@@ -26,6 +26,10 @@ final class ServiceDeckCollectionViewController: NSObject {
 
     func attach(to collectionView: NSCollectionView) {
         self.collectionView = collectionView
+        collectionView.register(
+            ServiceDeckCollectionItem.self,
+            forItemWithIdentifier: ServiceDeckCollectionItem.reuseIdentifier
+        )
         collectionView.collectionViewLayout = Self.makeLayout(columns: 1)
         let source = makeDataSource(collectionView: collectionView)
         collectionView.dataSource = source
@@ -76,9 +80,8 @@ final class ServiceDeckCollectionViewController: NSObject {
     }
 
     private func makeDataSource(collectionView: NSCollectionView) -> NSCollectionViewDiffableDataSource<ServiceDeckSection, UUID> {
-        // ponytail: instantiate items directly — macOS 27 currently throws on `makeItem` dequeue for our
-        // registered subclass; reuse can return once registration/dequeue is stable on this OS.
-        let source = NSCollectionViewDiffableDataSource<ServiceDeckSection, UUID>(collectionView: collectionView) { [weak self] _, _, serviceID in
+        // ponytail: fall back to direct init if dequeue fails on some macOS builds.
+        let source = NSCollectionViewDiffableDataSource<ServiceDeckSection, UUID>(collectionView: collectionView) { [weak self] collectionView, indexPath, serviceID in
             guard let self,
                   let snapshot = self.snapshotByID[serviceID],
                   let viewModel = self.viewModel,
@@ -88,7 +91,15 @@ final class ServiceDeckCollectionViewController: NSObject {
                 return NSCollectionViewItem()
             }
 
-            let item = ServiceDeckCollectionItem(nibName: nil, bundle: nil)
+            let item: ServiceDeckCollectionItem
+            if let dequeued = collectionView.makeItem(
+                withIdentifier: ServiceDeckCollectionItem.reuseIdentifier,
+                for: indexPath
+            ) as? ServiceDeckCollectionItem {
+                item = dequeued
+            } else {
+                item = ServiceDeckCollectionItem(nibName: nil, bundle: nil)
+            }
             item.configure(
                 snapshot: snapshot,
                 viewModel: viewModel,
