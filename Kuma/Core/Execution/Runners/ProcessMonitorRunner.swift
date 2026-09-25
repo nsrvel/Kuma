@@ -38,20 +38,12 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
                     if let pid = currentPID {
                         await pipeline.emit(level: "INFO", message: "[MONITOR] Process '\(processName)' is RUNNING (PID: \(pid))")
                         await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .kumaServiceStateChanged,
-                                object: serviceID,
-                                userInfo: ["state": ServiceState.running]
-                            )
+                            ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
                         }
                     } else {
                         await pipeline.emit(level: "WARN", message: "[MONITOR] Process '\(processName)' is NOT running")
                         await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .kumaServiceStateChanged,
-                                object: serviceID,
-                                userInfo: ["state": ServiceState.stopped]
-                            )
+                            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
                         }
                     }
                 }
@@ -67,11 +59,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         let task = unregisterTask(for: serviceID)
         task?.cancel()
         await MainActor.run {
-            NotificationCenter.default.post(
-                name: .kumaServiceStateChanged,
-                object: serviceID,
-                userInfo: ["state": ServiceState.stopped]
-            )
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
     }
 

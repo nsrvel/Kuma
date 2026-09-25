@@ -3,40 +3,34 @@ import SwiftUI
 /// Feature: Live Logs
 /// Aggregated real-time log streaming viewer across all running services in active workspace.
 public struct LiveLogsView: View {
-    @Environment(WorkspaceStore.self) private var workspaceStore
+    @State private var logAggregator = LogAggregator.shared
     @State private var filterQuery: String = ""
     @State private var debouncedQuery: String = ""
     @State private var selectedServiceFilter: String = "All"
     @State private var isAutoScroll: Bool = true
     @State private var debounceTask: Task<Void, Never>? = nil
 
-    private var logAggregator: LogAggregator {
-        LogAggregator.shared
-    }
-
     public init() {}
-
-    private var availableServices: [String] {
-        Array(Set(logAggregator.entries.map(\.serviceName))).sorted()
-    }
 
     private var filteredLogs: [LiveLogEntry] {
         var list = logAggregator.entries
         if selectedServiceFilter != "All" {
             list = list.filter { $0.serviceName == selectedServiceFilter }
         }
-        let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if !query.isEmpty {
-            list = list.filter { $0.message.lowercased().contains(query) || $0.serviceName.lowercased().contains(query) }
+            list = list.filter {
+                LiveLogTextMatcher.matches($0.message, query: query)
+                    || LiveLogTextMatcher.matches($0.serviceName, query: query)
+            }
         }
         return list
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Filter Bar
             HStack(spacing: 12) {
-                KumaSearchField(text: $filterQuery, prompt: "Filter logs by text or regex…")
+                KumaSearchField(text: $filterQuery, prompt: "Filter logs (substring or /regex/)…")
                     .frame(maxWidth: 320)
                     .onChange(of: filterQuery) { _, newValue in
                         debounceTask?.cancel()
@@ -49,7 +43,7 @@ public struct LiveLogsView: View {
 
                 Picker("Service", selection: $selectedServiceFilter) {
                     Text("All Services").tag("All")
-                    ForEach(availableServices, id: \.self) { srv in
+                    ForEach(logAggregator.availableServiceNames, id: \.self) { srv in
                         Text(srv).tag(srv)
                     }
                 }
@@ -76,7 +70,6 @@ public struct LiveLogsView: View {
 
             Divider().opacity(0.4)
 
-            // High-performance Native Terminal Log Console
             ZStack {
                 Color.black.opacity(0.85)
 
@@ -89,7 +82,9 @@ public struct LiveLogsView: View {
         }
         .navigationTitle("Live Logs")
         .background(KumaColors.canvasBackground)
-        .onAppear { logAggregator.retainUISubscriber() }
-        .onDisappear { logAggregator.releaseUISubscriber() }
+        .task {
+            logAggregator.retainUISubscriber()
+            defer { logAggregator.releaseUISubscriber() }
+        }
     }
 }

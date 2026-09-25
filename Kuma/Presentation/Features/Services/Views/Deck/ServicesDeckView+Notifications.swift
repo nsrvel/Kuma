@@ -23,15 +23,10 @@ extension ServicesDeckView {
             }
             .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { notif in
                 guard let serviceID = notif.object as? UUID,
-                      let state = notif.userInfo?["state"] as? ServiceState else { return }
-                let execState: ServiceExecutionState
-                switch state {
-                case .stopped: execState = .idle
-                case .starting: execState = .starting
-                case .running: execState = .running(pid: 0)
-                case .stopping: execState = .stopping
-                case .crashed: execState = .crashed(exitCode: 1)
-                }
+                      let execState = ServiceStateNotification.executionState(
+                          from: notif.userInfo,
+                          existing: serviceStateStore.state(for: serviceID)
+                      ) else { return }
                 serviceStateStore.setExecutionState(execState, for: serviceID)
                 viewModel.notifyExecutionStatesChanged()
             }

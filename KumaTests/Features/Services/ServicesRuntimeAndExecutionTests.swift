@@ -6,6 +6,25 @@ import Testing
 @MainActor
 struct ServicesRuntimeAndExecutionTests {
 
+    // MARK: - ServiceStateNotification parsing
+    @Test("TC-D07: ServiceStateNotification preserves PID when notification omits pid")
+    func testServiceStateNotificationPreservesPID() {
+        let existing = ServiceExecutionState.running(pid: 4242)
+        let userInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.running]
+        let parsed = ServiceStateNotification.executionState(from: userInfo, existing: existing)
+        #expect(parsed == .running(pid: 4242))
+    }
+
+    @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
+    func testServiceStateNotificationExitCode() {
+        let userInfo: [String: Any] = [
+            ServiceStateNotification.stateKey: ServiceState.crashed,
+            ServiceStateNotification.exitCodeKey: Int32(42)
+        ]
+        let parsed = ServiceStateNotification.executionState(from: userInfo, existing: .idle)
+        #expect(parsed == .crashed(exitCode: 42))
+    }
+
     // MARK: - [TC-D04] Batch Process Status Lookup
     @Test("TC-D04: ProcessRegistry.runningStates returns execution states in single call")
     func testBatchProcessStatusLookup() async {

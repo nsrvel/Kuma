@@ -183,12 +183,13 @@ public actor ProcessRegistry {
         managed.cleanupPipes(drainRemaining: true)
 
         let state: ServiceState = (exitCode == 0 || wasIntentionalStop) ? .stopped : .crashed
+        let pid = managed.process.processIdentifier
         Task { @MainActor in
-            NotificationCenter.default.post(
-                name: .kumaServiceStateChanged,
-                object: serviceID,
-                userInfo: ["state": state]
-            )
+            if state == .crashed {
+                ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: exitCode)
+            } else {
+                ServiceStateNotification.post(serviceID: serviceID, state: state, pid: pid)
+            }
         }
 
         // Send macOS system notification if crashed and notifyOnCrash is enabled

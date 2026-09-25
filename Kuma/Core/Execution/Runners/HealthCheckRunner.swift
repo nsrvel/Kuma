@@ -47,11 +47,11 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
                 guard lastPostedState != state else { return }
                 lastPostedState = state
                 await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .kumaServiceStateChanged,
-                        object: serviceID,
-                        userInfo: ["state": state]
-                    )
+                    if state == .crashed {
+                        ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: 1)
+                    } else {
+                        ServiceStateNotification.post(serviceID: serviceID, state: state)
+                    }
                 }
             }
 
@@ -120,11 +120,7 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
         let task = unregisterTask(for: serviceID)
         task?.cancel()
         await MainActor.run {
-            NotificationCenter.default.post(
-                name: .kumaServiceStateChanged,
-                object: serviceID,
-                userInfo: ["state": ServiceState.stopped]
-            )
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
     }
 

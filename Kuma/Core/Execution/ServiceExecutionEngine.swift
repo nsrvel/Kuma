@@ -122,9 +122,22 @@ public final class ServiceExecutionEngine: Sendable {
         guard !candidates.isEmpty else { return [] }
         var running = healthCheckRunner.activeServiceIDs().intersection(candidates)
         running.formUnion(processMonitorRunner.activeServiceIDs().intersection(candidates))
-        let remaining = candidates.subtracting(running)
-        for id in remaining where await isServiceRunning(serviceID: id) {
-            running.insert(id)
+        var remaining = candidates.subtracting(running)
+
+        let processActive = Set(await ProcessRegistry.shared.activeRunningServiceIDs()).intersection(remaining)
+        running.formUnion(processActive)
+        remaining.subtract(processActive)
+        guard !remaining.isEmpty else { return running }
+
+        await withTaskGroup(of: UUID?.self) { group in
+            for id in remaining {
+                group.addTask {
+                    await self.isServiceRunning(serviceID: id) ? id : nil
+                }
+            }
+            for await id in group {
+                if let id { running.insert(id) }
+            }
         }
         return running
     }
