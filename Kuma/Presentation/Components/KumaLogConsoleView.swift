@@ -142,6 +142,7 @@ public struct KumaLogConsoleView: NSViewRepresentable {
 
 // MARK: - Row formatting
 
+@MainActor
 private enum LogRowFormatter {
     static let placeholderAttributes: [NSAttributedString.Key: Any] = [
         .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
