@@ -33,12 +33,11 @@ extension ServicesDeckView {
                 case .crashed: execState = .crashed(exitCode: 1)
                 }
                 serviceStateStore.setExecutionState(execState, for: serviceID)
-                viewModel.applyRuntimeDiff([serviceID: ServiceRuntimeState(status: state, isLoading: false)])
+                viewModel.notifyExecutionStatesChanged()
             }
             .onReceive(NotificationCenter.default.publisher(for: .kumaServiceDeleted)) { notif in
                 if let deletedID = notif.object as? UUID {
                     viewModel.snapshots.removeAll(where: { $0.id == deletedID })
-                    viewModel.runtimeStates.removeValue(forKey: deletedID)
                     serviceStateStore.removeService(deletedID)
                     if viewModel.selectedServiceID == deletedID {
                         viewModel.selectedServiceID = nil
@@ -49,7 +48,7 @@ extension ServicesDeckView {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .kumaGroupsUpdated)) { _ in
-                viewModel.loadWorkspace(workspaceID: workspaceID)
+                Task { await viewModel.refreshGroups(workspaceID: workspaceID) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .kumaFocusSearch)) { _ in
                 isSearching = true

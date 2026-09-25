@@ -61,16 +61,32 @@ public final class ServicesDeckViewModel {
     /// Views use this instead of diffing the full [ServiceCardSnapshot] array.
     public private(set) var filterVersion: Int = 0
 
-    // MARK: - Tier 3: Live Runtime States (isolated from static list)
-
-    public var runtimeStates: [UUID: ServiceRuntimeState] = [:]
-
     public var canStartAll: Bool {
-        snapshots.contains { !$0.isDisabled && runtimeStates[$0.id]?.status.isOperational != true }
+        bulkActionSnapshots.contains { !$0.isDisabled && !isOperational($0.id) }
     }
 
     public var canStopAll: Bool {
-        snapshots.contains { runtimeStates[$0.id]?.status.isOperational == true }
+        bulkActionSnapshots.contains { isOperational($0.id) }
+    }
+
+    public func runtime(for id: UUID) -> ServiceRuntimeState {
+        stateStore?.runtime(for: id) ?? .idle
+    }
+
+    private func isOperational(_ id: UUID) -> Bool {
+        stateStore?.state(for: id).isOperational == true
+    }
+
+    /// Recompute filtered deck when execution state changes and filters depend on status.
+    public func notifyExecutionStatesChanged() {
+        if !selectedStatuses.isEmpty || sortBy == .status {
+            recomputeFilteredSnapshots()
+        }
+    }
+
+    /// Deck list scope for bulk start/stop (sidebar: All / Starred / Group + toolbar filters).
+    private var bulkActionSnapshots: [ServiceCardSnapshot] {
+        filteredSnapshots
     }
 
     // MARK: - Groups Data
@@ -128,7 +144,7 @@ public final class ServicesDeckViewModel {
                 if snapshot.isDisabled {
                     if !selectedStatuses.contains(.disabled) { return false }
                 } else {
-                    let state = runtimeStates[snapshot.id]?.status ?? .stopped
+                    let state = runtime(for: snapshot.id).status
                     switch state {
                     case .running, .starting:
                         if !selectedStatuses.contains(.running) { return false }
@@ -153,8 +169,8 @@ public final class ServicesDeckViewModel {
             result.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .status:
             result.sort { a, b in
-                let priorityA: Int = a.isDisabled ? 5 : (runtimeStates[a.id]?.status.sortPriority ?? 4)
-                let priorityB: Int = b.isDisabled ? 5 : (runtimeStates[b.id]?.status.sortPriority ?? 4)
+                let priorityA: Int = a.isDisabled ? 5 : runtime(for: a.id).status.sortPriority
+                let priorityB: Int = b.isDisabled ? 5 : runtime(for: b.id).status.sortPriority
 
                 if priorityA != priorityB {
                     return priorityA < priorityB
@@ -178,6 +194,14 @@ public final class ServicesDeckViewModel {
         }
     }
 
+    public func refreshGroups(workspaceID: UUID) async {
+        do {
+            groups = try await groupRepository.fetchAll(workspaceID: workspaceID)
+        } catch {
+            Self.logger.error("Failed to refresh groups for workspace \(workspaceID): \(error.localizedDescription)")
+        }
+    }
+
     public func loadWorkspaceAsync(workspaceID: UUID) async {
         do {
             async let loadedSnapshots = serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
@@ -190,14 +214,6 @@ public final class ServicesDeckViewModel {
             let serviceIDs = loaded.map(\.id)
             if let store = self.stateStore {
                 await store.refreshProcessStates(for: serviceIDs)
-                for id in serviceIDs {
-                    self.runtimeStates[id] = store.runtime(for: id)
-                }
-            } else {
-                let processStates = await ProcessRegistry.shared.runningStates(for: serviceIDs)
-                for (id, state) in processStates {
-                    self.runtimeStates[id] = ServiceRuntimeState(executionState: state)
-                }
             }
 
             let isFirstLoad = !self.hasInitialLoaded
@@ -232,9 +248,8 @@ public final class ServicesDeckViewModel {
         Task {
             // Gentle stagger between auto-started services
             for snapshot in candidates {
-                guard runtimeStates[snapshot.id]?.status.isOperational != true else { continue }
+                guard !isOperational(snapshot.id) else { continue }
                 stateStore?.setExecutionState(.starting, for: snapshot.id)
-                runtimeStates[snapshot.id] = ServiceRuntimeState(status: .starting, isLoading: true)
                 NotificationCenter.default.post(
                     name: .kumaServiceStateChanged,
                     object: snapshot.id,
@@ -244,7 +259,6 @@ public final class ServicesDeckViewModel {
                     try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
                     let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
                     stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
-                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
                     NotificationCenter.default.post(
                         name: .kumaServiceStateChanged,
                         object: snapshot.id,
@@ -253,7 +267,6 @@ public final class ServicesDeckViewModel {
                 } catch {
                     Self.logger.error("Auto-start failed for '\(snapshot.name)': \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
-                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .crashed, isLoading: false)
                     NotificationCenter.default.post(
                         name: .kumaServiceStateChanged,
                         object: snapshot.id,
@@ -276,11 +289,9 @@ public final class ServicesDeckViewModel {
                 }
             } else {
                 snapshots.removeAll(where: { $0.id == id })
-                runtimeStates.removeValue(forKey: id)
             }
             if let store = stateStore {
                 await store.refreshProcessStates(for: [id])
-                runtimeStates[id] = store.runtime(for: id)
             }
         } catch {
             Self.logger.error("Failed to reload single service snapshot \(id): \(error.localizedDescription)")
@@ -294,17 +305,14 @@ public final class ServicesDeckViewModel {
     }
 
     public func toggleServiceAsync(id: UUID) async {
-        let wasRunning = (runtimeStates[id] ?? .idle).status.isOperational
+        let wasRunning = isOperational(id)
 
         if wasRunning {
             stateStore?.setExecutionState(.stopping, for: id)
-            runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
             await ServiceExecutionEngine.shared.stop(serviceID: id)
             stateStore?.setExecutionState(.idle, for: id)
-            runtimeStates[id] = ServiceRuntimeState(status: .stopped, isLoading: false)
         } else {
             stateStore?.setExecutionState(.starting, for: id)
-            runtimeStates[id] = ServiceRuntimeState(status: .starting, isLoading: true)
             do {
                 try await ServiceExecutionEngine.shared.start(serviceID: id)
                 if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: id) {
@@ -312,104 +320,75 @@ public final class ServicesDeckViewModel {
                 } else {
                     stateStore?.setExecutionState(.running(pid: 0), for: id)
                 }
-                runtimeStates[id] = ServiceRuntimeState(status: .running, isLoading: false)
             } catch {
                 Self.logger.error("Failed to start service \(id): \(error.localizedDescription)")
                 stateStore?.setExecutionState(.crashed(exitCode: 1), for: id)
-                runtimeStates[id] = ServiceRuntimeState(status: .crashed, isLoading: false)
             }
         }
 
-        // Recompute if status filter is active or sorting depends on status
-        if !selectedStatuses.isEmpty || sortBy == .status {
-            recomputeFilteredSnapshots()
-        }
+        notifyExecutionStatesChanged()
     }
 
     public func startAllServices() {
         Task {
-            let targetSnapshots = snapshots.filter { snapshot in
-                let isAlreadyRunning = (stateStore?.state(for: snapshot.id).isOperational == true) ||
-                                       (runtimeStates[snapshot.id]?.status.isOperational == true)
-                return !snapshot.isDisabled && !isAlreadyRunning
+            let targetSnapshots = bulkActionSnapshots.filter { snapshot in
+                !snapshot.isDisabled && !isOperational(snapshot.id)
             }
-            
-            // Staggered launch: starts services sequentially with a 150ms delay between each
-            // to avoid extreme spikes in CPU, network socket binds, or OS process limits.
+
             for snapshot in targetSnapshots {
-                let isAlreadyRunning = (stateStore?.state(for: snapshot.id).isOperational == true) ||
-                                       (runtimeStates[snapshot.id]?.status.isOperational == true)
-                guard !isAlreadyRunning else { continue }
+                guard !isOperational(snapshot.id) else { continue }
 
                 stateStore?.setExecutionState(.starting, for: snapshot.id)
-                runtimeStates[snapshot.id] = ServiceRuntimeState(status: .starting, isLoading: true)
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
                     let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
                     stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
-                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
                 } catch {
                     Self.logger.error("Failed to start service \(snapshot.name): \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
-                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .crashed, isLoading: false)
                 }
-                
-                // 150ms gentle stagger gap
+
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
-            
-            if !selectedStatuses.isEmpty || sortBy == .status {
-                recomputeFilteredSnapshots()
-            }
+
+            notifyExecutionStatesChanged()
         }
     }
 
     public func stopAllServices() {
         Task {
-            let runningIDs = snapshots
-                .map(\.id)
-                .filter { id in
-                    (stateStore?.state(for: id).isOperational == true) ||
-                    (runtimeStates[id]?.status.isOperational == true)
-                }
-            
-            // Mark all as stopping immediately for UI responsiveness
+            let runningIDs = bulkActionSnapshots.map(\.id).filter { isOperational($0) }
+
             for id in runningIDs {
                 stateStore?.setExecutionState(.stopping, for: id)
-                runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
             }
-            
-            // Stop services cleanly
+
             for id in runningIDs {
                 await ServiceExecutionEngine.shared.stop(serviceID: id)
                 stateStore?.setExecutionState(.idle, for: id)
-                runtimeStates[id] = ServiceRuntimeState(status: .stopped, isLoading: false)
             }
-            
-            if !selectedStatuses.isEmpty || sortBy == .status {
-                recomputeFilteredSnapshots()
-            }
+
+            notifyExecutionStatesChanged()
         }
     }
 
     public func restartService(id: UUID) {
         Task {
-            runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
+            stateStore?.setExecutionState(.stopping, for: id)
             await ServiceExecutionEngine.shared.stop(serviceID: id)
             try? await Task.sleep(nanoseconds: 300_000_000)
 
-            runtimeStates[id] = ServiceRuntimeState(status: .starting, isLoading: true)
+            stateStore?.setExecutionState(.starting, for: id)
             do {
                 try await ServiceExecutionEngine.shared.start(serviceID: id)
-                runtimeStates[id] = ServiceRuntimeState(status: .running, isLoading: false)
+                let pid = await ProcessRegistry.shared.getSnapshot(serviceID: id)?.pid ?? 0
+                stateStore?.setExecutionState(.running(pid: pid), for: id)
             } catch {
                 Self.logger.error("Failed to restart service \(id): \(error.localizedDescription)")
-                runtimeStates[id] = ServiceRuntimeState(status: .crashed, isLoading: false)
+                stateStore?.setExecutionState(.crashed(exitCode: 1), for: id)
             }
 
-            if !selectedStatuses.isEmpty || sortBy == .status {
-                recomputeFilteredSnapshots()
-            }
+            notifyExecutionStatesChanged()
         }
     }
 
@@ -454,9 +433,7 @@ public final class ServicesDeckViewModel {
 
         // If disabling, also stop runtime
         if newDisabled {
-            var rt = runtimeStates[id] ?? .idle
-            rt.status = .stopped
-            runtimeStates[id] = rt
+            stateStore?.setExecutionState(.idle, for: id)
         }
 
         // 2. Persist
@@ -476,13 +453,12 @@ public final class ServicesDeckViewModel {
     }
 
     public func switchProvider(serviceID: UUID, providerID: UUID, workspaceID: UUID) {
-        let isCurrentlyRunning = runtimeStates[serviceID]?.status.isOperational == true
+        let isCurrentlyRunning = isOperational(serviceID)
 
         Task {
             do {
-                // If service is running, seamlessly stop old runner before switching
                 if isCurrentlyRunning {
-                    runtimeStates[serviceID] = ServiceRuntimeState(status: .stopping, isLoading: true)
+                    stateStore?.setExecutionState(.stopping, for: serviceID)
                     await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
                 }
 
@@ -495,14 +471,15 @@ public final class ServicesDeckViewModel {
 
                     // If it was running, restart immediately with new provider runner
                     if isCurrentlyRunning {
-                        runtimeStates[serviceID] = ServiceRuntimeState(status: .starting, isLoading: true)
+                        stateStore?.setExecutionState(.starting, for: serviceID)
                         try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
-                        runtimeStates[serviceID] = ServiceRuntimeState(status: .running, isLoading: false)
+                        let pid = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID)?.pid ?? 0
+                        stateStore?.setExecutionState(.running(pid: pid), for: serviceID)
                     }
                 }
             } catch {
                 Self.logger.error("Failed to switch provider for service \(serviceID): \(error)")
-                runtimeStates[serviceID] = ServiceRuntimeState(status: .crashed, isLoading: false)
+                stateStore?.setExecutionState(.crashed(exitCode: 1), for: serviceID)
                 await loadWorkspaceAsync(workspaceID: workspaceID)
             }
         }
@@ -614,7 +591,7 @@ public final class ServicesDeckViewModel {
     public func deleteService(id: UUID, workspaceID: UUID) {
         withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
             snapshots.removeAll(where: { $0.id == id })
-            runtimeStates.removeValue(forKey: id)
+            stateStore?.removeService(id)
             if selectedServiceID == id {
                 selectedServiceID = nil
                 isInspectorPresented = false
@@ -637,17 +614,4 @@ public final class ServicesDeckViewModel {
         self.isInspectorPresented = (id != nil)
     }
 
-    /// Batch apply runtime updates from background actor without invalidating static snapshot array
-    public func applyRuntimeDiff(_ diff: [UUID: ServiceRuntimeState]) {
-        var changed = false
-        for (id, state) in diff {
-            if self.runtimeStates[id] != state {
-                self.runtimeStates[id] = state
-                changed = true
-            }
-        }
-        if changed && (!selectedStatuses.isEmpty || sortBy == .status) {
-            recomputeFilteredSnapshots()
-        }
-    }
 }

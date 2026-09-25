@@ -91,25 +91,25 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     // MARK: - [TC-D07] Apply Runtime Diff Performance & Version Stability
-    @Test("TC-D07: applyRuntimeDiff updates state without bumping filterVersion when status filters are inactive")
-    func testApplyRuntimeDiffPerformance() async {
-        let deckVM = ServicesDeckViewModel()
+    @Test("TC-D07: execution state updates without bumping filterVersion when status filters are inactive")
+    func testExecutionStateFilterVersionStability() async {
+        let store = ServiceStateStore()
+        let deckVM = ServicesDeckViewModel(stateStore: store)
         let sID = UUID()
 
         let initialVersion = deckVM.filterVersion
-        deckVM.applyRuntimeDiff([sID: ServiceRuntimeState(status: .running, isLoading: false)])
+        store.setExecutionState(.running(pid: 0), for: sID)
+        deckVM.notifyExecutionStatesChanged()
 
-        #expect(deckVM.runtimeStates[sID]?.status == .running)
-        // With no status filter or sort-by-status active, filterVersion should remain unchanged
+        #expect(deckVM.runtime(for: sID).status == .running)
         #expect(deckVM.filterVersion == initialVersion)
 
-        // Now activate a status filter
         deckVM.selectedStatuses = [.running]
         let versionWithFilter = deckVM.filterVersion
         #expect(versionWithFilter > initialVersion)
 
-        // Diffing status now SHOULD bump version and recompute
-        deckVM.applyRuntimeDiff([sID: ServiceRuntimeState(status: .stopped, isLoading: false)])
+        store.setExecutionState(.idle, for: sID)
+        deckVM.notifyExecutionStatesChanged()
         #expect(deckVM.filterVersion > versionWithFilter)
     }
 }

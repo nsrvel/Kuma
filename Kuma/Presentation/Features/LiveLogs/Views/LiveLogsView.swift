@@ -89,5 +89,7 @@ public struct LiveLogsView: View {
         }
         .navigationTitle("Live Logs")
         .background(KumaColors.canvasBackground)
+        .onAppear { logAggregator.retainUISubscriber() }
+        .onDisappear { logAggregator.releaseUISubscriber() }
     }
 }

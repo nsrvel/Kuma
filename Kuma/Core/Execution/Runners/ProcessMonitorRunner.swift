@@ -79,6 +79,12 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         checkIsRunning(serviceID: serviceID)
     }
 
+    public func activeServiceIDs() -> Set<UUID> {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return Set(activeWatchTasks.compactMap { id, task in task.isCancelled ? nil : id })
+    }
+
     private func checkIsRunning(serviceID: UUID) -> Bool {
         stateLock.lock()
         defer { stateLock.unlock() }

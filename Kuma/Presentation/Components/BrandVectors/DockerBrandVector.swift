@@ -5,8 +5,7 @@ public struct DockerBrandVector: View {
     public init() {}
 
     public var body: some View {
-        GeometryReader { geo in
-            Canvas { ctx, size in
+        Canvas { ctx, size in
                 // Scale normalized to 24x24 viewBox with 1.15x prominent scale centered
                 let baseScale = min(size.width, size.height) / 24.0 * 1.16
                 let offsetX = (size.width - 24.0 * baseScale) / 2.0
@@ -147,8 +146,6 @@ public struct DockerBrandVector: View {
                     Path(ellipseIn: CGRect(x: offsetX + 3.45 * scaleX, y: offsetY + 13.85 * scaleY, width: 0.95 * scaleX, height: 0.95 * scaleY)),
                     with: .color(.black.opacity(0.4))
                 )
-            }
-            .drawingGroup()
         }
     }
 }

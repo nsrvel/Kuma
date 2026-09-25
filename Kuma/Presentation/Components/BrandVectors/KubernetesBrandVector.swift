@@ -5,8 +5,7 @@ public struct KubernetesBrandVector: View {
     public init() {}
 
     public var body: some View {
-        GeometryReader { geo in
-            Canvas { ctx, size in
+        Canvas { ctx, size in
                 let center = CGPoint(x: size.width / 2, y: size.height / 2)
                 let radius = min(size.width, size.height) * 0.455
                 let innerRadius = radius * 0.44
@@ -33,8 +32,6 @@ public struct KubernetesBrandVector: View {
                     spoke.addLine(to: CGPoint(x: center.x + CGFloat(cos(angle)) * radius, y: center.y + CGFloat(sin(angle)) * radius))
                     ctx.stroke(spoke, with: .foreground, style: StrokeStyle(lineWidth: max(1.0, size.width * 0.085)))
                 }
-            }
-            .drawingGroup()
         }
     }
 }

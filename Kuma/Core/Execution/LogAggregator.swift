@@ -37,8 +37,20 @@ public final class LogAggregator {
     public private(set) var entriesByService: [UUID: [LiveLogEntry]] = [:]
     private let maxEntriesPerService = 500
     private let maxTotalEntries = 2000
+    private var uiSubscriberCount = 0
+
+    public var deliversToUI: Bool { uiSubscriberCount > 0 }
 
     private init() {}
+
+    /// Retain while a live-log UI surface is visible (Live Logs, inspector console).
+    public func retainUISubscriber() {
+        uiSubscriberCount += 1
+    }
+
+    public func releaseUISubscriber() {
+        uiSubscriberCount = max(0, uiSubscriberCount - 1)
+    }
 
     public func logs(for serviceID: UUID) -> [LiveLogEntry] {
         entriesByService[serviceID] ?? []
@@ -71,13 +83,14 @@ public final class LogAggregator {
     public func appendBatch(_ newEntries: [LiveLogEntry]) {
         guard !newEntries.isEmpty else { return }
         entries.append(contentsOf: newEntries)
+        var touchedServiceIDs = Set<UUID>()
         for entry in newEntries {
             entriesByService[entry.serviceID, default: []].append(entry)
+            touchedServiceIDs.insert(entry.serviceID)
         }
-        for (serviceID, list) in entriesByService {
-            if list.count > maxEntriesPerService {
-                entriesByService[serviceID] = Array(list.suffix(maxEntriesPerService))
-            }
+        for serviceID in touchedServiceIDs {
+            guard let list = entriesByService[serviceID], list.count > maxEntriesPerService else { continue }
+            entriesByService[serviceID] = Array(list.suffix(maxEntriesPerService))
         }
         if entries.count > maxTotalEntries {
             entries.removeFirst(entries.count - maxTotalEntries)

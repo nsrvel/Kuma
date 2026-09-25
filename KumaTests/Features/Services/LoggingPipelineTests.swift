@@ -57,6 +57,8 @@ struct LoggingPipelineTests {
     @MainActor
     func testPipelineBatching() async {
         let serviceID = UUID()
+        LogAggregator.shared.retainUISubscriber()
+        defer { LogAggregator.shared.releaseUISubscriber() }
         let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: "TestService")
 
         await pipeline.emit(level: "INFO", message: "Line 1")
@@ -70,5 +72,19 @@ struct LoggingPipelineTests {
         #expect(logs.count >= 2)
         #expect(logs.contains(where: { $0.message == "Line 1" }))
         #expect(logs.contains(where: { $0.message == "Line 2" }))
+    }
+
+    @Test("TC-L06: Pipeline skips LogAggregator without UI subscriber")
+    @MainActor
+    func testPipelineSkipsAggregatorWithoutSubscriber() async {
+        let serviceID = UUID()
+        LogAggregator.shared.clear(serviceID: serviceID)
+        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: "NoUISubscriber")
+
+        await pipeline.emit(level: "INFO", message: "Should not land in memory")
+        await pipeline.finish()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(LogAggregator.shared.logs(for: serviceID).isEmpty)
     }
 }

@@ -117,6 +117,18 @@ public final class ServiceExecutionEngine: Sendable {
         return false
     }
 
+    /// Services among `candidates` that are active on non-process runners (health/monitor) or other runners.
+    public func runningServiceIDs(among candidates: Set<UUID>) async -> Set<UUID> {
+        guard !candidates.isEmpty else { return [] }
+        var running = healthCheckRunner.activeServiceIDs().intersection(candidates)
+        running.formUnion(processMonitorRunner.activeServiceIDs().intersection(candidates))
+        let remaining = candidates.subtracting(running)
+        for id in remaining where await isServiceRunning(serviceID: id) {
+            running.insert(id)
+        }
+        return running
+    }
+
     private func setPipeline(_ pipeline: ServiceLogPipeline, for serviceID: UUID) {
         activePipelinesLock.lock()
         defer { activePipelinesLock.unlock() }

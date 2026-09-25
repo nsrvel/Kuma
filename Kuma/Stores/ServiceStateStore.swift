@@ -47,6 +47,8 @@ public final class ServiceStateStore {
     public func refreshProcessStates(for serviceIDs: [UUID]) async {
         guard !serviceIDs.isEmpty else { return }
         let currentProcessStates = await processRegistry.runningStates(for: serviceIDs)
+        let idleProcessIDs = Set(currentProcessStates.compactMap { id, state in state == .idle ? id : nil })
+        let runningWithoutProcess = await ServiceExecutionEngine.shared.runningServiceIDs(among: idleProcessIDs)
 
         for (id, state) in currentProcessStates {
             let existing = executionStates[id] ?? .idle
@@ -58,8 +60,7 @@ public final class ServiceStateStore {
                 continue
             }
             if state == .idle {
-                // Check if actively managed by non-process runner (HealthCheck / ProcessMonitor)
-                if await ServiceExecutionEngine.shared.isServiceRunning(serviceID: id) {
+                if runningWithoutProcess.contains(id) {
                     if !existing.isOperational {
                         executionStates[id] = .running(pid: 0)
                     }

@@ -86,9 +86,12 @@ public actor ServiceLogPipeline {
         let batch = pendingBatch
         pendingBatch.removeAll(keepingCapacity: true)
 
-        // 1. Hot path: Single batch append to LogAggregator on MainActor (1 view invalidation per frame)
+        // 1. Hot path: UI batch only when a live-log surface is subscribed
         Task { @MainActor in
-            LogAggregator.shared.appendBatch(batch)
+            let aggregator = LogAggregator.shared
+            if aggregator.deliversToUI {
+                aggregator.appendBatch(batch)
+            }
         }
 
         // 2. Cold path: Single batch append to disk LogFileWriter

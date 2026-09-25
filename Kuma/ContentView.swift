@@ -124,13 +124,10 @@ struct ContentView: View {
             LiveLogsView()
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
 
-            // Main Dashboard Workspace Stage with Deck View (All Services, Starred, or Group Filter)
-            let isStarred = (selectedID == .stable("starred-services"))
-            let filterGroupID = sidebarViewModel.groupIDForSelectedRow(selectedID)
-            ServicesDeckView(
+            WorkspaceServicesDeckHost(
                 workspaceID: activeWorkspace.id,
-                isStarredOnly: isStarred,
-                filterGroupID: filterGroupID
+                selectedSidebarID: selectedID,
+                sidebarViewModel: sidebarViewModel
             )
             .id(activeWorkspace.id)
         } else {

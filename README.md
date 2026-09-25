@@ -15,9 +15,7 @@ Optional CLI tools (detected at runtime): `kubectl`, `docker`, `podman`, `ssh`, 
 
 1. Open [Releases](https://github.com/nsrvel/Kuma/releases) and download the latest `Kuma-x.y.dmg`.
 2. Open the DMG and drag **Kuma** to **Applications**.
-3. First launch: if macOS blocks the app (unsigned/ad-hoc build), open **System Settings → Privacy & Security** and choose **Open Anyway**, or right-click the app → **Open**.
-
-> Signed/notarized Developer ID builds may be added later; until then, Gatekeeper warnings are expected for downloaded builds.
+3. First launch: official releases from tags with signing secrets configured should open without Gatekeeper warnings. Ad-hoc CI/local DMGs may still require **Open Anyway** in **System Settings → Privacy & Security**.
 
 ## Build from source
 
@@ -55,6 +53,37 @@ git push origin v1.0.0
 ```
 
 The **Release** workflow (`.github/workflows/release.yml`) builds `dist/Kuma-*.dmg` and attaches it to the new GitHub Release with auto-generated notes.
+
+#### Signed & notarized releases (maintainers)
+
+**Not free:** distributing outside the App Store with no Gatekeeper warning requires the [Apple Developer Program](https://developer.apple.com/programs/) (**USD 99/year**). A free Apple ID only gives **Apple Development** signing (local/Xcode), not **Developer ID Application** + notarization.
+
+1. In [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list), create **Developer ID Application** (or via Xcode → Settings → Accounts → Manage Certificates).
+2. Export the cert + private key as a `.p12` for CI.
+3. Create an [app-specific password](https://appleid.apple.com) for `notarytool`.
+4. Add repository **Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Example / notes |
+|--------|------------------|
+| `BUILD_CERTIFICATE_BASE64` | `base64 -i Certificates.p12 \| pbcopy` |
+| `P12_PASSWORD` | Password used when exporting the `.p12` |
+| `MACOS_SIGN_IDENTITY` | `Developer ID Application: Your Name (UX2S427FB9)` — run `security find-identity -v -p codesigning` |
+| `APPLE_TEAM_ID` | `UX2S427FB9` (10-character Team ID) |
+| `APPLE_ID` | Apple ID email used for notarization |
+| `APPLE_NOTARIZATION_PASSWORD` | App-specific password (not your login password) |
+
+Without these secrets, release builds still ship as **ad-hoc** DMGs (same as before). With secrets, `make-dmg.sh` signs with hardened runtime and notarizes the DMG.
+
+Local signed build (after installing the Developer ID cert in your login keychain):
+
+```bash
+export MACOS_SIGN_IDENTITY='Developer ID Application: …'
+export APPLE_TEAM_ID=UX2S427FB9
+# Optional notarization:
+export APPLE_ID=you@example.com
+export APPLE_NOTARIZATION_PASSWORD=xxxx-xxxx-xxxx-xxxx
+./Scripts/make-dmg.sh
+```
 
 ## Project layout
 

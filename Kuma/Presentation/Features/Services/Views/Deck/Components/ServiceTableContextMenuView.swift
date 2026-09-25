@@ -4,14 +4,14 @@ extension View {
     @ViewBuilder
     public func serviceTableContextMenu(
         snapshots: [ServiceCardSnapshot],
-        runtimeStates: [UUID: ServiceRuntimeState],
+        runtimeFor: @escaping (UUID) -> ServiceRuntimeState,
         groups: [ServiceGroup],
         handlers: ServiceTableActionHandlers
     ) -> some View {
         self.contextMenu(forSelectionType: UUID.self) { selectedIDs in
             if let firstID = selectedIDs.first,
                let snapshot = snapshots.first(where: { $0.id == firstID }) {
-                let runtime = runtimeStates[snapshot.id] ?? .idle
+                let runtime = runtimeFor(snapshot.id)
                 ServiceActionContextMenu(
                     snapshot: snapshot,
                     runtime: runtime,

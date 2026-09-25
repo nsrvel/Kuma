@@ -142,7 +142,7 @@ struct SettingsAndLifecycleTests {
         // Since it was disabled, candidates list is empty, so it should not be removed from saved list or started
         let remaining = defaults.stringArray(forKey: KumaSettingsKey.activeServiceIDsBeforeQuit) ?? []
         #expect(remaining.contains(s1.id.uuidString))
-        #expect(deckVM.runtimeStates[s1.id]?.status.isOperational != true)
+        #expect(deckVM.runtime(for: s1.id).status.isOperational != true)
 
         // Test with autoResumeServices = false
         defaults.set(false, forKey: KumaSettingsKey.autoResumeServices)

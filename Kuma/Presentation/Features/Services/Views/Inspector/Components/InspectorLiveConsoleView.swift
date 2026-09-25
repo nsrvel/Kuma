@@ -59,5 +59,7 @@ public struct InspectorLiveConsoleView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { logAggregator.retainUISubscriber() }
+        .onDisappear { logAggregator.releaseUISubscriber() }
     }
 }
