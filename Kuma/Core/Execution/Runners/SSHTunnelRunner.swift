@@ -93,9 +93,13 @@ public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
         args.append("\(user)@\(host)")
 
-        // Clear local ports from orphaned processes
         for mapping in portMappings {
-            await killProcessOccupying(port: mapping.localPort, pipeline: pipeline)
+            try await LocalPortConflictResolver.shared.ensurePortAvailable(
+                port: mapping.localPort,
+                startingServiceID: service.id,
+                startingServiceName: service.name,
+                pipeline: pipeline
+            )
         }
 
         await pipeline.emit(level: "INFO", message: "Connecting SSH tunnel to \(user)@\(host):\(port)...")
@@ -157,32 +161,4 @@ public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
         }
     }
 
-    private func killProcessOccupying(port: Int, pipeline: ServiceLogPipeline) async {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        process.arguments = ["-ti", ":\(port)"]
-        let pipe = Pipe()
-        defer { try? pipe.fileHandleForReading.close() }
-        process.standardOutput = pipe
-
-        do {
-            try process.run()
-            process.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
-                let pids = output.components(separatedBy: .newlines).compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                let currentPID = ProcessInfo.processInfo.processIdentifier
-
-                for pid in pids where pid != currentPID {
-                    await pipeline.emit(level: "WARN", message: "Port \(port) was held by zombie process (PID \(pid)). Releasing port...")
-                    kill(pid, SIGTERM)
-                }
-                if !pids.isEmpty {
-                    try? await Task.sleep(nanoseconds: 200_000_000)
-                }
-            }
-        } catch {
-            Self.logger.debug("lsof port check failed: \(error.localizedDescription)")
-        }
-    }
 }

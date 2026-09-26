@@ -194,10 +194,8 @@ public actor ProcessRegistry {
 
         // Send macOS system notification if crashed and notifyOnCrash is enabled
         if exitCode != 0 && !wasIntentionalStop && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
-            let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
             await SystemNotificationCenter.shared.send(
-                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)"),
-                playSound: playSound
+                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)")
             )
         }
     }
@@ -264,6 +262,20 @@ public actor ProcessRegistry {
             pgid: managed.pgid,
             startTime: managed.startTime
         )
+    }
+
+    public func serviceName(forPID pid: pid_t) -> String? {
+        for managed in activeProcesses.values where managed.process.isRunning && managed.process.processIdentifier == pid {
+            return managed.serviceName
+        }
+        return nil
+    }
+
+    public func serviceID(forPID pid: pid_t) -> UUID? {
+        for managed in activeProcesses.values where managed.process.isRunning && managed.process.processIdentifier == pid {
+            return managed.serviceID
+        }
+        return nil
     }
 
     /// Batch queries execution states for a list of service IDs in a single actor crossing.

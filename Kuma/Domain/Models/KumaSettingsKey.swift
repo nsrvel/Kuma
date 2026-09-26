@@ -30,10 +30,7 @@ public nonisolated enum KumaSettingsKey {
 
     // MARK: - Notifications & Safety
     public static let notifyOnCrash = "kuma.settings.notifyOnCrash"
-    public static let notifySound = "kuma.settings.notifySound"
-    public static let warnOnPortCollision = "kuma.settings.warnOnPortCollision"
     public static let portConflictPolicy = "kuma.settings.portConflictPolicy"
-    public static let promptGracefulShutdown = "kuma.settings.promptGracefulShutdown"
 
     // MARK: - Logs & Buffer
     public static let logRetentionLimit = "kuma.settings.logRetentionLimit"
