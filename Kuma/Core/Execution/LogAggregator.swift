@@ -36,14 +36,16 @@ public final class LogAggregator {
     public private(set) var entries: [LiveLogEntry] = []
     public private(set) var availableServiceNames: [String] = []
 
-    private let maxEntriesPerService = 500
-    private let maxTotalEntries = 2000
+    private var maxEntriesPerService = 500
+    private var maxTotalEntries = 2_000
     private var uiSubscriberCount = 0
     private var serviceNameByID: [UUID: String] = [:]
 
     public var deliversToUI: Bool { uiSubscriberCount > 0 }
 
-    private init() {}
+    private init() {
+        applyRetentionSettings()
+    }
 
     /// Retain while a live-log UI surface is visible (Live Logs, inspector console).
     public func retainUISubscriber() {
@@ -52,6 +54,11 @@ public final class LogAggregator {
 
     public func releaseUISubscriber() {
         uiSubscriberCount = max(0, uiSubscriberCount - 1)
+    }
+
+    public func refreshRetentionFromSettings() {
+        applyRetentionSettings()
+        trimEntriesIfNeeded()
     }
 
     public func logs(for serviceID: UUID) -> [LiveLogEntry] {
@@ -93,6 +100,12 @@ public final class LogAggregator {
         rebuildAvailableServiceNames()
     }
 
+    private func applyRetentionSettings() {
+        let limit = LogRetentionLimit.current()
+        maxEntriesPerService = limit.maxLinesPerService
+        maxTotalEntries = limit.maxTotalLines
+    }
+
     private func registerServiceName(serviceID: UUID, serviceName: String) {
         guard !serviceName.isEmpty else { return }
         if serviceNameByID[serviceID] != serviceName {
@@ -107,9 +120,29 @@ public final class LogAggregator {
     }
 
     private func trimEntriesIfNeeded() {
-        if entries.count > maxTotalEntries {
+        applyRetentionSettings()
+
+        if maxTotalEntries < Int.max, entries.count > maxTotalEntries {
             entries.removeFirst(entries.count - maxTotalEntries)
-            rebuildAvailableServiceNames()
         }
+
+        if maxEntriesPerService < Int.max {
+            trimPerServiceKeepingNewest()
+        }
+
+        rebuildAvailableServiceNames()
+    }
+
+    private func trimPerServiceKeepingNewest() {
+        var kept: [LiveLogEntry] = []
+        var counts: [UUID: Int] = [:]
+        for entry in entries.reversed() {
+            let count = counts[entry.serviceID, default: 0]
+            if count < maxEntriesPerService {
+                kept.append(entry)
+                counts[entry.serviceID] = count + 1
+            }
+        }
+        entries = kept.reversed()
     }
 }

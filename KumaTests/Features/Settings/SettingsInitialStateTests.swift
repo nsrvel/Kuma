@@ -64,7 +64,7 @@ struct SettingsInitialStateTests {
     }
 
     // MARK: - [TC-A05] Clean Install Default Notification & Safety
-    @Test("TC-A05: Fresh install initializes safety toggles to enabled")
+    @Test("TC-A05: Fresh install initializes crash notifications to enabled")
     func testDefaultNotificationSettings() {
         let harness = SettingsTestHarness()
         defer { harness.cleanup() }
@@ -72,13 +72,10 @@ struct SettingsInitialStateTests {
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
         #expect(viewModel.notifyOnCrash == true)
-        #expect(viewModel.notifySound == true)
-        #expect(viewModel.warnOnPortCollision == true)
-        #expect(viewModel.promptGracefulShutdown == true)
     }
 
     // MARK: - [TC-A06] Clean Install Default Log Retention
-    @Test("TC-A06: Fresh install defaults to 50MB log buffer limit and false clearLogsOnSwitch")
+    @Test("TC-A06: Fresh install defaults to medium log buffer limit and false clearLogsOnSwitch")
     func testDefaultLogRetention() {
         let harness = SettingsTestHarness()
         defer { harness.cleanup() }
@@ -86,7 +83,8 @@ struct SettingsInitialStateTests {
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
         #expect(viewModel.logRetentionLimit == .fiftyMB)
-        #expect(viewModel.logRetentionLimit.title == "50 MB")
+        #expect(viewModel.logRetentionLimit.title == "~500 lines")
+        #expect(viewModel.logRetentionLimit.maxTotalLines == 2_000)
         #expect(viewModel.clearLogsOnSwitch == false)
     }
 

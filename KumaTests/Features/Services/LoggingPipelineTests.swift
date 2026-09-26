@@ -77,18 +77,35 @@ struct LoggingPipelineTests {
     @Test("TC-L07: LogAggregator logs(for:) stays consistent after global trim")
     @MainActor
     func testAggregatorLogsSubsetOfEntriesAfterTrim() {
-        let aggregator = LogAggregator.shared
-        aggregator.clear()
-        let serviceID = UUID()
+        let key = KumaSettingsKey.logRetentionLimit
+        let prior = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.set(LogRetentionLimit.fiftyMB.rawValue, forKey: key)
+        defer {
+            if let prior {
+                UserDefaults.standard.set(prior, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+            LogAggregator.shared.refreshRetentionFromSettings()
+        }
 
-        for index in 0..<2_100 {
-            aggregator.append(serviceID: serviceID, serviceName: "TrimTest", level: "INFO", message: "line \(index)")
+        let aggregator = LogAggregator.shared
+        aggregator.refreshRetentionFromSettings()
+        aggregator.clear()
+
+        let serviceIDs = (0..<5).map { _ in UUID() }
+        for serviceID in serviceIDs {
+            for index in 0..<450 {
+                aggregator.append(serviceID: serviceID, serviceName: "TrimTest", level: "INFO", message: "line \(index)")
+            }
         }
 
         #expect(aggregator.entries.count == 2_000)
-        let serviceLogs = aggregator.logs(for: serviceID)
         let entryIDs = Set(aggregator.entries.map(\.id))
-        #expect(serviceLogs.allSatisfy { entryIDs.contains($0.id) })
+        for serviceID in serviceIDs {
+            let serviceLogs = aggregator.logs(for: serviceID)
+            #expect(serviceLogs.allSatisfy { entryIDs.contains($0.id) })
+        }
         aggregator.clear()
     }
 
@@ -102,6 +119,60 @@ struct LoggingPipelineTests {
         await pipeline.emit(level: "INFO", message: "Should not land in memory")
         await pipeline.finish()
         try? await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(LogAggregator.shared.logs(for: serviceID).isEmpty)
+    }
+
+    @Test("TC-L08: LogAggregator enforces logRetentionLimit from settings")
+    @MainActor
+    func testRetentionLimitFromSettings() {
+        let key = KumaSettingsKey.logRetentionLimit
+        let prior = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.set(LogRetentionLimit.tenMB.rawValue, forKey: key)
+        defer {
+            if let prior {
+                UserDefaults.standard.set(prior, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+            LogAggregator.shared.refreshRetentionFromSettings()
+            LogAggregator.shared.clear()
+        }
+
+        LogAggregator.shared.refreshRetentionFromSettings()
+        let aggregator = LogAggregator.shared
+        aggregator.clear()
+        let serviceID = UUID()
+
+        for index in 0..<1_100 {
+            aggregator.append(serviceID: serviceID, serviceName: "Retention", level: "INFO", message: "line \(index)")
+        }
+
+        #expect(aggregator.entries.count <= 1_000)
+        aggregator.clear()
+    }
+
+    @Test("TC-L09: clearLogsOnSwitch clears in-memory logs on service start hook")
+    @MainActor
+    func testClearLogsOnRestartSetting() {
+        let key = KumaSettingsKey.clearLogsOnSwitch
+        let prior = UserDefaults.standard.object(forKey: key)
+        UserDefaults.standard.set(true, forKey: key)
+        defer {
+            if let prior {
+                UserDefaults.standard.set(prior, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        let serviceID = UUID()
+        LogAggregator.shared.append(serviceID: serviceID, serviceName: "Restart", message: "before")
+        #expect(!LogAggregator.shared.logs(for: serviceID).isEmpty)
+
+        if KumaSettingsKey.bool(forKey: KumaSettingsKey.clearLogsOnSwitch, defaultValue: false) {
+            LogAggregator.shared.clear(serviceID: serviceID)
+        }
 
         #expect(LogAggregator.shared.logs(for: serviceID).isEmpty)
     }

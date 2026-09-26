@@ -7,8 +7,36 @@ extension SidebarViewModel {
         do {
             self.groups = try await groupRepository.fetchAll(workspaceID: workspaceID)
             rebuildEntries()
+            reconcileSelectionForLoadedWorkspace()
         } catch {
             Self.logger.error("Failed to load groups for workspace \(workspaceID): \(error)")
+            self.groups = []
+            rebuildEntries()
+            reconcileSelectionForLoadedWorkspace()
+        }
+    }
+
+    func reconcileSelectionForLoadedWorkspace() {
+        let globalNavIDs: Set<UUID> = [
+            .stable("all-services"),
+            .stable("starred-services"),
+            .stable("live-logs"),
+            .stable("settings"),
+            .stable("groups"),
+        ]
+
+        if let selectedID {
+            let selectionIsValid =
+                globalNavIDs.contains(selectedID)
+                || groups.contains(where: { $0.id == selectedID })
+            if !selectionIsValid {
+                self.selectedID = .stable("all-services")
+            }
+        }
+
+        if let editingGroupID,
+           !groups.contains(where: { $0.id == editingGroupID }) {
+            self.editingGroupID = nil
         }
     }
 

@@ -75,6 +75,10 @@ public final class ServiceExecutionEngine: Sendable {
 
         Self.logger.info("Starting service '\(service.name)' with provider '\(provider.type.rawValue)'")
 
+        if KumaSettingsKey.bool(forKey: KumaSettingsKey.clearLogsOnSwitch, defaultValue: false) {
+            await MainActor.run { LogAggregator.shared.clear(serviceID: serviceID) }
+        }
+
         let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
         setPipeline(pipeline, for: serviceID)
 

@@ -80,10 +80,8 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
                         await postStateIfChanged(nextState)
 
                         if wasHealthy == true && !isHealthy && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
-                            let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
                             await SystemNotificationCenter.shared.send(
-                                .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString),
-                                playSound: playSound
+                                .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
                             )
                         }
                         wasHealthy = isHealthy
@@ -99,10 +97,8 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
                     await postStateIfChanged(.crashed)
 
                     if wasHealthy != false && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
-                        let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
                         await SystemNotificationCenter.shared.send(
-                            .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString),
-                            playSound: playSound
+                            .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
                         )
                     }
                     wasHealthy = false

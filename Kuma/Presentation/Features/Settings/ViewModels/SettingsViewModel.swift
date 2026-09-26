@@ -40,11 +40,37 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
 
     public var title: String {
         switch self {
-        case .tenMB: return "10 MB"
-        case .fiftyMB: return "50 MB"
-        case .hundredMB: return "100 MB"
+        case .tenMB: return "~250 lines"
+        case .fiftyMB: return "~500 lines"
+        case .hundredMB: return "~1,000 lines"
         case .unlimited: return "Unlimited"
         }
+    }
+
+    public var maxLinesPerService: Int {
+        switch self {
+        case .tenMB: return 250
+        case .fiftyMB: return 500
+        case .hundredMB: return 1_000
+        case .unlimited: return .max
+        }
+    }
+
+    public var maxTotalLines: Int {
+        switch self {
+        case .tenMB: return 1_000
+        case .fiftyMB: return 2_000
+        case .hundredMB: return 5_000
+        case .unlimited: return .max
+        }
+    }
+
+    public static func current(defaults: UserDefaults = .standard) -> LogRetentionLimit {
+        if let saved = defaults.object(forKey: KumaSettingsKey.logRetentionLimit) as? Int,
+           let limit = LogRetentionLimit(rawValue: saved) {
+            return limit
+        }
+        return .fiftyMB
     }
 }
 
@@ -137,26 +163,16 @@ public final class SettingsViewModel {
         didSet { userDefaults.set(ngrokRegion, forKey: Keys.ngrokRegion) }
     }
 
-    // MARK: - Notifications & Safety
+    // MARK: - Service notifications (failure toggle UI in General)
 
     public var notifyOnCrash: Bool {
         didSet { userDefaults.set(notifyOnCrash, forKey: Keys.notifyOnCrash) }
     }
 
-    public var notifySound: Bool {
-        didSet { userDefaults.set(notifySound, forKey: Keys.notifySound) }
-    }
-
-    public var warnOnPortCollision: Bool {
-        didSet { userDefaults.set(warnOnPortCollision, forKey: Keys.warnOnPortCollision) }
-    }
+    // MARK: - Ports & safety
 
     public var portConflictPolicy: PortConflictPolicy {
         didSet { userDefaults.set(portConflictPolicy.rawValue, forKey: Keys.portConflictPolicy) }
-    }
-
-    public var promptGracefulShutdown: Bool {
-        didSet { userDefaults.set(promptGracefulShutdown, forKey: Keys.promptGracefulShutdown) }
     }
 
     // MARK: - Advanced & Data
@@ -224,11 +240,8 @@ public final class SettingsViewModel {
         self.ngrokRegion = userDefaults.string(forKey: Keys.ngrokRegion) ?? "auto"
 
         self.notifyOnCrash = KumaSettingsKey.bool(forKey: Keys.notifyOnCrash, defaultValue: true, defaults: userDefaults)
-        self.notifySound = KumaSettingsKey.bool(forKey: Keys.notifySound, defaultValue: true, defaults: userDefaults)
-        self.warnOnPortCollision = KumaSettingsKey.bool(forKey: Keys.warnOnPortCollision, defaultValue: true, defaults: userDefaults)
         let rawPortPolicy = userDefaults.string(forKey: Keys.portConflictPolicy) ?? PortConflictPolicy.warnAndBlock.rawValue
         self.portConflictPolicy = PortConflictPolicy(rawValue: rawPortPolicy) ?? .warnAndBlock
-        self.promptGracefulShutdown = KumaSettingsKey.bool(forKey: Keys.promptGracefulShutdown, defaultValue: true, defaults: userDefaults)
 
         if let savedLimit = userDefaults.object(forKey: Keys.logRetentionLimit) as? Int,
            let limit = LogRetentionLimit(rawValue: savedLimit) {
@@ -313,10 +326,7 @@ public final class SettingsViewModel {
             Keys.ngrokAuthToken,
             Keys.ngrokRegion,
             Keys.notifyOnCrash,
-            Keys.notifySound,
-            Keys.warnOnPortCollision,
             Keys.portConflictPolicy,
-            Keys.promptGracefulShutdown,
             Keys.logRetentionLimit,
             Keys.clearLogsOnSwitch,
             Keys.legacyKubectlPath,
@@ -347,10 +357,7 @@ public final class SettingsViewModel {
         self.ngrokAuthToken = ""
         self.ngrokRegion = "auto"
         self.notifyOnCrash = true
-        self.notifySound = true
-        self.warnOnPortCollision = true
         self.portConflictPolicy = .warnAndBlock
-        self.promptGracefulShutdown = true
         self.logRetentionLimit = .fiftyMB
         self.clearLogsOnSwitch = false
 

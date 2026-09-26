@@ -15,7 +15,7 @@ public struct SettingsLogsSection: View {
             VStack(alignment: .leading, spacing: KumaSpacing.lg) {
                 KumaRowPickerField(
                     label: "Log Buffer Limit",
-                    description: "Maximum log lines retained in memory per service.",
+                    description: "Caps the live in-memory log buffer (per service and overall). Does not trim on-disk log files.",
                     options: LogRetentionLimit.allCases,
                     selection: $viewModel.logRetentionLimit,
                     titleResolver: { $0.title }
