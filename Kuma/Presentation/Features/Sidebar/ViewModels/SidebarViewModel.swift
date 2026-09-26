@@ -28,19 +28,24 @@ public final class SidebarViewModel {
         groupRepository: any ServiceGroupRepositoryProtocol = ServiceGroupRepository()
     ) {
         self.groupRepository = groupRepository
-        let finalEntries = entries.isEmpty ? Self.defaultEntries : entries
         self.selectedID = selectedID ?? .stable("all-services")
+
+        if entries.isEmpty {
+            self.entries = []
+            self.rebuildEntries()
+        } else {
+            self.entries = entries
+        }
 
         var initialExpanded = expandedIDs
         if expandedIDs.isEmpty {
-            for entry in finalEntries {
+            for entry in self.entries {
                 if case .item(let node) = entry, node.isExpandedByDefault {
                     initialExpanded.insert(node.id)
                 }
             }
         }
         self.expandedIDs = initialExpanded
-        self.entries = finalEntries
         self.rebuildFlattenedRows()
     }
 

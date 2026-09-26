@@ -65,42 +65,6 @@ extension SidebarViewModel {
         ]
     }
 
-    public static var defaultEntries: [SidebarEntry] {
-        [
-            .item(SidebarNode(
-                id: .stable("all-services"),
-                title: "All Services",
-                icon: .system("square.grid.2x2.fill"),
-                children: nil
-            )),
-            .item(SidebarNode(
-                id: .stable("starred-services"),
-                title: "Starred",
-                icon: .system("star"),
-                children: nil
-            )),
-            .item(SidebarNode(
-                id: .stable("live-logs"),
-                title: "Live Logs",
-                icon: .system("terminal"),
-                children: nil
-            )),
-            .item(SidebarNode(
-                id: .stable("groups"),
-                title: "Groups",
-                icon: .system("folder"),
-                children: [],
-                actions: [
-                    SidebarAction(icon: "plus", tooltip: "New Group") {
-                        // Action handled dynamically when VM is initialized
-                    }
-                ],
-                isSpecialHeader: true,
-                isExpandedByDefault: true
-            ))
-        ]
-    }
-
     func rebuildFlattenedRows() {
         var result: [FlattenedRow] = []
 

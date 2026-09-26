@@ -72,6 +72,16 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
         }
         return .fiftyMB
     }
+
+    /// On-disk log file size cap per service (MB); `unlimited` disables rotation.
+    public var maxDiskMegabytes: Int? {
+        switch self {
+        case .tenMB: return 10
+        case .fiftyMB: return 50
+        case .hundredMB: return 100
+        case .unlimited: return nil
+        }
+    }
 }
 
 public enum PortConflictPolicy: String, CaseIterable, Codable, Sendable {
@@ -178,7 +188,10 @@ public final class SettingsViewModel {
     // MARK: - Advanced & Data
 
     public var logRetentionLimit: LogRetentionLimit {
-        didSet { userDefaults.set(logRetentionLimit.rawValue, forKey: Keys.logRetentionLimit) }
+        didSet {
+            userDefaults.set(logRetentionLimit.rawValue, forKey: Keys.logRetentionLimit)
+            LogAggregator.shared.refreshRetentionFromSettings()
+        }
     }
 
     public var clearLogsOnSwitch: Bool {

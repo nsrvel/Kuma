@@ -58,6 +58,15 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
         let resolvedTarget = "\(kubeTarget.portForwardKind)/\(resolvedName)"
 
+        try await preflightTargetExists(
+            kubectlPath: kubectl,
+            target: resolvedTarget,
+            namespace: namespace,
+            context: context,
+            kubeconfigPath: kubeconfigPath,
+            pipeline: pipeline
+        )
+
         var args = ["port-forward", resolvedTarget]
 
         if let kubeconfigPath, !kubeconfigPath.isEmpty {
@@ -202,6 +211,50 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
         await pipeline.emit(level: "INFO", message: "Matched \(targetType.displayLabel): '\(matched)'.")
         return matched
+    }
+
+    private func preflightTargetExists(
+        kubectlPath: String,
+        target: String,
+        namespace: String?,
+        context: String?,
+        kubeconfigPath: String?,
+        pipeline: ServiceLogPipeline
+    ) async throws {
+        var getArgs = ["get", target, "-o", "name"]
+        if let kubeconfigPath, !kubeconfigPath.isEmpty {
+            getArgs.append(contentsOf: ["--kubeconfig", kubeconfigPath])
+        }
+        if let namespace, !namespace.isEmpty {
+            getArgs.append(contentsOf: ["-n", namespace])
+        }
+        if let context, !context.isEmpty {
+            getArgs.append(contentsOf: ["--context", context])
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: kubectlPath)
+        process.arguments = getArgs
+        let stderrPipe = Pipe()
+        process.standardError = stderrPipe
+
+        do {
+            try process.run()
+        } catch {
+            throw ServiceExecutionError.processFailed("Preflight failed to run kubectl: \(error.localizedDescription)")
+        }
+
+        process.waitUntilExit()
+        if process.terminationStatus == 0 {
+            await pipeline.emit(level: "INFO", message: "Preflight OK: \(target) exists in cluster.")
+            return
+        }
+
+        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        try? stderrPipe.fileHandleForReading.close()
+        let errMsg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = (errMsg?.isEmpty == false) ? errMsg! : "exit code \(process.terminationStatus)"
+        throw ServiceExecutionError.processFailed("Preflight failed for \(target): \(detail)")
     }
 
 }

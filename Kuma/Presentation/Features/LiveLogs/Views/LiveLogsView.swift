@@ -9,23 +9,9 @@ public struct LiveLogsView: View {
     @State private var selectedServiceFilter: String = "All"
     @State private var isAutoScroll: Bool = true
     @State private var debounceTask: Task<Void, Never>? = nil
+    @State private var displayedLogs: [LiveLogEntry] = []
 
     public init() {}
-
-    private var filteredLogs: [LiveLogEntry] {
-        var list = logAggregator.entries
-        if selectedServiceFilter != "All" {
-            list = list.filter { $0.serviceName == selectedServiceFilter }
-        }
-        let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !query.isEmpty {
-            list = list.filter {
-                LiveLogTextMatcher.matches($0.message, query: query)
-                    || LiveLogTextMatcher.matches($0.serviceName, query: query)
-            }
-        }
-        return list
-    }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -74,7 +60,7 @@ public struct LiveLogsView: View {
                 Color.black.opacity(0.85)
 
                 KumaLogConsoleView(
-                    entries: filteredLogs,
+                    entries: displayedLogs,
                     isAutoScroll: isAutoScroll,
                     emptyPlaceholder: "No live logs yet.\nStart a service to stream real-time logs here."
                 )
@@ -82,9 +68,28 @@ public struct LiveLogsView: View {
         }
         .navigationTitle("Live Logs")
         .background(KumaColors.canvasBackground)
+        .onAppear { recomputeDisplayedLogs() }
+        .onChange(of: logAggregator.changeToken) { _, _ in recomputeDisplayedLogs() }
+        .onChange(of: debouncedQuery) { _, _ in recomputeDisplayedLogs() }
+        .onChange(of: selectedServiceFilter) { _, _ in recomputeDisplayedLogs() }
         .task {
             logAggregator.retainUISubscriber()
             defer { logAggregator.releaseUISubscriber() }
         }
+    }
+
+    private func recomputeDisplayedLogs() {
+        var list = logAggregator.entries
+        if selectedServiceFilter != "All" {
+            list = list.filter { $0.serviceName == selectedServiceFilter }
+        }
+        let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            list = list.filter {
+                LiveLogTextMatcher.matches($0.message, query: query)
+                    || LiveLogTextMatcher.matches($0.serviceName, query: query)
+            }
+        }
+        displayedLogs = list
     }
 }

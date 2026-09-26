@@ -25,8 +25,9 @@ public struct ServiceInspectorView: View {
     public var body: some View {
         VStack(spacing: 0) {
             if let service = inspectorVM.service {
-                let isRunning = inspectorVM.isRunning
-                let isLocked = service.isDisabled || isRunning
+                let executionState = serviceStateStore.state(for: serviceID)
+                let isRunning = executionState.isOperational
+                let isLocked = service.isDisabled || isRunning || executionState == .starting
 
                 let isViewingLogs = inspectorVM.isViewingLogs
 
@@ -34,7 +35,7 @@ public struct ServiceInspectorView: View {
                 InspectorStatusHeader(
                     service: service,
                     provider: inspectorVM.activeProvider,
-                    runtime: ServiceRuntimeState(executionState: inspectorVM.executionState),
+                    runtime: ServiceRuntimeState(executionState: executionState),
                     isViewingLogs: isViewingLogs,
                     onToggle: {
                         inspectorVM.toggleRunning()
@@ -92,10 +93,11 @@ public struct ServiceInspectorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { notif in
             guard let changedID = notif.object as? UUID,
                   changedID == serviceID,
-                  let state = notif.userInfo?["state"] as? ServiceState else { return }
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                inspectorVM.isRunning = state.isOperational
-            }
+                  let execState = ServiceStateNotification.executionState(
+                      from: notif.userInfo,
+                      existing: serviceStateStore.state(for: serviceID)
+                  ) else { return }
+            serviceStateStore.setExecutionState(execState, for: serviceID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
             if notif.userInfo?["source"] as? String == "inspector" { return }
