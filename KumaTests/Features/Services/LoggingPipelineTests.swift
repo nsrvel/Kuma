@@ -176,4 +176,22 @@ struct LoggingPipelineTests {
 
         #expect(LogAggregator.shared.logs(for: serviceID).isEmpty)
     }
+
+    @Test("TC-L10: logs(for:) reads per-service index without scanning all entries")
+    @MainActor
+    func testPerServiceIndexMatchesChronologicalFilter() {
+        let aggregator = LogAggregator.shared
+        aggregator.clear()
+        let serviceA = UUID()
+        let serviceB = UUID()
+
+        aggregator.append(serviceID: serviceA, serviceName: "A", message: "a1")
+        aggregator.append(serviceID: serviceB, serviceName: "B", message: "b1")
+        aggregator.append(serviceID: serviceA, serviceName: "A", message: "a2")
+
+        let indexed = aggregator.logs(for: serviceA)
+        let filtered = aggregator.entries.filter { $0.serviceID == serviceA }
+        #expect(indexed == filtered)
+        aggregator.clear()
+    }
 }

@@ -15,6 +15,15 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(parsed == .running(pid: 4242))
     }
 
+    @Test("TC-D09: ServiceStateNotification maps starting and stopping without flattening to idle")
+    func testServiceStateNotificationTransientStates() {
+        let startingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.starting]
+        #expect(ServiceStateNotification.executionState(from: startingInfo, existing: .idle) == .starting)
+
+        let stoppingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopping]
+        #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .running(pid: 9)) == .stopping)
+    }
+
     @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
     func testServiceStateNotificationExitCode() {
         let userInfo: [String: Any] = [

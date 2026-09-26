@@ -146,7 +146,7 @@ final class ServiceDeckCollectionViewController: NSObject {
         let width = max(0, contentWidth - Self.contentInset * 2)
         guard width > 0 else { return }
 
-        let columns = ServiceDeckGridLayout.columnCount(
+        let columns = ServiceDeckColumnMetrics.columnCount(
             forWidth: width,
             minColumnWidth: Self.minColumnWidth,
             spacing: Self.spacing

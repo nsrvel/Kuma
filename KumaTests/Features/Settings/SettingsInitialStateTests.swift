@@ -85,6 +85,7 @@ struct SettingsInitialStateTests {
         #expect(viewModel.logRetentionLimit == .fiftyMB)
         #expect(viewModel.logRetentionLimit.title == "~500 lines")
         #expect(viewModel.logRetentionLimit.maxTotalLines == 2_000)
+        #expect(viewModel.logRetentionLimit.maxDiskMegabytes == 50)
         #expect(viewModel.clearLogsOnSwitch == false)
     }
 
