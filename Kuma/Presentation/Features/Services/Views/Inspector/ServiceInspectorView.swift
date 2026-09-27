@@ -109,6 +109,10 @@ public struct ServiceInspectorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .kumaGroupsUpdated)) { _ in
             Task { await inspectorVM.loadService(id: serviceID) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceDeleted)) { notif in
+            guard let deletedID = notif.object as? UUID, deletedID == serviceID else { return }
+            inspectorVM.clearAfterExternalDeletion()
+        }
         .onDisappear {
             Task {
                 await inspectorVM.flushPendingAutoSave()

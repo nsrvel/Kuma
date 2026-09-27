@@ -48,6 +48,14 @@ public final class ServiceInspectorViewModel {
         activeProvider?.type ?? .docker
     }
 
+    public func clearAfterExternalDeletion() {
+        service = nil
+        providers = []
+        activeProviderID = nil
+        draftPorts = []
+        cancelAutoSave()
+    }
+
     func postUpdatedNotification() {
         KumaServiceNotification.postServiceUpdated(
             serviceID: serviceID,

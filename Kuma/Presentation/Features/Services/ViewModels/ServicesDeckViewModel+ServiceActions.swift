@@ -178,7 +178,7 @@ extension ServicesDeckViewModel {
             } catch {
                 Self.logger.error("Failed to switch provider for service \(serviceID): \(error)")
                 stateStore?.setExecutionState(.crashed(exitCode: 1), for: serviceID)
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                await refreshSingleServiceSnapshot(id: serviceID)
             }
         }
     }
@@ -247,11 +247,14 @@ extension ServicesDeckViewModel {
         Task {
             do {
                 _ = try await serviceRepository.duplicateService(sourceID: id, newID: newServiceID)
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                await refreshSingleServiceSnapshot(id: newServiceID)
+                recomputeFilteredSnapshots()
                 NotificationCenter.default.post(name: .kumaServiceCreated, object: newServiceID)
             } catch {
                 Self.logger.error("Failed to duplicate service \(id): \(error)")
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                snapshots.removeAll(where: { $0.id == newServiceID })
+                recomputeFilteredSnapshots()
+                await refreshSingleServiceSnapshot(id: id)
             }
         }
     }
@@ -299,7 +302,8 @@ extension ServicesDeckViewModel {
                 NotificationCenter.default.post(name: .kumaServiceDeleted, object: id)
             } catch {
                 Self.logger.error("Failed to delete service \(id): \(error)")
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                await refreshSingleServiceSnapshot(id: id)
+                recomputeFilteredSnapshots()
             }
         }
     }

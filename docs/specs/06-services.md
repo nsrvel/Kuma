@@ -87,20 +87,12 @@
 
 ## 5. CRITICAL: Deck ↔ Inspector State Desynchronization
 
-### SYNC-01: Inspector Flattens Runtime State to Boolean — **Fixed (partial)**
-- **Location**: [`ServiceInspectorViewModel.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift), [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
-- **Resolution**: Inspector UI and toggles use `ServiceStateStore` / `ServiceExecutionState`; `toggleRunning` mutates the store (`.idle` after stop). Legacy `isRunning` getter may remain for compat but is no longer the source of truth.
-- **Rule Violated**: AGENTS.md §2 — *"Enums Over Multi-Booleans"*
-- **Detail**: Inspector tracks runtime state via `isRunning: Bool`. States `.starting`, `.stopping`, and `.crashed` are **flattened to `false`**. `InspectorRunningBanner` branches for these states are dead code.
-- **Chain**:
-  ```
-  ProcessRegistry → .kumaServiceStateChanged(ServiceState) 
-  → ServiceInspectorView: inspectorVM.isRunning = state.isOperational  // .starting/.crashed → false
-  → InspectorStatusHeader receives ServiceRuntimeState(status: isRunning ? .running : .stopped)
-  → .starting / .stopping / .crashed states NEVER reach UI
-  ```
+### SYNC-01: Inspector Flattens Runtime State to Boolean — **Fixed**
+- **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift), [`ServiceInspectorViewModel`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift)
+- **Resolution**: Inspector reads `ServiceStateStore` via `executionState` / `ServiceRuntimeState(executionState:)` for header, lock, and banner; `.starting` / `.stopping` / `.crashed` are no longer flattened to a lone `isRunning` binding.
 
 ### SYNC-02: Inspector Ignores Deck Mutations — **Fixed (partial)**
+- **SYNC-02b**: [`ServiceInspectorView`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift) handles `.kumaServiceDeleted` via `clearAfterExternalDeletion()` (**TC-C12**).
 - **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
 - **Resolution**: Inspector reloads on `.kumaServiceUpdated` (skips `source == inspector`) and `.kumaGroupsUpdated`; service delete is handled by Deck (close inspector + clear selection). Previously missing observers:
   - `.kumaServiceUpdated` — provider switch, rename, star, disable from Deck
@@ -109,8 +101,8 @@
 - **Impact**: Inspector displays stale data after any Deck-initiated mutation until manually reopened.
 
 ### SYNC-03: Full Workspace Reload on Every Single Keystroke — **Fixed (partial)**
-- **Detail**: Deck now uses `refreshSingleServiceSnapshot` for many single-service mutations; inspector-sourced updates still refresh one card instead of full workspace where possible.
-- **Remaining**: Inspector auto-save may still post `.kumaServiceUpdated` frequently — deck skips self-originated deck actions via `KumaServiceNotification.sourceDeck`.
+- **Detail**: Deck uses `refreshSingleServiceSnapshot` for single-service mutations; duplicate/delete/provider-switch error paths no longer call `loadWorkspaceAsync` (**TC-C11**).
+- **Remaining**: Inspector auto-save may still post `.kumaServiceUpdated` frequently — deck skips deck-sourced events via `KumaServiceNotification.sourceDeck`.
 
 ### SYNC-04: Optimistic Update Overwrite Race — **Fixed (partial)**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckViewModel+ServiceActions.swift`](Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel+ServiceActions.swift)
@@ -146,21 +138,21 @@
 - **Location**: [`LogChronologicalBuffer.swift`](Kuma/Core/Execution/LogChronologicalBuffer.swift), [`LogAggregator.swift`](Kuma/Core/Execution/LogAggregator.swift)
 - **Resolution**: Fixed-capacity ring buffer with O(1) eviction. **TC-E04**.
 
-### PERF-03: MainActor Task Flooding from Log Pipeline
-- **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `makeLogPipeline()`
-- **Detail**: Every stdout line creates **two** unthrottled tasks (`Task { @MainActor in LogAggregator... }` + `Task { await LogFileWriter... }`). At 500 lines/sec → 1,000 tasks/sec flooding the MainActor runloop.
+### PERF-03: MainActor Task Flooding from Log Pipeline — **Fixed**
+- **Location**: [`ServiceLogPipeline.swift`](Kuma/Core/Execution/Logging/ServiceLogPipeline.swift)
+- **Resolution**: ~30Hz batching to `LogAggregator.appendBatch`; UI append gated on `deliversToUI`. **TC-E03**.
 
-### PERF-04: LiveLogsView Body Computation
-- **Location**: [`LiveLogsView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift) line 36
-- **Detail**: `Array(Set(logAggregator.entries.map(\.serviceName))).sorted()` runs inside the view body. Every appended log re-maps, deduplicates, and sorts on the MainActor.
+### PERF-04: LiveLogsView Body Computation — **Fixed**
+- **Location**: [`LiveLogsView.swift`](Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift)
+- **Resolution**: `changeToken` drives `displayedLogs`; service picker uses `availableServiceNames` maintained by aggregator.
 
 ### PERF-05: 10 Concurrent Notification Loops — **Fixed (partial)**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift)
 - **Resolution**: Deck uses consolidated `.onReceive` handlers instead of multiple infinite `.task` notification loops (reduces duplicate listeners and rebuild churn).
 
-### PERF-06: ISO8601DateFormatter Created on Every Flush
-- **Location**: [`LogFileWriter.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/LogFileWriter.swift) line 67
-- **Detail**: `let dateFormatter = ISO8601DateFormatter()` instantiated inside `flushBuffer()` on every flush cycle instead of being cached.
+### PERF-06: ISO8601DateFormatter Created on Every Flush — **Fixed**
+- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
+- **Resolution**: `isoFormatter` cached on `LogFileWriter` actor.
 
 ### PERF-07: Unbounded Disk Log Growth — **Fixed (partial)**
 - **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
@@ -171,9 +163,9 @@
 - **Detail**: Grid parent read `ServiceStateStore` for every row; each card held `ServicesDeckViewModel` and `groups`, causing O(n) invalidation on unrelated deck mutations.
 - **Resolution**: Runtime isolated in `ServiceCardRow`; cards use `ServiceDeckActions` environment (closures, not `@Observable` VM); table status/actions cells read store per row; Canvas brand icons use `drawingGroup` to reduce repaint cost.
 
-### PERF-08: Triple Database Trip on Inspector Open
-- **Location**: [`ServiceInspectorViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift) — `loadService()`
-- **Detail**: Makes 3 distinct DB roundtrips (`fetchService`, `fetchProviders`, `fetchPortMappings`) instead of a single unified query.
+### PERF-08: Triple Database Trip on Inspector Open — **Fixed**
+- **Location**: [`ServiceInspectorViewModel+Loading.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel+Loading.swift), [`ServiceRepository+CRUD.swift`](Kuma/Core/Database/Repositories/ServiceRepository+CRUD.swift)
+- **Resolution**: `fetchServiceDetail` single read transaction. **TC-C01**.
 
 ### PERF-09: Idle State Not Zero-Effort — **Fixed (partial)**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckRuntimeObservation.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckRuntimeObservation.swift)
@@ -203,26 +195,14 @@
 
 ## 9. MEDIUM: View Architecture & Line Count Violations
 
-### 15 Files Exceed 150-Line Limit
+### View files still over 150 lines (2026-09 audit refresh)
 
-| File | Lines | Excess |
-|:-----|:------|:-------|
-| `ServicesDeckViewModel.swift` | 528 | +378 |
-| `ServiceInspectorViewModel.swift` | 353 | +203 |
-| `KubeConfigViewModel.swift` | 271 | +121 |
-| `ServicesDeckView.swift` | 254 | +104 |
-| `ServiceTableView.swift` | 238 | +88 |
-| `CreateServiceSheet.swift` | 237 | +87 |
-| `InspectorStatusHeader.swift` | 207 | +57 |
-| `ServiceInspectorView.swift` | 199 | +49 |
-| `CreateServiceFillDetailsStepView.swift` | 190 | +40 |
-| `ServicesToolbar.swift` | 189 | +39 |
-| `ServiceProvidersSectionView.swift` | 183 | +33 |
-| `ServiceActionContextMenu.swift` | 179 | +29 |
-| `InspectorOptionsSection.swift` | 178 | +28 |
-| `ServiceCardView.swift` | 176 | +26 |
-| `KubeConfigConnectionView.swift` | 153 | +3 |
-| `ContentView.swift` | 152 | +2 |
+| File | Lines (approx.) |
+|:-----|:----------------|
+| `CreateServiceSheet.swift` | 160 |
+| `ServicesDeckView.swift` | 154 |
+
+Deck view models are split across extensions (`ServicesDeckViewModel.swift` ~106 lines core; `ServicesDeckViewModel+ServiceActions.swift` still large — future split). **TC-F01** target list.
 
 ### 21 Views Missing `#Preview` Blocks (See Full List in Audit)
 

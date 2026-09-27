@@ -192,4 +192,44 @@ struct ServicesPersistenceAndSyncTests {
         #expect(snapshot?.portDisplays == [8080])
         #expect(snapshot?.providerCategory == .kubernetes)
     }
+
+    // MARK: - [TC-C11] Duplicate uses single-snapshot refresh
+    @Test("TC-C11: duplicateService refreshes only the new card snapshot")
+    func testDuplicateServiceUsesSingleSnapshotRefresh() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "Source Service",
+            providerType: .docker
+        )
+
+        let deckVM = ServicesDeckViewModel(serviceRepository: harness.serviceRepository)
+        await deckVM.loadWorkspaceAsync(workspaceID: harness.defaultWorkspaceID)
+        let countBefore = deckVM.snapshots.count
+
+        deckVM.duplicateService(id: service.id, workspaceID: harness.defaultWorkspaceID)
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(deckVM.snapshots.count == countBefore + 1)
+        #expect(deckVM.snapshots.contains(where: { $0.name == "Source Service (Copy)" }))
+    }
+
+    @Test("TC-C12: Inspector clears in-memory state after external deletion")
+    func testInspectorClearsAfterExternalDeletion() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(name: "Gone", providerType: .shell)
+
+        let inspectorVM = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await inspectorVM.loadService(id: service.id)
+        #expect(inspectorVM.service != nil)
+
+        inspectorVM.clearAfterExternalDeletion()
+
+        #expect(inspectorVM.service == nil)
+        #expect(inspectorVM.providers.isEmpty)
+    }
 }
