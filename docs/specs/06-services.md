@@ -178,6 +178,11 @@
 - **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
 - **Resolution**: Flush path reads `KumaSettingsKey.logRetentionLimit` and enforces retention on disk (see Settings log retention picker).
 
+### PERF-10: Deck Card Observation Fan-Out — **Fixed (partial)**
+- **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`ServiceDeckActions.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServiceDeckActions.swift), [`ServiceCardView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardView.swift)
+- **Detail**: Grid parent read `ServiceStateStore` for every row; each card held `ServicesDeckViewModel` and `groups`, causing O(n) invalidation on unrelated deck mutations.
+- **Resolution**: Runtime isolated in `ServiceCardRow`; cards use `ServiceDeckActions` environment (closures, not `@Observable` VM); table status/actions cells read store per row; Canvas brand icons use `drawingGroup` to reduce repaint cost.
+
 ### PERF-08: Triple Database Trip on Inspector Open
 - **Location**: [`ServiceInspectorViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift) — `loadService()`
 - **Detail**: Makes 3 distinct DB roundtrips (`fetchService`, `fetchProviders`, `fetchPortMappings`) instead of a single unified query.

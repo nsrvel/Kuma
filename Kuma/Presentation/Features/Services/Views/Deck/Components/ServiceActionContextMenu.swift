@@ -4,7 +4,7 @@ import AppKit
 public struct ServiceActionContextMenu: View {
     public let snapshot: ServiceCardSnapshot
     public let runtime: ServiceRuntimeState
-    public var groups: [ServiceGroup] = []
+    public var groupsProvider: () -> [ServiceGroup]
     public let onToggle: () -> Void
     public let onRestart: () -> Void
     public let onSwitchProvider: (UUID) -> Void
@@ -19,7 +19,7 @@ public struct ServiceActionContextMenu: View {
     public init(
         snapshot: ServiceCardSnapshot,
         runtime: ServiceRuntimeState,
-        groups: [ServiceGroup] = [],
+        groupsProvider: @escaping () -> [ServiceGroup] = { [] },
         onToggle: @escaping () -> Void = {},
         onRestart: @escaping () -> Void = {},
         onSwitchProvider: @escaping (UUID) -> Void = { _ in },
@@ -33,7 +33,7 @@ public struct ServiceActionContextMenu: View {
     ) {
         self.snapshot = snapshot
         self.runtime = runtime
-        self.groups = groups
+        self.groupsProvider = groupsProvider
         self.onToggle = onToggle
         self.onRestart = onRestart
         self.onSwitchProvider = onSwitchProvider
@@ -67,7 +67,7 @@ public struct ServiceActionContextMenu: View {
 
             ServiceProviderSwitchSubmenu(snapshot: snapshot, onSwitchProvider: onSwitchProvider)
 
-            ServiceGroupsSubmenu(groups: groups, selectedGroupIDs: snapshot.groupIDs, onToggleGroup: onToggleGroup)
+            ServiceGroupsSubmenu(groups: groupsProvider(), selectedGroupIDs: snapshot.groupIDs, onToggleGroup: onToggleGroup)
 
             Button {
                 onToggleStar()

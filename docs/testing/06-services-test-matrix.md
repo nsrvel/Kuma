@@ -78,6 +78,14 @@
 
 ---
 
+### Kategori G: Deck UI Performance (Invalidation & Rendering)
+| ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result |
+| :--- | :--- | :--- | :--- |
+| **TC-G01** | `testDeckSearchDebouncing` | (lihat TC-UI01) | Filter debounce tanpa full reload berlebihan |
+| **TC-G02** | `testServiceCardViewUsesDeckActionsNotViewModel` | Compile-time: `ServiceCardView` tidak memegang `ServicesDeckViewModel` | Card actions via `ServiceDeckActions` environment |
+
+---
+
 ### Kategori F: Headless SwiftUI View Hierarchy, Modularitas & HIG Accessibility
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result |
 | :--- | :--- | :--- | :--- |
