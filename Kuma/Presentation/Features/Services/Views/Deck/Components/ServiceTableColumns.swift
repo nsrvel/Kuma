@@ -53,31 +53,49 @@ public struct ServiceTableNameCell: View {
     }
 }
 
+/// Live status cell — reads `ServiceStateStore` per row.
+public struct ServiceTableStatusCell: View {
+    public let serviceID: UUID
+    public let isDisabled: Bool
+    public let onSelect: (UUID) -> Void
+
+    @Environment(ServiceStateStore.self) private var serviceStateStore
+
+    public var body: some View {
+        ServiceStatusObserver(
+            state: serviceStateStore.runtime(for: serviceID),
+            isDisabled: isDisabled
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onSelect(serviceID) }
+    }
+}
+
 /// Actions menu button cell for ServiceTableView.
 public struct ServiceTableActionsCell: View {
     public let snapshot: ServiceCardSnapshot
-    public let runtime: ServiceRuntimeState
-    public let groups: [ServiceGroup]
+    public let groupsProvider: () -> [ServiceGroup]
     public let handlers: ServiceTableActionHandlers
+
+    @Environment(ServiceStateStore.self) private var serviceStateStore
 
     public init(
         snapshot: ServiceCardSnapshot,
-        runtime: ServiceRuntimeState,
-        groups: [ServiceGroup],
+        groupsProvider: @escaping () -> [ServiceGroup],
         handlers: ServiceTableActionHandlers
     ) {
         self.snapshot = snapshot
-        self.runtime = runtime
-        self.groups = groups
+        self.groupsProvider = groupsProvider
         self.handlers = handlers
     }
 
     public var body: some View {
+        let runtime = serviceStateStore.runtime(for: snapshot.id)
         Menu {
             ServiceActionContextMenu(
                 snapshot: snapshot,
                 runtime: runtime,
-                groups: groups,
+                groupsProvider: groupsProvider,
                 onToggle: { handlers.onToggle(snapshot.id) },
                 onRestart: { handlers.onRestart(snapshot.id) },
                 onSwitchProvider: { provID in handlers.onSwitchProvider(snapshot.id, provID) },

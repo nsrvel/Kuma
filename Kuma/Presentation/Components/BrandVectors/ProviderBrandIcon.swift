@@ -17,12 +17,15 @@ public struct ProviderBrandIcon: View {
             case .docker:
                 DockerBrandVector()
                     .frame(width: size, height: size)
+                    .drawingGroup(opaque: false, colorMode: .nonLinear)
             case .kubernetes:
                 KubernetesBrandVector()
                     .frame(width: size, height: size)
+                    .drawingGroup(opaque: false, colorMode: .nonLinear)
             case .podman:
                 PodmanBrandVector()
                     .frame(width: size, height: size)
+                    .drawingGroup(opaque: false, colorMode: .nonLinear)
             case .shell:
                 Image(systemName: "terminal.fill")
                     .resizable()

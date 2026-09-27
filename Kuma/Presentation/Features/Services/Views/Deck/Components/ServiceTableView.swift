@@ -1,63 +1,28 @@
 import SwiftUI
 
 /// Ultra-polished native macOS Table view for Services deck.
-/// Features 1:1 gradient provider icons matching ServiceCardView, monospaced configs,
-/// interactive port chips, live status pills, and context menu actions via an ellipsis button.
 public struct ServiceTableView: View {
     public let snapshots: [ServiceCardSnapshot]
-    public let runtimeFor: (UUID) -> ServiceRuntimeState
     public let selectedID: UUID?
-    public var groups: [ServiceGroup] = []
-
+    public let groupsProvider: () -> [ServiceGroup]
     public let handlers: ServiceTableActionHandlers
+
     @State private var selection: Set<UUID> = []
 
     public init(
         snapshots: [ServiceCardSnapshot],
-        runtimeFor: @escaping (UUID) -> ServiceRuntimeState,
         selectedID: UUID?,
-        groups: [ServiceGroup] = [],
+        groupsProvider: @escaping () -> [ServiceGroup],
         handlers: ServiceTableActionHandlers
     ) {
         self.snapshots = snapshots
-        self.runtimeFor = runtimeFor
         self.selectedID = selectedID
-        self.groups = groups
+        self.groupsProvider = groupsProvider
         self.handlers = handlers
-    }
-
-    public init(
-        snapshots: [ServiceCardSnapshot],
-        runtimeFor: @escaping (UUID) -> ServiceRuntimeState,
-        selectedID: UUID?,
-        groups: [ServiceGroup] = [],
-        onToggle: @escaping (UUID) -> Void,
-        onRestart: @escaping (UUID) -> Void = { _ in },
-        onSwitchProvider: @escaping (UUID, UUID) -> Void = { _, _ in },
-        onToggleStar: @escaping (UUID) -> Void = { _ in },
-        onToggleDisabled: @escaping (UUID) -> Void = { _ in },
-        onToggleGroup: @escaping (UUID, UUID) -> Void = { _, _ in },
-        onDuplicate: @escaping (UUID) -> Void = { _ in },
-        onCopyConfig: @escaping (UUID) -> Void = { _ in },
-        onDelete: @escaping (UUID) -> Void = { _ in },
-        onSelect: @escaping (UUID) -> Void
-    ) {
-        self.init(
-            snapshots: snapshots,
-            runtimeFor: runtimeFor,
-            selectedID: selectedID,
-            groups: groups,
-            handlers: ServiceTableActionHandlers(
-                onToggle: onToggle, onRestart: onRestart, onSwitchProvider: onSwitchProvider,
-                onToggleStar: onToggleStar, onToggleDisabled: onToggleDisabled, onToggleGroup: onToggleGroup,
-                onDuplicate: onDuplicate, onCopyConfig: onCopyConfig, onDelete: onDelete, onSelect: onSelect
-            )
-        )
     }
 
     public var body: some View {
         Table(snapshots, selection: $selection) {
-            // MARK: 1. Service Identity (Icon + Star + Name)
             TableColumn("Name") { snapshot in
                 ServiceTableNameCell(
                     snapshot: snapshot,
@@ -66,7 +31,6 @@ public struct ServiceTableView: View {
             }
             .width(min: 160, ideal: 220)
 
-            // MARK: 2. Provider (Standard Clean Text)
             TableColumn("Provider") { snapshot in
                 Text(snapshot.providerCategory.sidebarLabel)
                     .font(.system(size: 11))
@@ -77,28 +41,24 @@ public struct ServiceTableView: View {
             }
             .width(ideal: 90)
 
-            // MARK: 3. Ports (Interactive Port Chips)
             TableColumn("Ports") { snapshot in
                 ServiceTablePortsCell(snapshot: snapshot, onSelect: handlers.onSelect)
             }
             .width(ideal: 110)
 
-            // MARK: 4. Status (Polished Capsule Pill)
             TableColumn("Status") { snapshot in
-                let runtime = runtimeFor(snapshot.id)
-                ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
-                    .contentShape(Rectangle())
-                    .onTapGesture { handlers.onSelect(snapshot.id) }
+                ServiceTableStatusCell(
+                    serviceID: snapshot.id,
+                    isDisabled: snapshot.isDisabled,
+                    onSelect: handlers.onSelect
+                )
             }
             .width(ideal: 90)
 
-            // MARK: 5. Actions (Ellipsis Menu Button)
             TableColumn("") { snapshot in
-                let runtime = runtimeFor(snapshot.id)
                 ServiceTableActionsCell(
                     snapshot: snapshot,
-                    runtime: runtime,
-                    groups: groups,
+                    groupsProvider: groupsProvider,
                     handlers: handlers
                 )
             }
@@ -107,8 +67,7 @@ public struct ServiceTableView: View {
         .tableStyle(.inset(alternatesRowBackgrounds: true))
         .serviceTableContextMenu(
             snapshots: snapshots,
-            runtimeFor: runtimeFor,
-            groups: groups,
+            groupsProvider: groupsProvider,
             handlers: handlers
         )
         .onChange(of: selection) { _, new in

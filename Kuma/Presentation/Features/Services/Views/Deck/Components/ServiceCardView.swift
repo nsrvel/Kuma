@@ -5,31 +5,22 @@ public struct ServiceCardView: View, Equatable {
     public let runtime: ServiceRuntimeState
     public let isSelected: Bool
 
-    // Direct ViewModel reference
-    public let viewModel: ServicesDeckViewModel
-    public let workspaceID: UUID
+    @Environment(\.serviceDeckActions) private var deckActions
 
     public init(
         snapshot: ServiceCardSnapshot,
         runtime: ServiceRuntimeState = .idle,
-        isSelected: Bool = false,
-        viewModel: ServicesDeckViewModel,
-        workspaceID: UUID
+        isSelected: Bool = false
     ) {
         self.snapshot = snapshot
         self.runtime = runtime
         self.isSelected = isSelected
-        self.viewModel = viewModel
-        self.workspaceID = workspaceID
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Header Row: Provider Icon + Name/Target Subtitle + Native Toggle
             HStack(spacing: 12) {
-                // Clickable Left Area (Selects Service)
                 HStack(spacing: 12) {
-                    // Service Provider Icon with Star Overlay Badge
                     ZStack(alignment: .topTrailing) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -61,7 +52,6 @@ public struct ServiceCardView: View, Equatable {
                     }
                     .animation(.spring(response: 0.26, dampingFraction: 0.65), value: snapshot.isStarred)
 
-                    // Name & Contextual Target Subtitle (Image/Namespace/Target)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(snapshot.name)
                             .font(.system(size: 13, weight: .semibold))
@@ -77,15 +67,13 @@ public struct ServiceCardView: View, Equatable {
 
                 Spacer(minLength: 8)
 
-                // Micro-component: Isolated Toggle Switch
                 CardToggleSwitch(
                     isDisabled: snapshot.isDisabled,
                     runtime: runtime,
-                    onToggle: { viewModel.toggleService(id: snapshot.id) }
+                    onToggle: { deckActions?.onToggle(snapshot.id) }
                 )
             }
 
-            // Footer Row: Static Ports OR Contextual Provider Badge + Live Status Observer
             HStack(spacing: 6) {
                 if !snapshot.portDisplays.isEmpty {
                     PortChipsView(ports: snapshot.portDisplays, limit: 3)
@@ -95,7 +83,6 @@ public struct ServiceCardView: View, Equatable {
 
                 Spacer(minLength: 4)
 
-                // Micro-Observer: Updates only this pill when status changes
                 ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
             }
         }
@@ -104,7 +91,7 @@ public struct ServiceCardView: View, Equatable {
         .background(KumaColors.surfaceBackground, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onTapGesture {
-            viewModel.selectService(snapshot.id)
+            deckActions?.onSelect(snapshot.id)
         }
         .overlay {
             if isSelected {
@@ -114,21 +101,23 @@ public struct ServiceCardView: View, Equatable {
         }
         .opacity(snapshot.isDisabled ? 0.65 : 1.0)
         .contextMenu {
-            ServiceActionContextMenu(
-                snapshot: snapshot,
-                runtime: runtime,
-                groups: viewModel.groups,
-                onToggle: { viewModel.toggleService(id: snapshot.id) },
-                onRestart: { viewModel.restartService(id: snapshot.id) },
-                onSwitchProvider: { providerID in viewModel.switchProvider(serviceID: snapshot.id, providerID: providerID, workspaceID: workspaceID) },
-                onToggleStar: { viewModel.toggleStarred(id: snapshot.id, workspaceID: workspaceID) },
-                onToggleDisabled: { viewModel.toggleDisabled(id: snapshot.id, workspaceID: workspaceID) },
-                onToggleGroup: { groupID in viewModel.toggleGroup(serviceID: snapshot.id, groupID: groupID, workspaceID: workspaceID) },
-                onDuplicate: { viewModel.duplicateService(id: snapshot.id, workspaceID: workspaceID) },
-                onCopyConfig: { viewModel.copyConfig(id: snapshot.id) },
-                onDelete: { viewModel.promptDeleteService(id: snapshot.id) },
-                onSelect: { viewModel.selectService(snapshot.id) }
-            )
+            if let deckActions {
+                ServiceActionContextMenu(
+                    snapshot: snapshot,
+                    runtime: runtime,
+                    groupsProvider: deckActions.groups,
+                    onToggle: { deckActions.onToggle(snapshot.id) },
+                    onRestart: { deckActions.onRestart(snapshot.id) },
+                    onSwitchProvider: { deckActions.onSwitchProvider(snapshot.id, $0) },
+                    onToggleStar: { deckActions.onToggleStar(snapshot.id) },
+                    onToggleDisabled: { deckActions.onToggleDisabled(snapshot.id) },
+                    onToggleGroup: { deckActions.onToggleGroup(snapshot.id, $0) },
+                    onDuplicate: { deckActions.onDuplicate(snapshot.id) },
+                    onCopyConfig: { deckActions.onCopyConfig(snapshot.id) },
+                    onDelete: { deckActions.onDelete(snapshot.id) },
+                    onSelect: { deckActions.onSelect(snapshot.id) }
+                )
+            }
         }
     }
 
@@ -145,7 +134,6 @@ extension ServiceCardView {
         lhs.snapshot == rhs.snapshot &&
         lhs.runtime.status == rhs.runtime.status &&
         lhs.runtime.isLoading == rhs.runtime.isLoading &&
-        lhs.isSelected == rhs.isSelected &&
-        lhs.workspaceID == rhs.workspaceID
+        lhs.isSelected == rhs.isSelected
     }
 }
