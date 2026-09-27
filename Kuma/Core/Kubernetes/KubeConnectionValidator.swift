@@ -55,7 +55,7 @@ public actor KubeConnectionValidator {
         }
 
         // 2. Resolve kubectl binary path
-        guard let kubectlPath = await EnvironmentPathResolver.shared.resolveExecutablePath(for: "kubectl") else {
+        guard let kubectlPath = await KumaSettingsExecutableResolver.kubectl() else {
             let errorResult = KubeValidationResult(isReachable: false, errorMessage: "kubectl binary not found in system PATH")
             validationCache[cacheKey] = errorResult
             return errorResult

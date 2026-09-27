@@ -192,8 +192,11 @@ public actor ProcessRegistry {
             }
         }
 
-        // Send macOS system notification if crashed and notifyOnCrash is enabled
-        if exitCode != 0 && !wasIntentionalStop && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
+        if exitCode != 0 && !wasIntentionalStop && KumaSettingsKey.bool(
+            forKey: KumaSettingsKey.notifyOnServiceFailure,
+            defaultValue: true,
+            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
+        ) {
             await SystemNotificationCenter.shared.send(
                 .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)")
             )

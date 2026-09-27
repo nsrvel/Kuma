@@ -20,7 +20,13 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
         pipeline: ServiceLogPipeline
     ) async throws {
         let binaryName = provider.type == .docker ? "docker" : "podman"
-        guard let binaryPath = await EnvironmentPathResolver.shared.resolveExecutablePath(for: binaryName) else {
+        let binaryPath: String?
+        if provider.type == .docker {
+            binaryPath = await KumaSettingsExecutableResolver.docker()
+        } else {
+            binaryPath = await KumaSettingsExecutableResolver.podman()
+        }
+        guard let binaryPath else {
             throw ServiceExecutionError.binaryNotFound(binaryName)
         }
 
