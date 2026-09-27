@@ -5,13 +5,13 @@ import os
 public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ContainerRunner")
 
-    private let processRegistry: ProcessRegistry
+    private let processLauncher: any ProcessLaunching
     private let stateLock = NSLock()
     private var activeComposeFiles: [UUID: String] = [:]
     private var activeBinaryPaths: [UUID: String] = [:]
 
-    public nonisolated init(processRegistry: ProcessRegistry = .shared) {
-        self.processRegistry = processRegistry
+    public nonisolated init(processLauncher: any ProcessLaunching) {
+        self.processLauncher = processLauncher
     }
 
     public func start(
@@ -75,19 +75,20 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
         composeArgs.append("up")
         await pipeline.emit(level: "INFO", message: "Starting \(binaryName) compose up...")
 
-        _ = try await processRegistry.launch(
+        _ = try await processLauncher.launch(
             serviceID: service.id,
             serviceName: service.name,
             executable: binaryPath,
             arguments: composeArgs,
             workingDirectory: workingDir,
+            environment: nil,
             onOutput: pipeline.makeOutputHandler()
         )
     }
 
     public func stop(serviceID: UUID) async {
         // 1. Stop attached client process
-        await processRegistry.stop(serviceID: serviceID)
+        await processLauncher.stop(serviceID: serviceID)
 
         // 2. Run background `compose down` to tear down containers cleanly
         let active = unregisterActive(serviceID: serviceID)
@@ -114,7 +115,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
-        await processRegistry.isRunning(serviceID: serviceID)
+        await processLauncher.isRunning(serviceID: serviceID)
     }
 
     private func registerActive(serviceID: UUID, binary: String, composeFile: String?) {

@@ -49,8 +49,9 @@ public final class ServiceExecutionEngine: Sendable {
         self.serviceRepository = serviceRepository
         self.kubernetesRunner = KubernetesRunner(processRegistry: processRegistry, serviceRepository: serviceRepository)
         self.shellRunner = ShellRunner(processRegistry: processRegistry)
-        self.containerRunner = ContainerRunner(processRegistry: processRegistry)
-        self.sshRunner = SSHTunnelRunner(processRegistry: processRegistry, serviceRepository: serviceRepository)
+        let processLauncher = ProcessRegistryLauncher(registry: processRegistry)
+        self.containerRunner = ContainerRunner(processLauncher: processLauncher)
+        self.sshRunner = SSHTunnelRunner(processLauncher: processLauncher, serviceRepository: serviceRepository)
         self.healthCheckRunner = HealthCheckRunner()
         self.tunnelRunner = TunnelRunner(processRegistry: processRegistry)
         self.processMonitorRunner = ProcessMonitorRunner()

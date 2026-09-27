@@ -89,6 +89,10 @@ public struct InspectorConfigFormStack: View {
                             get: { inspectorVM.draftPorts },
                             set: { inspectorVM.draftPorts = $0 }
                         ),
+                        sshAuthType: Binding(
+                            get: { inspectorVM.sshAuthType },
+                            set: { inspectorVM.sshAuthType = $0 }
+                        ),
                         kubeConfigVM: inspectorVM.kubeConfigVM,
                         isLocked: isLocked,
                         onFieldChanged: {

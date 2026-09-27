@@ -8,15 +8,15 @@ extension ServiceInspectorViewModel {
     }
 
     public func flushPendingAutoSave() async {
-        let hadPending = autoSaveTask != nil
         autoSaveTask?.cancel()
         autoSaveTask = nil
-        if hadPending {
+        if pendingSaveRevision != lastCommittedRevision {
             await commitChanges()
         }
     }
 
     public func scheduleAutoSave() {
+        pendingSaveRevision += 1
         autoSaveTask?.cancel()
         let targetServiceID = self.serviceID
         autoSaveTask = Task { [weak self] in
@@ -39,6 +39,9 @@ extension ServiceInspectorViewModel {
 
         guard var activeProv = activeProvider else { return }
         activeProv.updatedAt = Date()
+        if activeProv.type == .ssh {
+            activeProv = ProviderSSHAuth.normalizeForPersistence(activeProv, authType: sshAuthType)
+        }
         if activeProv.type == .kubernetes, let kubeVM = kubeConfigVM {
             activeProv.kubeConfigID = kubeVM.selectedKubeConfigID
             activeProv.kubeContext = kubeVM.sanitizedProviderContext(storedProviderContext: activeProv.kubeContext)
@@ -67,6 +70,7 @@ extension ServiceInspectorViewModel {
                 providers[idx] = activeProv
             }
 
+            lastCommittedRevision = pendingSaveRevision
             postUpdatedNotification()
         } catch is CancellationError {
             return

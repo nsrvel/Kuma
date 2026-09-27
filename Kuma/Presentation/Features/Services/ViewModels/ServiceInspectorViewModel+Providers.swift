@@ -27,6 +27,9 @@ extension ServiceInspectorViewModel {
                 try await serviceRepository.updateService(srv)
                 await reloadDraftPortsForActiveProvider()
                 await syncKubeConfigSelectionFromActiveProvider()
+                if let active = activeProvider, active.type == .ssh {
+                    sshAuthType = ProviderSSHAuth.inferredAuthType(for: active)
+                }
                 postUpdatedNotification()
 
                 if wasRunning {

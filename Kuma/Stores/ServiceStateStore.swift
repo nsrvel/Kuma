@@ -29,6 +29,11 @@ public final class ServiceStateStore {
         ServiceRuntimeState(executionState: state(for: serviceID))
     }
 
+    /// True when any service is starting/stopping (deck still needs runtime notifications).
+    public var hasTransientExecutionStates: Bool {
+        executionStates.values.contains { $0 == .starting || $0 == .stopping }
+    }
+
     /// IDs of services currently in an operational state (running or starting)
     public var activeServiceIDs: [UUID] {
         executionStates.compactMap { id, state in

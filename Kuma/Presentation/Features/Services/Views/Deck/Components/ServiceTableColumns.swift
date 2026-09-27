@@ -117,6 +117,7 @@ public struct ServiceTableActionsCell: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 24)
+        .accessibilityLabel("Service actions")
         .help("Service actions")
     }
 }

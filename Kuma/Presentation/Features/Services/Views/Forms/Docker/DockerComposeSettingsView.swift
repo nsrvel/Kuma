@@ -62,6 +62,7 @@ public struct DockerComposeSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Close compose editor")
                     }
 
                     KumaCodeEditor(

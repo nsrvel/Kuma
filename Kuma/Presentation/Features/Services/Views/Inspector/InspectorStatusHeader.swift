@@ -57,6 +57,7 @@ public struct InspectorStatusHeader: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Back to configuration")
                     .help("Back to Configuration")
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {

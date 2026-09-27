@@ -61,8 +61,8 @@
 | **TC-D05** | `testProcessRegistryLaunchAndGracefulStop` | Launch `/bin/sleep` lalu `stop(serviceID:)` | Proses berhenti; `.kumaServiceStateChanged` memuat `ServiceState.stopped` (PROC-03) |
 | **TC-D04** | `testBatchProcessStatusLookup` | Query status proses untuk beberapa serviceIDs sekaligus via `runningStates` | Mengembalikan status dalam 1 single actor call tanpa serial loop |
 | **TC-D03** | `testServiceStateStoreBatchRefresh` | Batch refresh `ServiceStateStore` + `runningStates` | Store tidak menimpa state `.starting` saat refresh in-flight |
-| **TC-D05 (planned)** | `testServiceExecutionEngineDockerYamlWrite` | Jalankan Docker provider yang memiliki `yamlConfig` | File compose sementara dibuat dan flag `-f` disematkan dengan benar (RUN-01 — out of scope hardening wave) |
-| **TC-D06** | `testServiceExecutionEngineSSHKeyFlag` | Jalankan SSH provider yang memiliki `sshKeyPath` | Argumen `-i <keyPath>` disertakan dalam command ssh |
+| **TC-D05** | `testContainerRunnerComposeYamlWrite` | Docker provider dengan `yamlConfig` | File `docker-compose.kuma.yml` dibuat; argumen `compose -f … up` (RUN-01) |
+| **TC-D06** | `testSSHTunnelRunnerSSHKeyFlag` | SSH provider dengan `sshKeyPath` + port mapping | Argumen `-i <keyPath>` pada `/usr/bin/ssh` (RUN-02) |
 
 ---
 
@@ -82,7 +82,7 @@
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result |
 | :--- | :--- | :--- | :--- |
 | **TC-G01** | `testDeckSearchDebouncing` | (lihat TC-UI01) | Filter debounce tanpa full reload berlebihan |
-| **TC-G02** | `testServiceCardViewUsesDeckActionsNotViewModel` | Compile-time: `ServiceCardView` tidak memegang `ServicesDeckViewModel` | Card actions via `ServiceDeckActions` environment |
+| **TC-G02** | `testServiceCardViewUsesDeckActionsNotViewModel` | Source audit: `ServiceCardView.swift` tanpa `ServicesDeckViewModel` | Card actions via `ServiceDeckActions` environment |
 
 ---
 

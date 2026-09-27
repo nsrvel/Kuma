@@ -62,6 +62,7 @@ public struct InitialScriptSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Close initial script editor")
                     }
 
                     KumaCodeEditor(

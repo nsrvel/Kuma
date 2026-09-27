@@ -123,6 +123,46 @@ struct LoggingPipelineTests {
         #expect(LogAggregator.shared.logs(for: serviceID).isEmpty)
     }
 
+    @Test("TC-E04: LogChronologicalBuffer evicts in O(1) at capacity")
+    @MainActor
+    func testLogAggregatorRingBufferBoundedMemory() {
+        var buffer = LogChronologicalBuffer(capacity: 3)
+        let e1 = LiveLogEntry(serviceID: UUID(), serviceName: "A", message: "1")
+        let e2 = LiveLogEntry(serviceID: UUID(), serviceName: "A", message: "2")
+        let e3 = LiveLogEntry(serviceID: UUID(), serviceName: "A", message: "3")
+        let e4 = LiveLogEntry(serviceID: UUID(), serviceName: "A", message: "4")
+        #expect(buffer.append(e1) == nil)
+        #expect(buffer.append(e2) == nil)
+        #expect(buffer.append(e3) == nil)
+        #expect(buffer.append(e4)?.id == e1.id)
+        let ordered = buffer.chronologicalEntries()
+        #expect(ordered.map(\.message) == ["2", "3", "4"])
+    }
+
+    @Test("TC-E03: ServiceLogPipeline coalesces high-volume lines")
+    @MainActor
+    func testRapidLogStreamBatchesToAggregator() async {
+        LogAggregator.shared.retainUISubscriber()
+        defer { LogAggregator.shared.releaseUISubscriber() }
+        let serviceID = UUID()
+        LogAggregator.shared.clear(serviceID: serviceID)
+        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: "Flood")
+        let before = LogAggregator.shared.changeToken
+
+        for index in 0..<500 {
+            await pipeline.emit(level: "INFO", message: "line \(index)")
+        }
+        await pipeline.finish()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let after = LogAggregator.shared.changeToken
+        let stored = LogAggregator.shared.logs(for: serviceID).count
+        #expect(after > before)
+        #expect(stored >= 400)
+        #expect(stored <= 2_000)
+        LogAggregator.shared.clear(serviceID: serviceID)
+    }
+
     @Test("TC-L08: LogAggregator enforces logRetentionLimit from settings")
     @MainActor
     func testRetentionLimitFromSettings() {

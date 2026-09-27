@@ -25,6 +25,9 @@ extension ServicesDeckView {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { notif in
+                guard ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(
+                    store: serviceStateStore
+                ) else { return }
                 guard let serviceID = notif.object as? UUID,
                       let execState = ServiceStateNotification.executionState(
                           from: notif.userInfo,

@@ -2,6 +2,7 @@ import SwiftUI
 
 public struct InspectorRemoteAndNetworkFormSections: View {
     @Binding public var provider: Provider
+    @Binding public var sshAuthType: SSHAuthType
     public let isLocked: Bool
     public let onFieldChanged: () -> Void
 
@@ -39,14 +40,10 @@ public struct InspectorRemoteAndNetworkFormSections: View {
                             set: { provider.sshUser = $0.isEmpty ? nil : $0; onFieldChanged() }
                         ),
                         authType: Binding(
-                            get: { (provider.sshPassword != nil && !provider.sshPassword!.isEmpty) ? .password : .key },
+                            get: { sshAuthType },
                             set: { newType in
-                                if newType == .key {
-                                    provider.sshPassword = nil
-                                    if provider.sshKeyPath == nil || provider.sshKeyPath!.isEmpty {
-                                        provider.sshKeyPath = "~/.ssh/id_ed25519"
-                                    }
-                                }
+                                sshAuthType = newType
+                                ProviderSSHAuth.applyAuthTypeChange(newType, to: &provider)
                                 onFieldChanged()
                             }
                         ),

@@ -26,6 +26,7 @@ public struct ServiceProvidersInlineFormView: View {
                         .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Cancel add provider")
             }
             .padding(.bottom, 2)
 

@@ -2,6 +2,10 @@ import Foundation
 import GRDB
 
 extension ServiceRepository {
+    public func fetchDeckItems(forWorkspace workspaceID: UUID) async throws -> [ServiceDeckItem] {
+        try await fetchSnapshots(forWorkspace: workspaceID)
+    }
+
     public func fetchSnapshots(forWorkspace workspaceID: UUID) async throws -> [ServiceCardSnapshot] {
         try await dbWriter.read { db in
             let services = try Service

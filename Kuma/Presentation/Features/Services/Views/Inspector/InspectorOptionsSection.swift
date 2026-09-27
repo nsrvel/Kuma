@@ -40,6 +40,7 @@ public struct InspectorOptionsSection: View {
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .labelsHidden()
+                        .accessibilityLabel("Disable service")
                         .disabled(isRunning)
                 }
 

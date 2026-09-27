@@ -30,6 +30,11 @@ extension ServiceInspectorViewModel {
             }
 
             await syncKubeConfigSelectionFromActiveProvider()
+            if let active = activeProvider, active.type == .ssh {
+                sshAuthType = ProviderSSHAuth.inferredAuthType(for: active)
+            }
+            pendingSaveRevision = 0
+            lastCommittedRevision = 0
         } catch {
             Self.logger.error("Failed to load service details for \(id): \(error.localizedDescription)")
         }

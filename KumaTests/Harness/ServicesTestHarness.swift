@@ -154,6 +154,8 @@ public final class ServicesTestHarness {
         name: String = "Test Service",
         providerType: ProviderCategory = .docker,
         sshPassword: String? = nil,
+        sshKeyPath: String? = nil,
+        yamlConfig: String? = nil,
         ngrokAuthToken: String? = nil,
         customKubeConfigPath: String? = nil,
         kubeConfigID: UUID? = nil,
@@ -177,6 +179,8 @@ public final class ServicesTestHarness {
             kubeConfigID: kubeConfigID,
             customKubeConfigPath: customKubeConfigPath,
             targetName: targetName,
+            yamlConfig: yamlConfig,
+            sshKeyPath: sshKeyPath,
             sshPassword: sshPassword,
             ngrokAuthToken: ngrokAuthToken
         )

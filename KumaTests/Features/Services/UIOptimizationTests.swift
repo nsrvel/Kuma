@@ -57,6 +57,28 @@ struct UIOptimizationTests {
         #expect(vm.filteredSnapshots.first?.name == "Alpha Service")
     }
 
+    @Test("TC-G02: ServiceCardView does not reference ServicesDeckViewModel")
+    func testServiceCardViewUsesDeckActionsNotViewModel() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        #expect(!source.contains("ServicesDeckViewModel"))
+        #expect(source.contains("serviceDeckActions"))
+    }
+
+    @Test("TC-E05: Deck skips execution-state notifications when fully idle")
+    @MainActor
+    func testZeroEffortWhenIdle() {
+        let store = ServiceStateStore()
+        #expect(!ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(store: store))
+        store.setExecutionState(.starting, for: UUID())
+        #expect(ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(store: store))
+    }
+
     @Test("TC-UI02: LiveLogEntry formats correctly without memory overhead")
     func testLiveLogEntryCreation() {
         let entry = LiveLogEntry(
