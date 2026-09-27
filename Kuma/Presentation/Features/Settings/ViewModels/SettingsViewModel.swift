@@ -38,12 +38,11 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
     case hundredMB = 100
     case unlimited = 0
 
+    /// Short label for Settings picker (per-service line cap).
     public var title: String {
         switch self {
-        case .tenMB: return "~250 lines"
-        case .fiftyMB: return "~500 lines"
-        case .hundredMB: return "~1,000 lines"
         case .unlimited: return "Unlimited"
+        default: return "\(maxLinesPerService)"
         }
     }
 
