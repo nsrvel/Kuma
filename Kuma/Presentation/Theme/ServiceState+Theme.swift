@@ -1,14 +1,13 @@
 import SwiftUI
 
 extension ServiceState {
+    /// Chroma for dots, halos, and inspector accents.
     public var color: Color {
-        switch self {
-        case .stopped:  return .secondary
-        case .starting: return .yellow
-        case .running:  return .green
-        case .stopping: return .orange
-        case .crashed:  return .red
-        }
+        KumaStatus.indicatorColor(for: self)
+    }
+
+    public var labelColor: Color {
+        KumaStatus.labelColor(for: self)
     }
 
     public var icon: String {
@@ -24,13 +23,11 @@ extension ServiceState {
 
 extension ServiceExecutionState {
     public var color: Color {
-        switch self {
-        case .idle:     return .secondary
-        case .starting: return .yellow
-        case .running:  return .green
-        case .stopping: return .orange
-        case .crashed, .failed: return .red
-        }
+        KumaStatus.indicatorColor(for: self)
+    }
+
+    public var labelColor: Color {
+        KumaStatus.labelColor(for: self)
     }
 
     public var icon: String {

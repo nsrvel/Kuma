@@ -19,24 +19,11 @@ public struct PortChipsView: View {
                 .foregroundStyle(.tertiary)
 
             HStack(spacing: 4) {
-                // Direct slice iteration — zero array allocation
                 ForEach(ports.prefix(limit), id: \.self) { port in
-                    Text("\(port)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
-                        }
-                        .fixedSize()
+                    PortChipLabel(port: port)
                 }
                 if overflow > 0 {
-                    Text("+\(overflow)")
+                    Text(verbatim: "+\(overflow)")
                         .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                         .monospacedDigit()
                         .foregroundStyle(.tertiary)
@@ -45,5 +32,28 @@ public struct PortChipsView: View {
                 }
             }
         }
+    }
+}
+
+private struct PortChipLabel: View {
+    let port: Int
+
+    var body: some View {
+        let label = KumaPortFormatting.plain(port)
+        Text(verbatim: label)
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 0.5)
+            }
+            .fixedSize()
+            .accessibilityLabel("Port \(label)")
+            .accessibilityIdentifier(KumaUIID.servicePortChip(port))
     }
 }
