@@ -33,11 +33,11 @@ public struct SettingsGeneralSection: View {
 
                 KumaToggleField(
                     label: "Notify on Service Failure",
-                    value: $viewModel.notifyOnCrash,
+                    value: $viewModel.notifyOnServiceFailure,
                     description: "Notify when a service fails or exits unexpectedly."
                 )
-                .onChange(of: viewModel.notifyOnCrash) { _, newValue in
-                    handleNotifyOnCrashToggle(newValue: newValue)
+                .onChange(of: viewModel.notifyOnServiceFailure) { _, newValue in
+                    handleNotifyOnServiceFailureToggle(newValue: newValue)
                 }
 
                 Divider().opacity(0.3)
@@ -78,7 +78,7 @@ public struct SettingsGeneralSection: View {
         }
     }
 
-    private func handleNotifyOnCrashToggle(newValue: Bool) {
+    private func handleNotifyOnServiceFailureToggle(newValue: Bool) {
         guard newValue else { return }
 
         Task {

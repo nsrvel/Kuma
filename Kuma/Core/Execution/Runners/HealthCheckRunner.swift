@@ -79,7 +79,11 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
                         let nextState: ServiceState = isHealthy ? .running : .crashed
                         await postStateIfChanged(nextState)
 
-                        if wasHealthy == true && !isHealthy && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
+                        if wasHealthy == true && !isHealthy && KumaSettingsKey.bool(
+                            forKey: KumaSettingsKey.notifyOnServiceFailure,
+                            defaultValue: true,
+                            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
+                        ) {
                             await SystemNotificationCenter.shared.send(
                                 .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
                             )
@@ -96,7 +100,11 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
 
                     await postStateIfChanged(.crashed)
 
-                    if wasHealthy != false && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
+                    if wasHealthy != false && KumaSettingsKey.bool(
+                        forKey: KumaSettingsKey.notifyOnServiceFailure,
+                        defaultValue: true,
+                        fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
+                    ) {
                         await SystemNotificationCenter.shared.send(
                             .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
                         )

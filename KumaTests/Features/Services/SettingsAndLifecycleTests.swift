@@ -69,14 +69,19 @@ struct SettingsAndLifecycleTests {
     }
 
     // MARK: - [TC-E04] Notify on Service Crash Settings Resolution
-    @Test("TC-E04: notifyOnCrash defaults to true")
+    @Test("TC-E04: notifyOnServiceFailure defaults to true")
     func testNotifyOnCrashDefaults() {
         let defaults = UserDefaults(suiteName: "SettingsAndLifecycleTestsNotify")!
         defaults.removePersistentDomain(forName: "SettingsAndLifecycleTestsNotify")
 
-        let notifyCrash = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true, defaults: defaults)
+        let notifyFailure = KumaSettingsKey.bool(
+            forKey: KumaSettingsKey.notifyOnServiceFailure,
+            defaultValue: true,
+            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash,
+            defaults: defaults
+        )
 
-        #expect(notifyCrash == true)
+        #expect(notifyFailure == true)
     }
 
     // MARK: - [TC-E05] Auto-Resume Services On Launch Success

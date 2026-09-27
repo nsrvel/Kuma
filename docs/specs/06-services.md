@@ -201,9 +201,9 @@
 - **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `startSSH()`
 - **Detail**: `provider.sshKeyPath` is never passed with `-i` flag.
 
-### RUN-03: Shell Runner Hardcodes `/bin/zsh`
-- **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `startShell()`
-- **Detail**: Ignores `KumaSettingsKey.defaultShell` and user path overrides.
+### RUN-03: Shell Runner Hardcodes `/bin/zsh` — **Fixed**
+- **Location**: [`ShellRunner.swift`](Kuma/Core/Execution/Runners/ShellRunner.swift) + [`KumaShellLaunchConfiguration.swift`](Kuma/Core/Environment/KumaShellLaunchConfiguration.swift)
+- **Detail**: Previously ignored `KumaSettingsKey.defaultShell`. Now reads Settings and launches zsh/bash/fish with appropriate bootstrap.
 
 ### RUN-04: SSH Auth Type Binding Broken
 - **Location**: [`InspectorFormSections.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/InspectorFormSections.swift) lines 155-157

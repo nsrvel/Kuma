@@ -21,7 +21,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         provider: Provider,
         pipeline: ServiceLogPipeline
     ) async throws {
-        guard let kubectl = await EnvironmentPathResolver.shared.resolveExecutablePath(for: "kubectl") else {
+        guard let kubectl = await KumaSettingsExecutableResolver.kubectl() else {
             throw ServiceExecutionError.binaryNotFound("kubectl")
         }
 

@@ -47,7 +47,7 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
         target: String,
         pipeline: ServiceLogPipeline
     ) async throws {
-        guard let binaryPath = await EnvironmentPathResolver.shared.resolveExecutablePath(for: "cloudflared") else {
+        guard let binaryPath = await KumaSettingsExecutableResolver.cloudflared() else {
             throw ServiceExecutionError.binaryNotFound("cloudflared")
         }
 
@@ -91,7 +91,7 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
         target: String,
         pipeline: ServiceLogPipeline
     ) async throws {
-        guard let binaryPath = await EnvironmentPathResolver.shared.resolveExecutablePath(for: "ngrok") else {
+        guard let binaryPath = await KumaSettingsExecutableResolver.ngrok() else {
             throw ServiceExecutionError.binaryNotFound("ngrok")
         }
 

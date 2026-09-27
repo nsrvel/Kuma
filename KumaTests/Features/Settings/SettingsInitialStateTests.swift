@@ -40,7 +40,6 @@ struct SettingsInitialStateTests {
 
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
-        #expect(viewModel.customPathOverride.isEmpty)
         #expect(viewModel.customKubectlPath.isEmpty)
         #expect(viewModel.customKubeconfigPath.isEmpty)
         #expect(viewModel.customDockerPath.isEmpty)
@@ -58,6 +57,7 @@ struct SettingsInitialStateTests {
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
         #expect(viewModel.defaultShell == "/bin/zsh")
+        #expect(KumaShellLaunchConfiguration.validatedShellPath(defaults: harness.userDefaults) == "/bin/zsh")
         #expect(DefaultShell.zsh.label == "Zsh")
         #expect(DefaultShell.bash.label == "Bash")
         #expect(DefaultShell.fish.label == "Fish")
@@ -71,7 +71,7 @@ struct SettingsInitialStateTests {
 
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
-        #expect(viewModel.notifyOnCrash == true)
+        #expect(viewModel.notifyOnServiceFailure == true)
     }
 
     // MARK: - [TC-A06] Clean Install Default Log Retention
