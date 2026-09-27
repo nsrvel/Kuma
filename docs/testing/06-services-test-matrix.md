@@ -50,6 +50,8 @@
 | **TC-C06** | `testInspectorListensToDeckProviderSwitch` | Switch provider aktif dari Deck card context menu | Inspector merefresh state provider aktif tanpa perlu ditutup dan dibuka ulang |
 | **TC-C07** | `testDuplicateServiceAtomicIntegrity` | Duplikasi service yang memiliki multiple providers dan ports | Semua relasi terduplikasi sempurna dalam 1 write transaction dengan UUID baru |
 | **TC-C08** | `testToggleStarredOptimisticSync` | Toggle star pada service | State lokal dan SQLite tersinkronisasi tanpa UI flicker atau overwrite race |
+| **TC-C11** | `testDuplicateServiceUsesSingleSnapshotRefresh` | Duplicate service dari deck | Hanya refresh snapshot baru; tidak `loadWorkspaceAsync` penuh |
+| **TC-C12** | `testInspectorClearsAfterExternalDeletion` | Hapus service dari deck saat inspector terbuka | `clearAfterExternalDeletion()` mengosongkan state inspector |
 
 ---
 
