@@ -27,9 +27,6 @@ extension ServiceInspectorViewModel {
 
             if let store = stateStore {
                 await store.refreshProcessStates(for: [id])
-                self.isRunning = store.state(for: id).isOperational
-            } else {
-                self.isRunning = await ProcessRegistry.shared.isRunning(serviceID: id)
             }
 
             await syncKubeConfigSelectionFromActiveProvider()

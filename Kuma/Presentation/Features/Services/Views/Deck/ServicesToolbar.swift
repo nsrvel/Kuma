@@ -67,6 +67,8 @@ extension ServicesDeckView {
             } label: {
                 Image(systemName: "sidebar.trailing")
             }
+            .accessibilityLabel(viewModel.isInspectorPresented ? "Hide detail panel" : "Show detail panel")
+            .accessibilityHint("Toggles the service inspector. Shortcut: Command I.")
             .help(viewModel.isInspectorPresented ? "Hide detail panel (⌘I)" : "Show detail panel (⌘I)")
             .keyboardShortcut("i", modifiers: [.command])
         }

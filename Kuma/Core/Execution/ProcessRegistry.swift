@@ -32,11 +32,26 @@ public actor ProcessRegistry {
         public let startTime: Date
     }
 
+    private enum SignalTarget: Sendable {
+        case processGroup(pgid: pid_t)
+        case singleProcess(pid: pid_t)
+
+        func send(_ signal: Int32) {
+            switch self {
+            case .processGroup(let pgid):
+                kill(-pgid, signal)
+            case .singleProcess(let pid):
+                kill(pid, signal)
+            }
+        }
+    }
+
     private final class ManagedProcess {
         let serviceID: UUID
         let serviceName: String
         let process: Process
         let pgid: pid_t
+        let signalTarget: SignalTarget
         let startTime: Date
         let onOutput: (@Sendable (String) -> Void)?
         var stdoutPipe: Pipe?
@@ -47,6 +62,7 @@ public actor ProcessRegistry {
             serviceName: String,
             process: Process,
             pgid: pid_t,
+            signalTarget: SignalTarget,
             startTime: Date,
             stdoutPipe: Pipe?,
             stderrPipe: Pipe?,
@@ -56,6 +72,7 @@ public actor ProcessRegistry {
             self.serviceName = serviceName
             self.process = process
             self.pgid = pgid
+            self.signalTarget = signalTarget
             self.startTime = startTime
             self.stdoutPipe = stdoutPipe
             self.stderrPipe = stderrPipe
@@ -138,13 +155,15 @@ public actor ProcessRegistry {
         try process.run()
 
         let pid = process.processIdentifier
-        // Assign separate process group to isolate signals.
-        // On macOS, if the child process exited immediately, setpgid may return -1 with ESRCH or EACCES.
-        if setpgid(pid, pid) != 0 {
+        let signalTarget: SignalTarget
+        if setpgid(pid, pid) == 0 {
+            signalTarget = .processGroup(pgid: pid)
+        } else {
             let err = errno
             if err != ESRCH && err != EACCES {
-                Self.logger.debug("setpgid failed for PID \(pid): errno \(err)")
+                Self.logger.debug("setpgid failed for PID \(pid): errno \(err); using single-process signals")
             }
+            signalTarget = .singleProcess(pid: pid)
         }
 
         let managed = ManagedProcess(
@@ -152,6 +171,7 @@ public actor ProcessRegistry {
             serviceName: serviceName,
             process: process,
             pgid: pid,
+            signalTarget: signalTarget,
             startTime: Date(),
             stdoutPipe: stdoutPipe,
             stderrPipe: stderrPipe,
@@ -209,45 +229,37 @@ public actor ProcessRegistry {
     public func stop(serviceID: UUID) async {
         guard let managed = activeProcesses[serviceID] else { return }
         intentionallyStopping.insert(serviceID)
-        let pgid = managed.pgid
         let process = managed.process
 
-        Self.logger.info("Stopping process for service \(serviceID) (PGID: \(pgid))...")
+        Self.logger.info("Stopping process for service \(serviceID) (PID: \(process.processIdentifier))...")
 
-        // 1. Graceful SIGINT to process group
-        kill(-pgid, SIGINT)
+        managed.signalTarget.send(SIGINT)
 
-        // Wait up to 1.5s for clean exit
         for _ in 0..<15 {
             if !process.isRunning { break }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        // 2. Escalate to SIGTERM if still alive
         if process.isRunning {
-            Self.logger.warning("Process \(pgid) still running after SIGINT. Escalating to SIGTERM.")
-            kill(-pgid, SIGTERM)
+            Self.logger.warning("Process \(process.processIdentifier) still running after SIGINT. Escalating to SIGTERM.")
+            managed.signalTarget.send(SIGTERM)
 
-            // Wait up to 1.0s
             for _ in 0..<10 {
                 if !process.isRunning { break }
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }
 
-        // 3. Final escalation to SIGKILL if stubborn
         if process.isRunning {
-            Self.logger.error("Process \(pgid) still running after SIGTERM. Sending SIGKILL.")
-            kill(-pgid, SIGKILL)
+            Self.logger.error("Process \(process.processIdentifier) still running after SIGTERM. Sending SIGKILL.")
+            managed.signalTarget.send(SIGKILL)
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        // Cleanup tracking and pipes
-        if let removed = activeProcesses.removeValue(forKey: serviceID) {
-            Self.syncActiveIDs(Array(activeProcesses.keys))
-            removed.cleanupPipes(drainRemaining: true)
+        if activeProcesses[serviceID] != nil {
+            let exitCode = process.isRunning ? SIGKILL : process.terminationStatus
+            await handleProcessTerminated(serviceID: serviceID, exitCode: exitCode)
         }
-        intentionallyStopping.remove(serviceID)
     }
 
     /// Checks if a service process is currently active and running.
@@ -307,8 +319,7 @@ public actor ProcessRegistry {
     public func terminateAll() {
         // 1. Send SIGTERM first to allow child processes to teardown gracefully
         for (_, managed) in activeProcesses {
-            let pgid = managed.pgid
-            kill(-pgid, SIGTERM)
+            managed.signalTarget.send(SIGTERM)
         }
 
         // 2. Short non-blocking grace period (up to 200ms) for clean exit
@@ -320,9 +331,8 @@ public actor ProcessRegistry {
 
         // 3. SIGKILL any processes still alive and close pipes immediately without blocking
         for (_, managed) in activeProcesses {
-            let pgid = managed.pgid
             if managed.process.isRunning {
-                kill(-pgid, SIGKILL)
+                managed.signalTarget.send(SIGKILL)
             }
             managed.cleanupPipes(drainRemaining: false)
         }

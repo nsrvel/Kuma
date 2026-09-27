@@ -21,6 +21,7 @@ public struct CardToggleSwitch: View {
             Image(systemName: "lock.circle.fill")
                 .font(.system(size: 18))
                 .foregroundStyle(.tertiary)
+                .accessibilityLabel("Service disabled")
         } else {
             let isRunning = runtime.status == .running || runtime.status == .starting
             Toggle("", isOn: Binding<Bool>(
@@ -33,6 +34,8 @@ public struct CardToggleSwitch: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
+            .accessibilityLabel(isRunning ? "Stop service" : "Start service")
+            .accessibilityValue(isRunning ? "Running" : "Stopped")
             .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
         }
     }

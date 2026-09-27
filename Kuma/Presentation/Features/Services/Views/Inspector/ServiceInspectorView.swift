@@ -100,8 +100,13 @@ public struct ServiceInspectorView: View {
             serviceStateStore.setExecutionState(execState, for: serviceID)
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
-            if notif.userInfo?["source"] as? String == "inspector" { return }
+            if (notif.userInfo?[KumaServiceNotification.sourceKey] as? String) == KumaServiceNotification.sourceInspector {
+                return
+            }
             guard let changedID = notif.object as? UUID, changedID == serviceID else { return }
+            Task { await inspectorVM.loadService(id: serviceID) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaGroupsUpdated)) { _ in
             Task { await inspectorVM.loadService(id: serviceID) }
         }
         .onDisappear {

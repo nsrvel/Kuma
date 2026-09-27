@@ -28,7 +28,7 @@ extension DataPortRepository {
             isStarred: svc.isStarred
         )
 
-        let exportProviders = providers.map { Self.toExportProvider($0) }
+        let exportProviders = try providers.map { try Self.toExportProvider($0) }
         let exportPorts = ports.map { p in
             DataPortService.ExportPortMapping(
                 id: p.id,
@@ -84,8 +84,8 @@ extension DataPortRepository {
                 )
             }
 
-            let exportProviders = providers.map { p in
-                Self.toExportProvider(p)
+            let exportProviders = try providers.map { p in
+                try Self.toExportProvider(p)
             }
 
             let exportPortMappings = portMappings.map { pm in
@@ -184,8 +184,8 @@ extension DataPortRepository {
                 )
             }
 
-            let exportProviders = providers.map { p in
-                Self.toExportProvider(p)
+            let exportProviders = try providers.map { p in
+                try Self.toExportProvider(p)
             }
 
             let exportPortMappings = portMappings.map { pm in
@@ -287,7 +287,7 @@ extension DataPortRepository {
             isStarred: svc.isStarred
         )
 
-        let exportProviders = providers.map { Self.toExportProvider($0) }
+        let exportProviders = try providers.map { try Self.toExportProvider($0) }
         let exportPorts = ports.map { p in
             DataPortService.ExportPortMapping(
                 id: p.id,
