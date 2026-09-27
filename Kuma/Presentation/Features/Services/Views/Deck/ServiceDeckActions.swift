@@ -61,7 +61,7 @@ public struct ServiceDeckActions {
 }
 
 private struct ServiceDeckActionsKey: EnvironmentKey {
-    static let defaultValue: ServiceDeckActions? = nil
+    nonisolated(unsafe) static var defaultValue: ServiceDeckActions? = nil
 }
 
 extension EnvironmentValues {
