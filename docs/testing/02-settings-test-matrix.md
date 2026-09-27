@@ -22,7 +22,7 @@
 | **TC-A03** | `testDefaultEnginePaths` | Fresh install path binary custom kosong | `customKubectlPath`, `customDockerPath`, `customPodmanPath` bernilai `""` | ✅ Passed (0.002s) |
 | **TC-A04** | `testDefaultShellOption` | Inisialisasi default shell | `defaultShell == "/bin/zsh"` | ✅ Passed (0.002s) |
 | **TC-A05** | `testDefaultNotificationSettings` | Fresh install nilai default notifikasi | `notifyOnServiceFailure == true` | ✅ Passed |
-| **TC-A06** | `testDefaultLogRetention` | Fresh install default log retention | `logRetentionLimit == .fiftyMB` (~500 lines / 50 MB disk), `clearLogsOnSwitch == false` | ✅ Passed |
+| **TC-A06** | `testDefaultLogRetention` | Fresh install default log retention | `logRetentionLimit == .fiftyMB` (picker `500`, 50 MB disk), `clearLogsOnSwitch == false` | ✅ Passed |
 | **TC-A07** | `testDefaultPortConflictPolicy` | Fresh install default port conflict policy | `portConflictPolicy == .warnAndBlock` ("Warn & Prevent Start") | ✅ Passed (0.001s) |
 
 ---
