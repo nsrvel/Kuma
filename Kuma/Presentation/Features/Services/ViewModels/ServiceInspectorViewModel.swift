@@ -29,15 +29,7 @@ public final class ServiceInspectorViewModel {
     }
 
     public var isRunning: Bool {
-        get {
-            if let store = stateStore {
-                return store.state(for: serviceID).isOperational
-            }
-            return _legacyIsRunning
-        }
-        set {
-            _legacyIsRunning = newValue
-        }
+        stateStore?.state(for: serviceID).isOperational ?? _legacyIsRunning
     }
     private var _legacyIsRunning: Bool = false
 
@@ -60,9 +52,6 @@ public final class ServiceInspectorViewModel {
                 ServiceStateNotification.post(serviceID: serviceID, state: .stopping)
                 await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
                 stateStore?.setExecutionState(.idle, for: serviceID)
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                    self.isRunning = false
-                }
                 ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
             } else {
                 stateStore?.setExecutionState(.starting, for: serviceID)
@@ -74,17 +63,11 @@ public final class ServiceInspectorViewModel {
                     } else {
                         stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
                     }
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        self.isRunning = true
-                    }
                     let pid = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID)?.pid ?? 0
                     ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
                 } catch {
                     Self.logger.error("Failed to start service \(self.serviceID): \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: serviceID)
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        self.isRunning = false
-                    }
                     ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: 1)
                 }
             }
@@ -93,10 +76,9 @@ public final class ServiceInspectorViewModel {
     }
 
     func postUpdatedNotification() {
-        NotificationCenter.default.post(
-            name: .kumaServiceUpdated,
-            object: serviceID,
-            userInfo: ["source": "inspector"]
+        KumaServiceNotification.postServiceUpdated(
+            serviceID: serviceID,
+            source: KumaServiceNotification.sourceInspector
         )
     }
 

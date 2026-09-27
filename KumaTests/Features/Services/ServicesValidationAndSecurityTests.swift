@@ -61,6 +61,22 @@ struct ServicesValidationAndSecurityTests {
         #expect(fetchedProviders.first?.ngrokAuthToken == plainToken)
     }
 
+    @Test("TC-B02b: Export backup JSON does not contain plaintext SSH password")
+    func testExportBackupOmitsPlaintextPassword() async throws {
+        let harness = ServicesTestHarness()
+        let plainPassword = "ExportSecretPassword-unique-42"
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "SSH Export",
+            providerType: .ssh,
+            sshPassword: plainPassword
+        )
+
+        let dataPort = DataPortRepository(dbWriter: harness.databaseQueue)
+        let json = try await dataPort.exportSingleServiceJSON(serviceID: service.id)
+        #expect(!json.contains(plainPassword))
+        #expect(json.contains(":"), "Exported credentials should be vault ciphertext")
+    }
+
     // MARK: - [TC-B03] Custom KubeConfig Path Persistence
     @Test("TC-B03: Custom KubeConfig Path persists in SQLite (Schema V4)")
     func testCustomKubeConfigPathPersistence() async throws {

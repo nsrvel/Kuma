@@ -35,6 +35,7 @@
 | **TC-B04** | `testInvalidPortMappingRejection` | Input port di luar rentang valid (misal 0, 70000, negatif) | Error validasi tertolak sebelum persisted ke DB |
 | **TC-B05** | `testServiceNameEmptyValidation` | Validasi form create service dengan nama kosong atau hanya spasi | Menolak pembuatan service, mengembalikan error `invalidConfiguration` |
 | **TC-B06** | `testDataPortExportCredentialEncryption` | Export service yang memiliki password/token ke backup JSON | Credential tidak bocor dalam plaintext pada file JSON backup |
+| **TC-B02b** | `testExportBackupJSONDoesNotContainPlaintextSSHPassword` | Export backup setelah create service SSH dengan password unik | Substring password asli **tidak** ada di JSON; export gagal jika encrypt gagal (fail-closed) |
 
 ---
 
@@ -57,9 +58,10 @@
 | :--- | :--- | :--- | :--- |
 | **TC-D01** | `testProcessGroupSetpgidBeforeRun` | Spawn subprocess via `ProcessRegistry` | Child process terdaftar di isolated process group (PGID) dengan aman |
 | **TC-D02** | `testStopServiceKeepsPipesOpenUntilExit` | Hentikan service yang sedang running via `stop(serviceID:)` | Pipes tetap terbuka saat SIGINT dikirim, tidak memicu `SIGPIPE` pada child process |
-| **TC-D03** | `testStopServiceDispatchesStateChangedNotification` | Panggil `stop(serviceID:)` sampai subprocess exit | Notifikasi `.kumaServiceStateChanged` dengan state `.idle` / `.stopped` terkirim ke seluruh app |
-| **TC-D04** | `testBatchProcessStatusLookup` | Query status proses untuk 50 serviceIDs sekaligus | Mengembalikan status dalam 1 single actor call tanpa serial loop |
-| **TC-D05** | `testServiceExecutionEngineDockerYamlWrite` | Jalankan Docker provider yang memiliki `yamlConfig` | File compose sementara dibuat dan flag `-f` disematkan dengan benar |
+| **TC-D05** | `testProcessRegistryLaunchAndGracefulStop` | Launch `/bin/sleep` lalu `stop(serviceID:)` | Proses berhenti; `.kumaServiceStateChanged` memuat `ServiceState.stopped` (PROC-03) |
+| **TC-D04** | `testBatchProcessStatusLookup` | Query status proses untuk beberapa serviceIDs sekaligus via `runningStates` | Mengembalikan status dalam 1 single actor call tanpa serial loop |
+| **TC-D03** | `testServiceStateStoreBatchRefresh` | Batch refresh `ServiceStateStore` + `runningStates` | Store tidak menimpa state `.starting` saat refresh in-flight |
+| **TC-D05 (planned)** | `testServiceExecutionEngineDockerYamlWrite` | Jalankan Docker provider yang memiliki `yamlConfig` | File compose sementara dibuat dan flag `-f` disematkan dengan benar (RUN-01 — out of scope hardening wave) |
 | **TC-D06** | `testServiceExecutionEngineSSHKeyFlag` | Jalankan SSH provider yang memiliki `sshKeyPath` | Argumen `-i <keyPath>` disertakan dalam command ssh |
 
 ---

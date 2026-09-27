@@ -34,17 +34,17 @@ extension DataPortRepository {
         }
     }
 
-    public nonisolated static func toExportProvider(_ p: Provider) -> DataPortService.ExportProvider {
+    public nonisolated static func toExportProvider(_ p: Provider) throws -> DataPortService.ExportProvider {
         let encryptedPassword: String?
         if let pass = p.sshPassword, !pass.isEmpty {
-            encryptedPassword = (try? CryptoVault.shared.encrypt(plainText: pass)) ?? pass
+            encryptedPassword = try CredentialProtector.encryptForStorage(pass)
         } else {
             encryptedPassword = nil
         }
 
         let encryptedToken: String?
         if let token = p.ngrokAuthToken, !token.isEmpty {
-            encryptedToken = (try? CryptoVault.shared.encrypt(plainText: token)) ?? token
+            encryptedToken = try CredentialProtector.encryptForStorage(token)
         } else {
             encryptedToken = nil
         }
