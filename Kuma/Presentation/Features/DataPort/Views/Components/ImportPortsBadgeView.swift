@@ -26,7 +26,9 @@ public struct ImportPortsBadgeView: View {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(Color.secondary.opacity(0.12))
                         )
-                        .help("Host :\(port.localPort) ➔ Container :\(port.remotePort)")
+                        .help(
+                            "Host :\(KumaPortFormatting.plain(port.localPort)) ➔ Container :\(KumaPortFormatting.plain(port.remotePort))"
+                        )
                 }
 
                 if portMappings.count > maxVisible {
@@ -46,10 +48,12 @@ public struct ImportPortsBadgeView: View {
     }
 
     private func portText(for port: DataPortService.ExportPortMapping) -> String {
+        let local = KumaPortFormatting.plain(port.localPort)
+        let remote = KumaPortFormatting.plain(port.remotePort)
         if port.localPort == port.remotePort {
-            return ":\(port.localPort)"
+            return ":\(local)"
         }
-        return "\(port.localPort):\(port.remotePort)"
+        return "\(local):\(remote)"
     }
 
     private var remainingPortsTooltip: String {

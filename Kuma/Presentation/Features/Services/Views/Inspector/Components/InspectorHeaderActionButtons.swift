@@ -74,7 +74,7 @@ public struct InspectorHeaderActionButton: View {
 
     public var body: some View {
         let isRunning = runtime.status.isOperational
-        let tintColor: Color = isRunning ? .red : .green
+        let tintColor: Color = isRunning ? KumaStatus.failedIndicator : KumaStatus.runningIndicator
 
         Button {
             KumaHapticManager.shared.tap()

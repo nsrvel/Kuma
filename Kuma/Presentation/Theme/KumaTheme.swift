@@ -91,12 +91,12 @@ public enum KumaColors {
     /// Native Hairline Border & Separator Line
     public static let borderSubtle = Color(nsColor: .separatorColor)
 
-    // Service Execution States
-    public static let statusRunning = Color.green
-    public static let statusStarting = Color.orange
-    public static let statusStopped = Color.secondary
-    public static let statusFailed = Color.red
-    public static let statusDisabled = Color.secondary.opacity(0.4)
+    // Service Execution States (delegate to KumaStatus)
+    public static let statusRunning = KumaStatus.runningIndicator
+    public static let statusStarting = KumaStatus.transitionalIndicator
+    public static let statusStopped = KumaStatus.idleIndicator
+    public static let statusFailed = KumaStatus.failedIndicator
+    public static let statusDisabled = KumaStatus.disabledIndicator
 }
 
 public enum KumaTheme {

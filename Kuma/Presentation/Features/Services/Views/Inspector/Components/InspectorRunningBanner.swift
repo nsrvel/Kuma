@@ -24,7 +24,7 @@ public struct InspectorRunningBanner: View {
                 icon: "lock.slash.fill",
                 title: "Service Disabled",
                 subtitle: "Enable in Options below to configure or run",
-                tintColor: .secondary
+                tintColor: KumaStatus.disabledIndicator
             )
         } else {
             switch runtime.status {
@@ -33,7 +33,7 @@ public struct InspectorRunningBanner: View {
                     icon: "lock.fill",
                     title: "Running — Settings Locked",
                     subtitle: "Stop the service to modify configuration",
-                    tintColor: .green,
+                    tintColor: KumaStatus.indicatorColor(for: ServiceState.running),
                     onViewLogs: onViewLogs
                 )
             case .starting:
@@ -41,7 +41,7 @@ public struct InspectorRunningBanner: View {
                     icon: "gearshape.2.fill",
                     title: "Starting Process…",
                     subtitle: "Allocating ports and initializing runner",
-                    tintColor: .yellow,
+                    tintColor: KumaStatus.indicatorColor(for: ServiceState.starting),
                     isLoading: true,
                     onViewLogs: onViewLogs
                 )
@@ -50,7 +50,7 @@ public struct InspectorRunningBanner: View {
                     icon: "stop.fill",
                     title: "Stopping Service…",
                     subtitle: "Terminating subprocesses cleanly",
-                    tintColor: .orange,
+                    tintColor: KumaStatus.indicatorColor(for: ServiceState.stopping),
                     isLoading: true
                 )
             case .crashed:
@@ -58,7 +58,7 @@ public struct InspectorRunningBanner: View {
                     icon: "exclamationmark.triangle.fill",
                     title: "Process Exited Unexpectedly",
                     subtitle: "Check terminal output for error details",
-                    tintColor: .red,
+                    tintColor: KumaStatus.indicatorColor(for: ServiceState.crashed),
                     onViewLogs: onViewLogs
                 )
             case .stopped:
@@ -66,7 +66,7 @@ public struct InspectorRunningBanner: View {
                     icon: "stop.circle.fill",
                     title: "Ready to Start",
                     subtitle: "All configurations are unlocked and ready for execution",
-                    tintColor: .secondary,
+                    tintColor: KumaStatus.indicatorColor(for: ServiceState.stopped),
                     onViewLogs: onViewLogs
                 )
             }

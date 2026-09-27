@@ -173,4 +173,11 @@ struct ServicesInitialStateTests {
         #expect(mapping.protocolType == "TCP")
         #expect(mapping.displayString == "8080:80")
     }
+
+    @Test("TC-A06b: Port UI strings stay plain decimal without grouping")
+    func testKumaPortFormattingPlainDecimal() {
+        #expect(KumaPortFormatting.plain(8080) == "8080")
+        #expect(KumaPortFormatting.plain(9200) == "9200")
+        #expect(!KumaPortFormatting.plain(9200).contains("."))
+    }
 }
