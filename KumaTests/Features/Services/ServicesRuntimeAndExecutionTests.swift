@@ -25,27 +25,33 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     @Test("TC-D10: ServiceStateStore publishes kumaServiceStateChanged on setExecutionState")
-    func testStorePublishesOnSetExecutionState() {
+    func testStorePublishesOnSetExecutionState() async {
         let store = ServiceStateStore()
         let serviceID = UUID()
-        final class Counter: @unchecked Sendable {
-            var value = 0
-        }
-        let counter = Counter()
+        let counter = LockIsolated(0)
         let token = NotificationCenter.default.addObserver(
             forName: .kumaServiceStateChanged,
-            object: serviceID,
-            queue: nil
-        ) { _ in counter.value += 1 }
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let id = note.object as? UUID, id == serviceID else { return }
+            counter.withValue { $0 += 1 }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
 
         store.setExecutionState(.starting, for: serviceID)
+        #expect(store.state(for: serviceID) == .starting)
+        await drainPostedNotifications()
         #expect(counter.value == 1)
+
         store.setExecutionState(.starting, for: serviceID)
+        await drainPostedNotifications()
         #expect(counter.value == 1)
+
         store.setExecutionState(.running(pid: 42), for: serviceID)
+        #expect(store.state(for: serviceID) == .running(pid: 42))
+        await drainPostedNotifications()
         #expect(counter.value == 2)
-
-        NotificationCenter.default.removeObserver(token)
     }
 
     @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
@@ -184,6 +190,12 @@ struct ServicesRuntimeAndExecutionTests {
         deckVM.notifyExecutionStatesChanged()
         #expect(deckVM.filterVersion > versionWithFilter)
     }
+}
+
+/// Lets NotificationCenter observers on `.main` run before assertions (CI can defer delivery).
+private func drainPostedNotifications() async {
+    await Task.yield()
+    try? await Task.sleep(nanoseconds: 5_000_000)
 }
 
 private final class LockIsolated<Value>: @unchecked Sendable {
