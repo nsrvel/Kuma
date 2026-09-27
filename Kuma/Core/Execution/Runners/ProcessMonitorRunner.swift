@@ -30,7 +30,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
             var lastObservedPID: Int32? = nil
 
             while !Task.isCancelled {
-                let currentPID = Self.lookupProcessPID(named: processName)
+                let currentPID = await Self.lookupProcessPID(named: processName)
 
                 if currentPID != lastObservedPID {
                     lastObservedPID = currentPID
@@ -92,7 +92,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         return activeWatchTasks.removeValue(forKey: serviceID)
     }
 
-    private static func lookupProcessPID(named name: String) -> Int32? {
+    private static func lookupProcessPID(named name: String) async -> Int32? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
         process.arguments = ["-f", name]
@@ -103,7 +103,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
 
         do {
             try process.run()
-            process.waitUntilExit()
+            await SubprocessWait.waitForExit(of: process)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
                 let pids = output.components(separatedBy: .newlines).compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }

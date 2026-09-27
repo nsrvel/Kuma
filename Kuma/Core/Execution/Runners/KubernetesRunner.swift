@@ -174,7 +174,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         }.value
 
         await withTaskCancellationHandler {
-            process.waitUntilExit()
+            await SubprocessWait.waitForExit(of: process)
         } onCancel: {
             if process.isRunning {
                 process.terminate()
@@ -244,7 +244,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             throw ServiceExecutionError.processFailed("Preflight failed to run kubectl: \(error.localizedDescription)")
         }
 
-        process.waitUntilExit()
+        await SubprocessWait.waitForExit(of: process)
         if process.terminationStatus == 0 {
             await pipeline.emit(level: "INFO", message: "Preflight OK: \(target) exists in cluster.")
             return

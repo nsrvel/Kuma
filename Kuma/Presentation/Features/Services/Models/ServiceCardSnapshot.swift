@@ -1,7 +1,6 @@
 import Foundation
 
-/// Lightweight read-only projection DTO for Service Cards and Table rows.
-/// Contains only the essential fields needed for rendering lists without loading heavy Provider details or sensitive configs.
+/// Presentation DTO for deck cards and table rows (mapped from `ServiceDeckItem`).
 public nonisolated struct ServiceCardSnapshot: Identifiable, Sendable, Equatable, Hashable {
     public nonisolated struct ProviderOption: Identifiable, Sendable, Equatable, Hashable {
         public let id: UUID
@@ -54,10 +53,52 @@ public nonisolated struct ServiceCardSnapshot: Identifiable, Sendable, Equatable
         self.searchKey = "\(name) \(subtitle)".lowercased()
     }
 
-    /// Zero-allocation toggle — mutates only isStarred, preserves searchKey without recompute
     public func toggling(starred: Bool) -> Self {
         var copy = self
         copy.isStarred = starred
         return copy
+    }
+}
+
+extension ServiceCardSnapshot {
+    public nonisolated init(deckItem: ServiceDeckItem) {
+        let subtitle: String = {
+            let target = deckItem.resolvedTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !target.isEmpty { return target }
+            if let desc = deckItem.serviceDescription?.trimmingCharacters(in: .whitespacesAndNewlines), !desc.isEmpty {
+                return desc
+            }
+            return ""
+        }()
+
+        let options = deckItem.providerOptions.map { opt in
+            let trimmed = opt.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = trimmed.isEmpty ? opt.category.sidebarLabel : trimmed
+            return ProviderOption(
+                id: opt.id,
+                category: opt.category,
+                label: label,
+                isActive: opt.isActive
+            )
+        }
+
+        self.init(
+            id: deckItem.id,
+            name: deckItem.name,
+            groupIDs: deckItem.groupIDs,
+            isDisabled: deckItem.isDisabled,
+            isStarred: deckItem.isStarred,
+            subtitle: subtitle,
+            providerCategory: deckItem.activeProviderCategory,
+            portDisplays: deckItem.localPorts,
+            providerOptions: options,
+            createdAt: deckItem.createdAt
+        )
+    }
+}
+
+extension Array where Element == ServiceDeckItem {
+    public var asCardSnapshots: [ServiceCardSnapshot] {
+        map { ServiceCardSnapshot(deckItem: $0) }
     }
 }

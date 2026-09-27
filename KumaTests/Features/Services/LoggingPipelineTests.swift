@@ -149,7 +149,7 @@ struct LoggingPipelineTests {
         let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: "Flood")
         let before = LogAggregator.shared.changeToken
 
-        for index in 0..<500 {
+        for index in 0..<1000 {
             await pipeline.emit(level: "INFO", message: "line \(index)")
         }
         await pipeline.finish()

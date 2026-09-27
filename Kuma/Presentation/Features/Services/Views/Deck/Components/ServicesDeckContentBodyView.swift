@@ -75,3 +75,16 @@ public struct ServicesDeckContentBodyView: View {
         }
     }
 }
+
+#Preview {
+    let vm = ServicesDeckViewModel(userDefaults: UserDefaults(suiteName: "deck-preview")!)
+    vm.snapshots = [
+        ServiceCardSnapshot(id: UUID(), name: "Preview", providerCategory: .shell),
+    ]
+    vm.hasInitialLoaded = true
+    let actions = vm.makeDeckActions(workspaceID: UUID())
+    return ServicesDeckContentBodyView(viewModel: vm, isStarredOnly: false, deckActions: actions)
+        .environment(\.serviceDeckActions, actions)
+        .environment(ServiceStateStore())
+        .frame(width: 600, height: 400)
+}

@@ -41,10 +41,33 @@ public final class ServiceStateStore {
         }
     }
 
-    /// Updates execution state for a specific service directly (e.g. from notifications or user actions)
-    public func setExecutionState(_ state: ServiceExecutionState, for serviceID: UUID) {
-        if executionStates[serviceID] != state {
-            executionStates[serviceID] = state
+    /// Updates execution state; publishes `.kumaServiceStateChanged` by default so deck rows using `SyncedServiceRuntime` stay in sync.
+    public func setExecutionState(
+        _ state: ServiceExecutionState,
+        for serviceID: UUID,
+        publish: Bool = true
+    ) {
+        guard executionStates[serviceID] != state else { return }
+        executionStates[serviceID] = state
+        if publish {
+            publishNotification(for: state, serviceID: serviceID)
+        }
+    }
+
+    private func publishNotification(for state: ServiceExecutionState, serviceID: UUID) {
+        switch state {
+        case .idle:
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
+        case .starting:
+            ServiceStateNotification.post(serviceID: serviceID, state: .starting)
+        case .running(let pid):
+            ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
+        case .stopping:
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopping)
+        case .crashed(let exitCode):
+            ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: exitCode)
+        case .failed:
+            ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: 1)
         }
     }
 
@@ -67,12 +90,12 @@ public final class ServiceStateStore {
             if state == .idle {
                 if runningWithoutProcess.contains(id) {
                     if !existing.isOperational {
-                        executionStates[id] = .running(pid: 0)
+                        setExecutionState(.running(pid: 0), for: id, publish: true)
                     }
                     continue
                 }
             }
-            executionStates[id] = state
+            setExecutionState(state, for: id, publish: true)
         }
     }
 

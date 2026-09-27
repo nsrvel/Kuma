@@ -114,7 +114,7 @@ public struct MenuBarPopupView: View {
     private func loadServices() async {
         guard let wsID = workspaceStore.activeWorkspace?.id else { return }
         do {
-            let snaps = try await serviceRepository.fetchSnapshots(forWorkspace: wsID)
+            let snaps = try await serviceRepository.fetchDeckItems(forWorkspace: wsID).asCardSnapshots
             await MainActor.run {
                 self.snapshots = snaps
             }

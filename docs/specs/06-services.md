@@ -112,9 +112,9 @@
 
 ## 6. HIGH: Layer Boundary Violations
 
-### LAYER-01: Core → Presentation Import — **Fixed (partial)**
-- **Location**: [`ServiceRepository+Snapshots.swift`](Kuma/Core/Database/Repositories/ServiceRepository+Snapshots.swift), [`ServiceDeckItem.swift`](Kuma/Domain/Models/ServiceDeckItem.swift)
-- **Resolution**: Deck list projection lives in **Domain** as `ServiceCardSnapshot` / `ServiceDeckItem` (pure Swift). Repository exposes `fetchDeckItems` alias; no Presentation import in Core.
+### LAYER-01: Core → Presentation Import — **Fixed**
+- **Location**: [`ServiceRepository+DeckItems.swift`](Kuma/Core/Database/Repositories/ServiceRepository+DeckItems.swift), [`ServiceDeckItem.swift`](Kuma/Domain/Models/ServiceDeckItem.swift), [`ServiceCardSnapshot.swift`](Kuma/Presentation/Features/Services/Models/ServiceCardSnapshot.swift)
+- **Resolution**: Repository returns **Domain** `ServiceDeckItem` only (`fetchDeckItems` / `fetchDeckItem`). Presentation maps to `ServiceCardSnapshot` (search key, subtitle fallback, provider label chrome).
 
 ### LAYER-02: Domain Imports SwiftUI — **Fixed**
 - **Resolution**: Provider chrome (`Color`, `LinearGradient`) moved to [`ProviderCategory+Theme.swift`](Kuma/Presentation/Theme/ProviderCategory+Theme.swift). Domain [`ProviderCategory.swift`](Kuma/Domain/Enums/ProviderCategory.swift) is Foundation-only.
@@ -122,9 +122,9 @@
 ### LAYER-03: UI Enums in Domain Layer — **Fixed**
 - **Resolution**: `DeckViewMode`, `ServiceStatusFilterOption`, and `ServiceSortOption` live in [`ServicesDeckUIEnums.swift`](Kuma/Presentation/Features/Services/Models/ServicesDeckUIEnums.swift).
 
-### LAYER-04: Struct in Enums Folder
-- **Location**: [`ServiceRuntimeState.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Domain/Enums/ServiceRuntimeState.swift)
-- **Detail**: `ServiceRuntimeState` is a `struct`, not an `enum`, but placed in `Domain/Enums/`.
+### LAYER-04: Struct in Enums Folder — **Fixed**
+- **Location**: [`ServiceRuntimeState.swift`](Kuma/Domain/Models/ServiceRuntimeState.swift)
+- **Resolution**: Moved from `Domain/Enums/` to `Domain/Models/`.
 
 ---
 
@@ -146,9 +146,9 @@
 - **Location**: [`LiveLogsView.swift`](Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift)
 - **Resolution**: `changeToken` drives `displayedLogs`; service picker uses `availableServiceNames` maintained by aggregator.
 
-### PERF-05: 10 Concurrent Notification Loops — **Fixed (partial)**
+### PERF-05: 10 Concurrent Notification Loops — **Fixed**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift)
-- **Resolution**: Deck uses consolidated `.onReceive` handlers instead of multiple infinite `.task` notification loops (reduces duplicate listeners and rebuild churn).
+- **Resolution**: Single merged `AnyPublisher` + `switch` handler (no per-notification `.task` loops).
 
 ### PERF-06: ISO8601DateFormatter Created on Every Flush — **Fixed**
 - **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
@@ -158,18 +158,17 @@
 - **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
 - **Resolution**: Flush path reads `KumaSettingsKey.logRetentionLimit` and enforces retention on disk (see Settings log retention picker).
 
-### PERF-10: Deck Card Observation Fan-Out — **Fixed (partial)**
-- **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`ServiceDeckActions.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServiceDeckActions.swift), [`ServiceCardView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardView.swift)
-- **Detail**: Grid parent read `ServiceStateStore` for every row; each card held `ServicesDeckViewModel` and `groups`, causing O(n) invalidation on unrelated deck mutations.
-- **Resolution**: Runtime isolated in `ServiceCardRow`; cards use `ServiceDeckActions` environment (closures, not `@Observable` VM); table status/actions cells read store per row; Canvas brand icons use `drawingGroup` to reduce repaint cost.
+### PERF-10: Deck Card Observation Fan-Out — **Fixed**
+- **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`SyncedServiceRuntime.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift), [`ServiceTableColumns.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceTableColumns.swift)
+- **Resolution**: Row runtime synced via `@State` + per-ID `.kumaServiceStateChanged` (store not read in `body`); `ServiceDeckActions` environment; **TC-G02** source + headless checks.
 
 ### PERF-08: Triple Database Trip on Inspector Open — **Fixed**
 - **Location**: [`ServiceInspectorViewModel+Loading.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel+Loading.swift), [`ServiceRepository+CRUD.swift`](Kuma/Core/Database/Repositories/ServiceRepository+CRUD.swift)
 - **Resolution**: `fetchServiceDetail` single read transaction. **TC-C01**.
 
-### PERF-09: Idle State Not Zero-Effort — **Fixed (partial)**
+### PERF-09: Idle State Not Zero-Effort — **Fixed**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckRuntimeObservation.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckRuntimeObservation.swift)
-- **Resolution**: `.kumaServiceStateChanged` handler no-ops when no running processes and no transient `.starting`/`.stopping` states. Log pipeline already skips UI append without subscribers. **TC-E05**.
+- **Resolution**: Idle gate on state-changed notifications; `notifyExecutionStatesChanged()` skips filter recompute unless status filter/sort active. **TC-E05**, **TC-E05b**.
 
 ---
 
@@ -199,12 +198,13 @@
 
 | File | Lines (approx.) |
 |:-----|:----------------|
-| `CreateServiceSheet.swift` | 160 |
-| `ServicesDeckView.swift` | 154 |
+| `CreateServiceSheet.swift` | ≤151 (sheet); chrome in `+Preview` |
+| `ServicesDeckView.swift` | ≤68 core; dialogs in `+DeckChrome` |
 
-Deck view models are split across extensions (`ServicesDeckViewModel.swift` ~106 lines core; `ServicesDeckViewModel+ServiceActions.swift` still large — future split). **TC-F01** target list.
+Deck view models are split across extensions (`ServicesDeckViewModel+ServiceActions.swift` still large — future split). **TC-F01** enforced in `ServicesVisualAndAccessibilityTests`.
 
-### 21 Views Missing `#Preview` Blocks (See Full List in Audit)
+### `#Preview` coverage — **Partial**
+Baseline ~39 component views still without `#Preview`; **TC-F02** guards against growth; `CreateServiceSheet+Preview.swift` added.
 
 ---
 
@@ -229,13 +229,13 @@ Deck view models are split across extensions (`ServicesDeckViewModel.swift` ~106
 
 | Issue | Location |
 |:------|:---------|
-| ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed**; production grid is `LazyVGrid` in [`ServicesDeckContentBodyView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServicesDeckContentBodyView.swift) | Deck/Components |
-| `ServiceNonPortBadge.metadata` — 20-line computed property never referenced | `ServiceNonPortBadge.swift` |
-| `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` |
-| `InspectorLiveConsoleView.copiedRecently` — unused `@State` | `InspectorLiveConsoleView.swift` |
-| `InspectorStatusHeader.onToggleStar` — closure never bound to UI | `InspectorStatusHeader.swift` |
-| `LiveLogsView.isAutoScroll` — toggle exists but no `ScrollViewReader` implemented | `LiveLogsView.swift` |
-| `PodmanComposeSettingsView` — 100% duplicate of `DockerComposeSettingsView` | `PodmanComposeSettingsView.swift` |
+| ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed** | Deck/Components |
+| ~~`ServiceNonPortBadge.metadata`~~ — **Removed** | `ServiceNonPortBadge.swift` |
+| ~~`InspectorStatusHeader.onToggleStar`~~ — **Removed** (unused closure) | `InspectorStatusHeader.swift` |
+| ~~`LiveLogsView.isAutoScroll`~~ — **Removed** misleading toggle | `LiveLogsView.swift` |
+| ~~Podman/Docker compose duplicate UI~~ — **Fixed** via shared [`ComposeSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/ComposeSettingsView.swift) |
+| **Card toggle stale after deck start (Kube)** — **Fixed**: [`ServiceStateStore`](Kuma/Stores/ServiceStateStore.swift) publishes `.kumaServiceStateChanged` on `setExecutionState`; deck rows use [`SyncedServiceRuntime`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift). **TC-D10**. |
+| `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` (verify / remove if still present) |
 | Table name inconsistency: `"portMapping"` (camelCase) vs all others (`snake_case`) | `ServicePortMapping+Record.swift` |
 | `Provider.kubeTargetType: String?` raw String instead of typed `KubeTargetType?` | `Provider.swift` |
 | `ServiceRuntimeState` uses multi-boolean (`status` + `isLoading`) instead of single enum | `ServiceRuntimeState.swift` |

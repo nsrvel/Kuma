@@ -24,6 +24,30 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .running(pid: 9)) == .stopping)
     }
 
+    @Test("TC-D10: ServiceStateStore publishes kumaServiceStateChanged on setExecutionState")
+    func testStorePublishesOnSetExecutionState() {
+        let store = ServiceStateStore()
+        let serviceID = UUID()
+        final class Counter: @unchecked Sendable {
+            var value = 0
+        }
+        let counter = Counter()
+        let token = NotificationCenter.default.addObserver(
+            forName: .kumaServiceStateChanged,
+            object: serviceID,
+            queue: nil
+        ) { _ in counter.value += 1 }
+
+        store.setExecutionState(.starting, for: serviceID)
+        #expect(counter.value == 1)
+        store.setExecutionState(.starting, for: serviceID)
+        #expect(counter.value == 1)
+        store.setExecutionState(.running(pid: 42), for: serviceID)
+        #expect(counter.value == 2)
+
+        NotificationCenter.default.removeObserver(token)
+    }
+
     @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
     func testServiceStateNotificationExitCode() {
         let userInfo: [String: Any] = [

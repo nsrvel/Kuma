@@ -15,13 +15,13 @@ public struct CreateServiceSheet: View {
         case fillDetails
     }
 
-    @State private var currentStep: CreationStep = .selectProvider
-    @State private var selectedProvider: ProviderCategory = .kubernetes
+    @State var currentStep: CreationStep = .selectProvider
+    @State var selectedProvider: ProviderCategory = .kubernetes
 
     // Grouped Form Drafts
     @State private var generalDraft = ServiceGeneralDraft()
     @State private var kubeDraft = ServiceKubernetesDraft()
-    @State private var kubeConfigVM = KubeConfigViewModel()
+    @State var kubeConfigVM = KubeConfigViewModel()
     @State private var dockerDraft = ServiceComposeDraft()
     @State private var podmanDraft = ServiceComposeDraft()
     @State private var shellDraft = ServiceShellDraft()
@@ -111,7 +111,7 @@ public struct CreateServiceSheet: View {
                         }
                     },
                     onCancel: { dismiss() },
-                    onCreate: { createService() }
+                    onCreate: { beginCreateService() }
                 )
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
@@ -120,41 +120,28 @@ public struct CreateServiceSheet: View {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: currentStep)
-        .onChange(of: currentStep) { _, step in
-            if step == .fillDetails && selectedProvider == .kubernetes {
-                Task { await kubeConfigVM.loadConfigs(preferredSelectionID: kubeConfigVM.selectedKubeConfigID) }
-            }
-        }
+        .onChange(of: currentStep) { _, step in loadKubeConfigsWhenEnteringDetails(step: step) }
         .frame(
             width: currentStep == .selectProvider ? 520 : 500,
             height: currentStep == .selectProvider ? 440 : 580
         )
     }
 
-    private func createService() {
+    private func beginCreateService() {
         isSaving = true
-        let repo = self.serviceRepository
         if selectedProvider == .kubernetes {
             let stored = kubeDraft.context.isEmpty ? nil : kubeDraft.context
             if let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: stored) {
                 kubeDraft.context = sanitized
             }
         }
-        let inputs = currentDraftInputs
-
-        Task {
-            do {
-                let (service, provider, portMappings) = try CreateServicePayloadBuilder.buildPayload(
-                    workspaceID: workspaceID,
-                    inputs: inputs
-                )
-                try await repo.insertService(service, defaultProvider: provider, portMappings: portMappings)
-                onServiceCreated?()
-                dismiss()
-            } catch {
-                Self.logger.error("Failed to create service: \(error.localizedDescription)")
-                isSaving = false
-            }
-        }
+        CreateServiceSaving.beginCreate(
+            workspaceID: workspaceID,
+            inputs: currentDraftInputs,
+            serviceRepository: serviceRepository,
+            onServiceCreated: onServiceCreated,
+            dismiss: { dismiss() },
+            onSavingFailed: { isSaving = false }
+        )
     }
 }

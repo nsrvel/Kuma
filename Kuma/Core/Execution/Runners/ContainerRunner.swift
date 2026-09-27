@@ -104,7 +104,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
             proc.executableURL = URL(fileURLWithPath: binary)
             proc.arguments = downArgs
             try? proc.run()
-            proc.waitUntilExit()
+            await SubprocessWait.waitForExit(of: proc)
 
             // Cleanup ephemeral temp compose directory if applicable
             if let composeFile = active.composeFile, composeFile.contains("kuma-compose-\(serviceID.uuidString)") {
@@ -151,7 +151,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
         do {
             try proc.run()
-            processRegistryWait(proc)
+            await SubprocessWait.waitForExit(of: proc)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
                 await pipeline.emit(level: "INFO", message: output)
@@ -161,7 +161,4 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
         }
     }
 
-    private func processRegistryWait(_ proc: Process) {
-        proc.waitUntilExit()
-    }
 }

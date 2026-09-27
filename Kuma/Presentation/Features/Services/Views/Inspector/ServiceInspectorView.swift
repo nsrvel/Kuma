@@ -40,9 +40,6 @@ public struct ServiceInspectorView: View {
                     onToggle: {
                         inspectorVM.toggleRunning()
                     },
-                    onToggleStar: {
-                        inspectorVM.toggleStarred()
-                    },
                     onBack: {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                             inspectorVM.isViewingLogs = false
@@ -97,7 +94,7 @@ public struct ServiceInspectorView: View {
                       from: notif.userInfo,
                       existing: serviceStateStore.state(for: serviceID)
                   ) else { return }
-            serviceStateStore.setExecutionState(execState, for: serviceID)
+            serviceStateStore.setExecutionState(execState, for: serviceID, publish: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
             if (notif.userInfo?[KumaServiceNotification.sourceKey] as? String) == KumaServiceNotification.sourceInspector {

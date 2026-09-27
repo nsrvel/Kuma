@@ -43,7 +43,7 @@
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result |
 | :--- | :--- | :--- | :--- |
 | **TC-C01** | `testSingleQueryServiceDetailFetch` | Panggil `fetchServiceDetail(id:)` dari Inspector ViewModel | Mengembalikan Service, Providers, dan Port Mappings dalam 1 single read transaction |
-| **TC-C02** | `testGranularSingleSnapshotFetch` | Panggil `fetchSnapshot(serviceID:)` setelah single update | Hanya me-load 1 snapshot tanpa query ulang seluruh workspace |
+| **TC-C02** | `testGranularSingleSnapshotFetch` | Panggil `fetchDeckItem(serviceID:)` setelah single update | Hanya me-load 1 deck row; map ke `ServiceCardSnapshot` di Presentation |
 | **TC-C03** | `testInspectorAutoSaveCommitDebounce` | User mengetik field di Inspector berturut-turut | Hanya 1 kali write transaction ke SQLite yang dieksekusi setelah debounce selesai |
 | **TC-C04** | `testDeckInspectorSharedStateSync` | Update provider atau nama service di Inspector | Perubahan langsung terrefleksi di Deck tanpa full workspace reload |
 | **TC-C05** | `testInspectorListensToDeckDeletion` | Service yang sedang dibuka di Inspector dihapus dari Deck context menu | Inspector menangani event deletion secara anggun (close drawer / clear state) |
@@ -65,6 +65,7 @@
 | **TC-D03** | `testServiceStateStoreBatchRefresh` | Batch refresh `ServiceStateStore` + `runningStates` | Store tidak menimpa state `.starting` saat refresh in-flight |
 | **TC-D05** | `testContainerRunnerComposeYamlWrite` | Docker provider dengan `yamlConfig` | File `docker-compose.kuma.yml` dibuat; argumen `compose -f … up` (RUN-01) |
 | **TC-D06** | `testSSHTunnelRunnerSSHKeyFlag` | SSH provider dengan `sshKeyPath` + port mapping | Argumen `-i <keyPath>` pada `/usr/bin/ssh` (RUN-02) |
+| **TC-D10** | `testStorePublishesOnSetExecutionState` | `ServiceStateStore.setExecutionState` tanpa manual post | Mem-post `.kumaServiceStateChanged` agar card toggle (`SyncedServiceRuntime`) ikut |
 
 ---
 
@@ -73,10 +74,10 @@
 | :--- | :--- | :--- | :--- |
 | **TC-E01** | `testInspectorAutoSaveFlushedOnDisappear` | Edit field di Inspector lalu segera trigger `onDisappear` (<300ms) | Perubahan langsung di-flush dan ter-commit ke database, tidak hilang |
 | **TC-E02** | `testInspectorClearLogsScopedToServiceID` | Klik tombol trash logs di Inspector | Hanya log milik service aktif yang dihapus, log service lain tetap utuh |
-| **TC-E03** | `testRapidLogStreamDoesNotHitchMainActor` | Stream 2,000 log lines dalam 1 detik | Log di-coalesce/batch ke MainActor tanpa task flooding atau UI freeze |
+| **TC-E03** | `testRapidLogStreamDoesNotHitchMainActor` | Stream ~1,000 log lines (batched pipeline) | Log di-coalesce/batch ke MainActor tanpa task flooding atau UI freeze |
 | **TC-E04** | `testLogAggregatorRingBufferBoundedMemory` | Stream log melebihi `maxEntries` (2,000 baris) | Memory bounded, operasi pembuangan log lama efisien ($O(1)$) tanpa array shift overhead |
-| **TC-E05** | `testZeroEffortWhenIdle` | App dalam kondisi idle tanpa service running | Zero active polling tasks, zero CPU wakeups |
-| **TC-E06** | `testNonBlockingProcessWaitInAsyncEngine` | Jalankan resolving pod / dynamic check di background | Tidak memblokir thread worker kooperatif Swift Concurrency |
+| **TC-E05** | `testZeroEffortWhenIdle` | App dalam kondisi idle tanpa service running | Gate `shouldHandleExecutionStateNotifications`; **TC-E05b** filter recompute skip |
+| **TC-E06** | `testNonBlockingProcessWaitInAsyncEngine` | `SubprocessWait.waitForExit` pada child process | `waitUntilExit` tidak pada cooperative MainActor thread |
 
 ---
 
@@ -84,7 +85,7 @@
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result |
 | :--- | :--- | :--- | :--- |
 | **TC-G01** | `testDeckSearchDebouncing` | (lihat TC-UI01) | Filter debounce tanpa full reload berlebihan |
-| **TC-G02** | `testServiceCardViewUsesDeckActionsNotViewModel` | Source audit: `ServiceCardView.swift` tanpa `ServicesDeckViewModel` | Card actions via `ServiceDeckActions` environment |
+| **TC-G02** | `testServiceCardViewUsesDeckActionsNotViewModel` | Source audit + **TC-G02b** headless `ServiceCardView.body` | Card actions via `ServiceDeckActions`; no deck VM on card |
 
 ---
 

@@ -40,8 +40,6 @@ extension ServiceInspectorViewModel {
                     } else {
                         stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
                     }
-                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID)?.pid ?? 0
-                    ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
                 }
             } catch {
                 Self.logger.error("Failed to switch active provider for service \(srv.id): \(error.localizedDescription)")
