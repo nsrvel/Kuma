@@ -18,7 +18,7 @@ struct ComposeSettingsExpandedContent: View {
                 placeholder: composeFilePlaceholder,
                 chooseFiles: true,
                 chooseDirectories: false,
-                allowedContentTypes: ComposeSettingsView.composeFileTypes
+                allowedContentTypes: ComposeFileTypes.allowed
             )
         } else {
             KumaCodeEditor(
@@ -48,4 +48,14 @@ struct ComposeSettingsExpandedContent: View {
         }
     }
     return Wrapper()
+}
+
+enum ComposeFileTypes {
+    static let allowed: [UTType] = {
+        var types: [UTType] = []
+        if let yml = UTType(filenameExtension: "yml") { types.append(yml) }
+        if let yaml = UTType(filenameExtension: "yaml") { types.append(yaml) }
+        types.append(.plainText)
+        return types
+    }()
 }

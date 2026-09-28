@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+@MainActor
 public enum KumaScriptFileSupport {
     public static let allowedTypes: [UTType] = {
         var types: [UTType] = []

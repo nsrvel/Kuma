@@ -139,6 +139,13 @@ public final class DataPortTestHarness {
             }
         }
 
+        migrator.registerMigration("v6_provider_compose_and_script_paths") { db in
+            try db.alter(table: "provider") { t in
+                t.add(column: "composeFilePath", .text)
+                t.add(column: "initialScriptPath", .text)
+            }
+        }
+
         try! migrator.migrate(queue)
 
         // Seed default workspace

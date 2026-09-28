@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Shared compose YAML editor for Docker and Podman providers.
 public struct ComposeSettingsView: View {
@@ -143,12 +142,4 @@ public struct ComposeSettingsView: View {
         if !yaml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .pasteYAML }
         return .chooseFile
     }
-
-    static let composeFileTypes: [UTType] = {
-        var types: [UTType] = []
-        if let yml = UTType(filenameExtension: "yml") { types.append(yml) }
-        if let yaml = UTType(filenameExtension: "yaml") { types.append(yaml) }
-        types.append(.plainText)
-        return types
-    }()
 }
