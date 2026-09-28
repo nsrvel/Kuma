@@ -124,7 +124,9 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
         let contentSize = scrollView.contentSize
         let textView = CodeNSTextView(frame: NSRect(origin: .zero, size: contentSize))
         textView.onFocusChange = { [weak coordinator = context.coordinator] focused in
-            coordinator?.setFocused(focused)
+            Task { @MainActor in
+                coordinator?.setFocused(focused)
+            }
         }
         textView.minSize = NSSize(width: 0.0, height: minHeight)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -182,7 +184,8 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
         Coordinator(self)
     }
 
-    class Coordinator: NSObject, NSTextViewDelegate {
+    @MainActor
+    final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: KumaNativeCodeTextView
         var isDismantled = false
 
@@ -198,11 +201,8 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
 
         func setFocused(_ focused: Bool) {
             guard !isDismantled else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, !self.isDismantled else { return }
-                guard self.parent.isFocused != focused else { return }
-                self.parent.isFocused = focused
-            }
+            guard parent.isFocused != focused else { return }
+            parent.isFocused = focused
         }
     }
 }
