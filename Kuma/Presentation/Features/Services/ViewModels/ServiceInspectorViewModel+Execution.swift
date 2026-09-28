@@ -7,10 +7,13 @@ extension ServiceInspectorViewModel {
             stateStore?.setExecutionState(.stopping, for: serviceID, publish: false)
             let sid = serviceID
             let store = stateStore
-            Task.detached(priority: .userInitiated) { [weak self] in
+            Task.detached(priority: .userInitiated) {
                 await ServiceStopSupport.stopOffMainActor(serviceID: sid, stateStore: store)
                 await MainActor.run {
-                    self?.postUpdatedNotification()
+                    KumaServiceNotification.postServiceUpdated(
+                        serviceID: sid,
+                        source: KumaServiceNotification.sourceInspector
+                    )
                 }
             }
             return

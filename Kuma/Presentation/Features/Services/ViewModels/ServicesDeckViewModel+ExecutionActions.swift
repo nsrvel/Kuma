@@ -8,8 +8,8 @@ extension ServicesDeckViewModel {
             let store = stateStore
             Task.detached(priority: .userInitiated) {
                 await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: store)
-                await MainActor.run { [weak self] in
-                    self?.notifyExecutionStatesChanged()
+                await MainActor.run {
+                    ServiceStateNotification.post(serviceID: id, state: .stopped)
                 }
             }
             return
