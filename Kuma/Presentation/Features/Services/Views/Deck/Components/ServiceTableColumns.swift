@@ -131,7 +131,9 @@ public struct ServiceTablePortsCell: View {
     public var body: some View {
         Group {
             if snapshot.portDisplays.isEmpty {
-                ServiceNonPortBadge(category: snapshot.providerCategory)
+                Text("—")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
             } else {
                 PortChipsView(ports: snapshot.portDisplays)
             }

@@ -72,6 +72,18 @@ struct ServicesVisualAndAccessibilityTests {
         }
     }
 
+    @Test("TC-E06b: SubprocessWait terminates process when timeout elapses")
+    func testSubprocessWaitTimeout() async {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try? process.run()
+
+        let completed = await SubprocessWait.waitForExit(of: process, timeout: 0.25)
+        #expect(completed == false)
+        #expect(process.isRunning == false)
+    }
+
     @Test("TC-E06: SubprocessWait does not block MainActor while waiting")
     func testNonBlockingProcessWait() async {
         let process = Process()
@@ -98,6 +110,39 @@ struct ServicesVisualAndAccessibilityTests {
         let snap = ServiceCardSnapshot(deckItem: item)
         #expect(snap.subtitle == "nginx")
         #expect(snap.searchKey.contains("api"))
+        #expect(snap.searchKey.contains("nginx"))
         #expect(snap.providerOptions.first?.label == ProviderCategory.docker.sidebarLabel)
+    }
+
+    @Test("TC-LAYER: card subtitle prefers description over resolved target")
+    func testDeckItemSubtitlePrefersDescription() {
+        let item = ServiceDeckItem(
+            id: UUID(),
+            name: "API",
+            activeProviderCategory: .kubernetes,
+            resolvedTarget: "k8s: api-pod",
+            serviceDescription: "Prod API",
+            providerOptions: [
+                .init(id: UUID(), category: .kubernetes, label: "", isActive: true),
+            ]
+        )
+        let snap = ServiceCardSnapshot(deckItem: item)
+        #expect(snap.subtitle == "Prod API")
+        #expect(snap.searchKey.contains("prod api"))
+        #expect(snap.searchKey.contains("k8s"))
+    }
+
+    @Test("TC-LAYER: empty description and target yields empty subtitle")
+    func testDeckItemSubtitleEmptyWhenNoDescriptionOrTarget() {
+        let item = ServiceDeckItem(
+            id: UUID(),
+            name: "Lonely",
+            activeProviderCategory: .shell,
+            resolvedTarget: "",
+            serviceDescription: nil
+        )
+        let snap = ServiceCardSnapshot(deckItem: item)
+        #expect(snap.subtitle == "")
+        #expect(snap.searchKey.contains("lonely"))
     }
 }

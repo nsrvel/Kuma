@@ -76,11 +76,11 @@ public enum KumaColors {
     }))
     /// Secondary / Sub-panel Surface
     public static let surfaceSecondary = Color(nsColor: .controlBackgroundColor)
-    /// Input Field Background Surface (Subtle Inset in Dark, Crisp Pure White in Light)
+    /// Input Field Background Surface (opaque inset in dark, white in light)
     public static let inputBackground = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(white: 0.0, alpha: 0.20) // Soft Subtle Inset in Dark
-            : NSColor.white                    // Solid Pure White Input Field in Light
+            ? NSColor(calibratedWhite: 0.11, alpha: 1.0)
+            : NSColor.white
     }))
     /// Input Field Hairline Border
     public static let inputBorder = Color(nsColor: NSColor(name: nil, dynamicProvider: { appearance in
@@ -88,6 +88,10 @@ public enum KumaColors {
             ? NSColor(white: 1.0, alpha: 0.08) // Soft hairline border in Dark
             : NSColor(white: 0.0, alpha: 0.12) // Crisp subtle border in Light
     }))
+    /// Text field fill — same opaque surface as `inputBackground` / Service Name.
+    public static var inputFieldFill: Color { inputBackground }
+    /// Default unfocused text field stroke.
+    public static var inputFieldStroke: Color { inputBorder.opacity(0.6) }
     /// Native Hairline Border & Separator Line
     public static let borderSubtle = Color(nsColor: .separatorColor)
 
@@ -145,9 +149,14 @@ public enum KumaTheme {
         public static let popoverWidth: CGFloat = 275
         /// Modal form sheet width (Create / Edit)
         public static let formSheetWidth: CGFloat = 440
-        /// Minimum sheet height when Danger Zone is hidden
         public static let formSheetMinHeightCompact: CGFloat = 300
-        /// Minimum sheet height when Danger Zone is displayed
-        public static let formSheetMinHeightExpanded: CGFloat = 380
+    }
+
+    public enum Deck {
+        public static let gridPadding: CGFloat = 16
+        public static let gutter: CGFloat = 16
+        public static let cardMinWidth: CGFloat = 296
+        public static let cardIdealWidth: CGFloat = 320
+        public static let cardMaxWidth: CGFloat = 368
     }
 }

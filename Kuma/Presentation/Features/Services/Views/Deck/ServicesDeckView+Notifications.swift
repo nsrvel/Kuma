@@ -43,15 +43,15 @@ extension ServicesDeckView {
                 viewModel.loadWorkspace(workspaceID: workspaceID)
             }
         case .kumaServiceStateChanged:
-            guard ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(
-                store: serviceStateStore
-            ) else { return }
             guard let serviceID = notif.object as? UUID,
                   let execState = ServiceStateNotification.executionState(
                       from: notif.userInfo,
                       existing: serviceStateStore.state(for: serviceID)
                   ) else { return }
             serviceStateStore.setExecutionState(execState, for: serviceID, publish: false)
+            guard ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(
+                store: serviceStateStore
+            ) else { return }
             viewModel.notifyExecutionStatesChanged()
         case .kumaServiceDeleted:
             if let deletedID = notif.object as? UUID {

@@ -54,7 +54,7 @@ struct WorkspaceVisualTests {
     }
 
     // MARK: - [TC-F04] WorkspaceFormSheet Mode Create
-    @Test("TC-F04: WorkspaceFormSheet in create mode has no danger zone")
+    @Test("TC-F04: WorkspaceFormSheet in create mode has no delete row")
     func testWorkspaceFormSheetViewModeCreate() {
         let store = WorkspaceStore(initialWorkspaces: [Workspace(name: "Main")])
         var presented = true
@@ -65,9 +65,9 @@ struct WorkspaceVisualTests {
         #expect(sheet.mode == .create)
     }
 
-    // MARK: - [TC-F05] WorkspaceFormSheet Mode Edit With Danger Zone
-    @Test("TC-F05: WorkspaceFormSheet in edit mode with multiple workspaces enables danger zone")
-    func testWorkspaceFormSheetViewModeEditWithDangerZone() {
+    // MARK: - [TC-F05] WorkspaceFormSheet Mode Edit With Delete
+    @Test("TC-F05: WorkspaceFormSheet in edit mode with multiple workspaces shows delete row")
+    func testWorkspaceFormSheetViewModeEditWithDelete() {
         let ws1 = Workspace(name: "One")
         let ws2 = Workspace(name: "Two")
         let store = WorkspaceStore(initialWorkspaces: [ws1, ws2])

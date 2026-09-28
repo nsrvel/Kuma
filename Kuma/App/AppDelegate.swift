@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             await ProcessRegistry.shared.terminateAll()
             await LogFileWriter.shared.flushAll()
             sender.reply(toApplicationShouldTerminate: true)
-            // Safety watchdog: ensure process terminates if macOS MenuBarExtra auxiliary scene stalls
+            // Safety watchdog: ensure process terminates if teardown stalls before exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 exit(0)
             }

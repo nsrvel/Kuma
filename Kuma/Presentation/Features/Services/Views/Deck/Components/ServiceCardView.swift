@@ -135,7 +135,7 @@ public struct ServiceCardView: View, Equatable {
         runtime: ServiceRuntimeState(status: .running, isLoading: false),
         isSelected: false
     )
-    .frame(width: 280)
+    .frame(width: KumaTheme.Deck.cardIdealWidth)
     .padding()
 }
 

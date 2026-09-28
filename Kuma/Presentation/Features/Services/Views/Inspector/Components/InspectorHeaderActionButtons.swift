@@ -73,36 +73,36 @@ public struct InspectorHeaderActionButton: View {
     }
 
     public var body: some View {
-        let isRunning = runtime.status.isOperational
-        let tintColor: Color = isRunning ? KumaStatus.failedIndicator : KumaStatus.runningIndicator
+        let showsStop = showsStopChrome(for: runtime.status)
+        let isBusy = runtime.isLoading || runtime.status == .starting || runtime.status == .stopping
 
         Button {
+            guard !isBusy else { return }
             KumaHapticManager.shared.tap()
             onToggle()
         } label: {
             HStack(spacing: 5) {
-                if runtime.isLoading || runtime.status == .starting || runtime.status == .stopping {
-                    KumaActivityIndicator(size: 11, color: tintColor, lineWidth: 1.5)
+                if isBusy {
+                    KumaActivityIndicator(size: 11, color: .white, lineWidth: 1.5)
                 }
-                Text(isRunning ? "Stop" : "Start")
-                    .font(.system(size: 12.5, weight: .semibold))
+                Text(showsStop ? "Stop" : "Start")
+                    .frame(minWidth: 34, alignment: .center)
+                    .contentTransition(.interpolate)
             }
-            .foregroundStyle(tintColor)
-            .frame(minWidth: 56)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6.5)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(tintColor.opacity(0.13))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(tintColor.opacity(0.35), lineWidth: 0.8)
-            )
         }
-        .buttonStyle(.plain)
-        .disabled(runtime.isLoading || runtime.status == .starting || runtime.status == .stopping)
+        .buttonStyle(KumaPrimaryButtonStyle.inspectorToggle(isRunning: showsStop))
+        .allowsHitTesting(!isBusy)
         .padding(.trailing, 8)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .animation(isBusy ? nil : .easeInOut(duration: 0.18), value: showsStop)
+    }
+
+    private func showsStopChrome(for status: ServiceState) -> Bool {
+        switch status {
+        case .running, .starting, .stopping:
+            return true
+        case .stopped, .crashed:
+            return false
+        }
     }
 }

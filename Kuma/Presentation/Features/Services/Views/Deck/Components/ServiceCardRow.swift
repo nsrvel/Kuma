@@ -29,6 +29,6 @@ public struct ServiceCardRow: View {
         isSelected: true
     )
     .environment(ServiceStateStore())
-    .frame(width: 280)
+    .frame(width: KumaTheme.Deck.cardIdealWidth)
     .padding()
 }

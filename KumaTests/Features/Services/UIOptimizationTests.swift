@@ -80,6 +80,14 @@ struct UIOptimizationTests {
         #expect(ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(store: store))
     }
 
+    @Test("TC-E05c: Deck observation stays active while store still shows running")
+    @MainActor
+    func testObservationWhenStoreOperationalButRegistryIdle() {
+        let store = ServiceStateStore()
+        store.setExecutionState(.running(pid: 42), for: UUID())
+        #expect(ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(store: store))
+    }
+
     @Test("TC-E05b: notifyExecutionStatesChanged is no-op without status filter or sort")
     @MainActor
     func testNotifyExecutionStatesChangedSkipsRecomputeWhenIdleFilters() {
@@ -128,6 +136,22 @@ struct UIOptimizationTests {
         let card = ServiceCardView(snapshot: snapshot, runtime: .idle, isSelected: false)
         #expect(card.snapshot.name == "Headless")
         _ = card.body
+    }
+
+    @Test("TC-G03: Deck card grid uses native adaptive min/max layout")
+    func testDeckCardGridUsesAdaptiveMinMax() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Kuma/Presentation/Features/Services/Views/Deck/Components/ServicesDeckContentBodyView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        #expect(source.contains(".adaptive"))
+        #expect(source.contains("cardMinWidth"))
+        #expect(source.contains("cardMaxWidth"))
+        #expect(!source.contains("maximum: .infinity"))
+        #expect(!source.contains("onGeometryChange"))
     }
 
     @Test("TC-UI02: LiveLogEntry formats correctly without memory overhead")

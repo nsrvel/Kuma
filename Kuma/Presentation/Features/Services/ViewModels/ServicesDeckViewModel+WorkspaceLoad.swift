@@ -64,8 +64,10 @@ extension ServicesDeckViewModel {
                 stateStore?.setExecutionState(.starting, for: snapshot.id)
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
-                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
-                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
+                    await ServiceExecutionStateSync.applyAfterSuccessfulStart(
+                        serviceID: snapshot.id,
+                        stateStore: stateStore
+                    )
                 } catch {
                     Self.logger.error("Auto-start failed for '\(snapshot.name)': \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)

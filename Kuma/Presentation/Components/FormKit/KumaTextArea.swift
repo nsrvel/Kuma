@@ -44,24 +44,28 @@ public struct KumaTextArea: View {
                     .foregroundStyle(.secondary)
             }
 
-            TextField(
-                placeholder,
-                text: $value,
-                prompt: Text(placeholder).foregroundColor(Color(nsColor: .placeholderTextColor)),
-                axis: .vertical
-            )
-            .textFieldStyle(.plain)
-            .font(isMonospaced ? .system(size: 11.5, weight: .regular, design: .monospaced) : KumaFont.body)
-            .foregroundStyle(Color.primary)
-            .lineLimit(lineLimit)
+            ZStack(alignment: .topLeading) {
+                if value.isEmpty {
+                    Text(placeholder)
+                        .font(isMonospaced ? .system(size: 11.5, weight: .regular, design: .monospaced) : KumaFont.body)
+                        .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                        .allowsHitTesting(false)
+                }
+
+                TextField("", text: $value, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(isMonospaced ? .system(size: 11.5, weight: .regular, design: .monospaced) : KumaFont.body)
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(lineLimit)
+            }
             .frame(minHeight: minHeight, maxHeight: maxHeight, alignment: .topLeading)
             .focused($isFocused)
             .padding(KumaSpacing.sm)
-            .background(KumaColors.inputBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+            .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                     .stroke(
-                        isFocused ? Color.accentColor : KumaColors.inputBorder,
+                        isFocused ? Color.accentColor : KumaColors.inputFieldStroke,
                         lineWidth: isFocused ? 1.5 : 0.5
                     )
             )

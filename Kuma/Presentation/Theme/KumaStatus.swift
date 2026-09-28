@@ -5,6 +5,8 @@ public enum KumaStatus {
     public static let runningIndicator = Color(nsColor: dynamicSystemGreen)
     public static let transitionalIndicator = Color(nsColor: dynamicTransitionalAmber)
     public static let failedIndicator = Color(nsColor: dynamicSystemRed)
+    /// Saturated fill for primary-style Stop / destructive buttons (not status dots).
+    public static let destructiveButtonFill = Color(nsColor: dynamicDestructiveButtonFill)
     public static let idleIndicator = Color(nsColor: .tertiaryLabelColor)
     public static let disabledIndicator = Color(nsColor: .secondaryLabelColor).opacity(0.55)
 
@@ -64,5 +66,12 @@ public enum KumaStatus {
         return isDark
             ? NSColor(red: 1.0, green: 0.45, blue: 0.42, alpha: 1.0)
             : NSColor.systemRed
+    })
+
+    private static let dynamicDestructiveButtonFill = NSColor(name: nil, dynamicProvider: { appearance in
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return isDark
+            ? NSColor(red: 0.90, green: 0.22, blue: 0.20, alpha: 1.0)
+            : NSColor(red: 0.78, green: 0.10, blue: 0.12, alpha: 1.0)
     })
 }

@@ -22,7 +22,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         let intervalSeconds = max(provider.monitorInterval ?? 5, 2)
         let serviceID = service.id
 
-        await stop(serviceID: serviceID)
+        cancelWatchTask(for: serviceID)
 
         await pipeline.emit(level: "INFO", message: "Starting process watchdog for: '\(processName)' (Interval: \(intervalSeconds)s)")
 
@@ -56,11 +56,15 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
     }
 
     public func stop(serviceID: UUID) async {
-        let task = unregisterTask(for: serviceID)
-        task?.cancel()
+        cancelWatchTask(for: serviceID)
         await MainActor.run {
             ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
+    }
+
+    private func cancelWatchTask(for serviceID: UUID) {
+        let task = unregisterTask(for: serviceID)
+        task?.cancel()
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {

@@ -24,6 +24,36 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .running(pid: 9)) == .stopping)
     }
 
+    @Test("TC-D09b: stray stopped notification ignored while execution is starting")
+    func testServiceStateNotificationIgnoresStoppedDuringStarting() {
+        let stoppedInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopped]
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .starting) == nil)
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .idle) == .idle)
+    }
+
+    @Test("TC-D09c: stopped notification clears stopping to idle after process exit")
+    func testServiceStateNotificationStoppedClearsStopping() {
+        let stoppedInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopped]
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .stopping) == .idle)
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .running(pid: 1)) == .idle)
+    }
+
+    @Test("TC-D09e: stale stopping notification ignored after idle")
+    func testStaleStoppingNotificationIgnoredAfterIdle() {
+        let stoppingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopping]
+        #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .idle) == nil)
+    }
+
+    @Test("TC-D09d: late running notification ignored while execution is stopping")
+    func testServiceStateNotificationIgnoresRunningDuringStopping() {
+        let runningInfo: [String: Any] = [
+            ServiceStateNotification.stateKey: ServiceState.running,
+            ServiceStateNotification.pidKey: Int32(99)
+        ]
+        #expect(ServiceStateNotification.executionState(from: runningInfo, existing: .stopping) == nil)
+        #expect(ServiceStateNotification.executionState(from: runningInfo, existing: .idle) == .running(pid: 99))
+    }
+
     @Test("TC-D10: ServiceStateStore publishes kumaServiceStateChanged on setExecutionState")
     func testStorePublishesOnSetExecutionState() async {
         let store = ServiceStateStore()

@@ -64,8 +64,22 @@
 | **TC-D04** | `testBatchProcessStatusLookup` | Query status proses untuk beberapa serviceIDs sekaligus via `runningStates` | Mengembalikan status dalam 1 single actor call tanpa serial loop |
 | **TC-D03** | `testServiceStateStoreBatchRefresh` | Batch refresh `ServiceStateStore` + `runningStates` | Store tidak menimpa state `.starting` saat refresh in-flight |
 | **TC-D05** | `testContainerRunnerComposeYamlWrite` | Docker provider dengan `yamlConfig` | File `docker-compose.kuma.yml` dibuat; argumen `compose -f … up` (RUN-01) |
+| **TC-D05b** | `testContainerRunnerComposeOnDiskPathDocker` | `composeFilePath` on disk (stale `yamlConfig` ignored) | `-f` menunjuk ke file user; `workingDirectory` = parent folder; file tetap ada setelah stop |
+| **TC-D05c** | `testContainerRunnerComposeOnDiskPathPodman` | Podman + `composeFilePath` | Sama seperti D05b untuk engine podman |
+| **TC-D05d** | `testContainerRunnerMissingComposePath` | Path compose tidak ada | `ServiceExecutionError.invalidConfiguration` |
+| **TC-D05e** | `testContainerRunnerInitialScriptPath` | `initialScriptPath` + compose file | Script dijalankan (`touch` marker) sebelum `compose up` |
 | **TC-D06** | `testSSHTunnelRunnerSSHKeyFlag` | SSH provider dengan `sshKeyPath` + port mapping | Argumen `-i <keyPath>` pada `/usr/bin/ssh` (RUN-02) |
+| **TC-D08** | `testKubernetesRunnerPortForwardArgs` | Mock `kubectl` + `RecordingProcessLaunching`; `usePattern: false` | Preflight/list via `EphemeralCLI`; `port-forward` args include `--kubeconfig`, `-n`, port mappings; managed launch only for forward |
+| **TC-D05f** | `testComposeStackContextArguments` | `ComposeStackContext` down/up args | Stable `-p kuma-<uuid>` + `-f` on down |
 | **TC-D10** | `testStorePublishesOnSetExecutionState` | `ServiceStateStore.setExecutionState` tanpa manual post | Mem-post `.kumaServiceStateChanged` agar card toggle (`SyncedServiceRuntime`) ikut |
+
+#### Manual smoke (post-build, per provider)
+
+| Provider | Start | Stop | Notes |
+| :--- | :--- | :--- | :--- |
+| Shell / SSH / Tunnel / K8s | □ | □ | No stuck `.stopping`; K8s local port listens |
+| Docker / Podman | □ | □ | Container removed in Desktop; no orphan `compose` project without `-p` |
+| HTTP check / Process monitor | □ | □ | Task stops cleanly |
 
 ---
 
@@ -77,6 +91,7 @@
 | **TC-E03** | `testRapidLogStreamDoesNotHitchMainActor` | Stream ~1,000 log lines (batched pipeline) | Log di-coalesce/batch ke MainActor tanpa task flooding atau UI freeze |
 | **TC-E04** | `testLogAggregatorRingBufferBoundedMemory` | Stream log melebihi `maxEntries` (2,000 baris) | Memory bounded, operasi pembuangan log lama efisien ($O(1)$) tanpa array shift overhead |
 | **TC-E05** | `testZeroEffortWhenIdle` | App dalam kondisi idle tanpa service running | Gate `shouldHandleExecutionStateNotifications`; **TC-E05b** filter recompute skip |
+| **TC-E06b** | `testSubprocessWaitTimeout` | `sleep` subprocess dengan timeout 0.25s | Proses di-terminate; `waitForExit` returns `false` (PROC-05) |
 | **TC-E06** | `testNonBlockingProcessWaitInAsyncEngine` | `SubprocessWait.waitForExit` pada child process | `waitUntilExit` tidak pada cooperative MainActor thread |
 
 ---
@@ -86,6 +101,7 @@
 | :--- | :--- | :--- | :--- |
 | **TC-G01** | `testDeckSearchDebouncing` | (lihat TC-UI01) | Filter debounce tanpa full reload berlebihan |
 | **TC-G02** | `testServiceCardViewUsesDeckActionsNotViewModel` | Source audit + **TC-G02b** headless `ServiceCardView.body` | Card actions via `ServiceDeckActions`; no deck VM on card |
+| **TC-G03** | `testDeckCardGridUsesAdaptiveMinMax` | Source audit `ServicesDeckContentBodyView.swift` | `.adaptive` with `cardMinWidth` / `cardMaxWidth`; no `.infinity` max or `onGeometryChange` |
 
 ---
 

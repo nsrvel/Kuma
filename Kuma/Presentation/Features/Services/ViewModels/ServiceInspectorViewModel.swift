@@ -13,6 +13,7 @@ public final class ServiceInspectorViewModel {
     let serviceRepository: any ServiceRepositoryProtocol
 
     public var service: Service? = nil
+    public var isLoadingServiceDetail: Bool = false
     public var providers: [Provider] = []
     public var activeProviderID: UUID? = nil
     public var draftPorts: [KumaPortMappingItem] = []

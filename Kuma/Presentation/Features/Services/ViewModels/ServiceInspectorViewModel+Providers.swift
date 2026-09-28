@@ -12,8 +12,8 @@ extension ServiceInspectorViewModel {
             guard var srv = service else { return }
 
             if wasRunning {
-                stateStore?.setExecutionState(.stopping, for: serviceID)
-                await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
+                stateStore?.setExecutionState(.stopping, for: serviceID, publish: false)
+                await ServiceStopSupport.stopOffMainActor(serviceID: serviceID, stateStore: stateStore)
             }
 
             withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
@@ -35,14 +35,14 @@ extension ServiceInspectorViewModel {
                 if wasRunning {
                     stateStore?.setExecutionState(.starting, for: serviceID)
                     try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
-                    if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID) {
-                        stateStore?.setExecutionState(.running(pid: proc.pid), for: serviceID)
-                    } else {
-                        stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
-                    }
+                    await ServiceExecutionStateSync.applyAfterSuccessfulStart(
+                        serviceID: serviceID,
+                        stateStore: stateStore
+                    )
                 }
             } catch {
                 Self.logger.error("Failed to switch active provider for service \(srv.id): \(error.localizedDescription)")
+                stateStore?.clearStoppingIfStillPending(for: serviceID)
             }
         }
     }

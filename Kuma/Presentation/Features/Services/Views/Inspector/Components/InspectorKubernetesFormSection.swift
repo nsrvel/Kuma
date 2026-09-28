@@ -22,7 +22,6 @@ public struct InspectorKubernetesFormSection: View {
                         onFieldChanged()
                     }
                 )
-                .disabled(isLocked)
 
                 KumaFormSection(icon: "network", title: "Cluster Connection") {
                     KubeConnectionSettingsView(

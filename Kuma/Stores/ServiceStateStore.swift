@@ -24,6 +24,12 @@ public final class ServiceStateStore {
         executionStates[serviceID] ?? .idle
     }
 
+    /// If stop was requested but the UI task never reached `.idle`, unwind a stuck `.stopping` pill.
+    public func clearStoppingIfStillPending(for serviceID: UUID) {
+        guard state(for: serviceID) == .stopping else { return }
+        setExecutionState(.idle, for: serviceID)
+    }
+
     /// Fast O(1) runtime wrapper for backwards compatibility with subviews
     public func runtime(for serviceID: UUID) -> ServiceRuntimeState {
         ServiceRuntimeState(executionState: state(for: serviceID))
@@ -84,7 +90,11 @@ public final class ServiceStateStore {
             if existing == .starting && state == .idle {
                 continue
             }
-            if existing == .stopping && state.isOperational {
+            if existing == .stopping {
+                // User requested stop — never promote back to running while compose teardown is in flight.
+                if state == .idle && !runningWithoutProcess.contains(id) {
+                    setExecutionState(.idle, for: id, publish: true)
+                }
                 continue
             }
             if state == .idle {

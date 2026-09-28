@@ -83,4 +83,4 @@
 | **TC-F02** | `testWorkspaceSwitcherPopoverInactiveShortcuts` | Render popover dengan 3 workspace | Inactive row menampilkan shortcut badge `⌘2`, `⌘3` | ✅ Passed (0.001s) |
 | **TC-F03** | `testWorkspaceAvatarViewGradientGeneration` | Generate avatar tanpa gambar untuk 2 nama berbeda | Inisial huruf pertama akurat, deterministic gradient palette terpilih | ✅ Passed (0.001s) |
 | **TC-F04** | `testWorkspaceFormSheetViewModeCreate` | Render `WorkspaceFormSheet` mode `.create` | Title "New Workspace", Danger Zone tidak muncul | ✅ Passed (0.001s) |
-| **TC-F05** | `testWorkspaceFormSheetViewModeEditWithDangerZone` | Render `WorkspaceFormSheet` mode `.edit` dengan 2 workspace | Title "Workspace Settings", Danger Zone subview ter-render | ✅ Passed (0.001s) |
+| **TC-F05** | `testWorkspaceFormSheetViewModeEditWithDelete` | Render `WorkspaceFormSheet` mode `.edit` dengan 2 workspace | Title "Workspace Settings", delete row tersedia (bukan danger-zone section) | ✅ Passed (0.001s) |

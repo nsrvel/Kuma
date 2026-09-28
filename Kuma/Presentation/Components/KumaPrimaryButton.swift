@@ -2,30 +2,61 @@ import SwiftUI
 
 /// Custom ButtonStyle providing Apple-grade tactile press state and crisp depth.
 public struct KumaPrimaryButtonStyle: ButtonStyle {
+    private let fill: Color
     private let maxWidth: CGFloat?
+    private let minWidth: CGFloat?
+    private let cornerRadius: CGFloat
+    private let labelFont: Font
+    private let verticalPadding: CGFloat
+    private let horizontalPadding: CGFloat
 
-    public init(maxWidth: CGFloat? = 220) {
+    public init(
+        fill: Color = Color.accentColor,
+        maxWidth: CGFloat? = 220,
+        minWidth: CGFloat? = nil,
+        cornerRadius: CGFloat = KumaRadius.md,
+        labelFont: Font = KumaFont.heading,
+        verticalPadding: CGFloat = 9,
+        horizontalPadding: CGFloat = KumaSpacing.lg
+    ) {
+        self.fill = fill
         self.maxWidth = maxWidth
+        self.minWidth = minWidth
+        self.cornerRadius = cornerRadius
+        self.labelFont = labelFont
+        self.verticalPadding = verticalPadding
+        self.horizontalPadding = horizontalPadding
+    }
+
+    /// Compact inspector Start/Stop — same fill treatment as wizard primary, smaller metrics.
+    public static func inspectorToggle(isRunning: Bool) -> KumaPrimaryButtonStyle {
+        KumaPrimaryButtonStyle(
+            fill: isRunning ? KumaStatus.destructiveButtonFill : Color.accentColor,
+            maxWidth: nil,
+            minWidth: 56,
+            cornerRadius: 7,
+            labelFont: .system(size: 12.5, weight: .semibold),
+            verticalPadding: 6.5,
+            horizontalPadding: 16
+        )
     }
 
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(KumaFont.heading)
+            .font(labelFont)
             .foregroundStyle(.white)
-            .frame(maxWidth: maxWidth)
-            .padding(.vertical, 9)
-            .padding(.horizontal, KumaSpacing.lg)
+            .frame(minWidth: minWidth, maxWidth: maxWidth)
+            .padding(.vertical, verticalPadding)
+            .padding(.horizontal, horizontalPadding)
             .background(
-                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
-                    .fill(Color.accentColor)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(fill)
                     .brightness(configuration.isPressed ? -0.08 : 0)
             )
-            // Crisp 0.5pt macOS stroke highlight
             .overlay(
-                RoundedRectangle(cornerRadius: KumaRadius.md, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(Color.white.opacity(configuration.isPressed ? 0.05 : 0.15), lineWidth: 0.5)
             )
-            // Subtle native drop shadow (depth without neon glow)
             .shadow(
                 color: Color.black.opacity(configuration.isPressed ? 0.05 : 0.12),
                 radius: configuration.isPressed ? 1 : 3,
@@ -34,6 +65,7 @@ public struct KumaPrimaryButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: configuration.isPressed)
+            .animation(.easeInOut(duration: 0.18), value: fill)
             .contentShape(Rectangle())
     }
 }

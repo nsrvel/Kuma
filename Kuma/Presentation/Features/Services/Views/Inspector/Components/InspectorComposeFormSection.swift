@@ -11,19 +11,15 @@ public struct InspectorComposeFormSection: View {
             VStack(alignment: .leading, spacing: 14) {
                 if isPodman {
                     PodmanComposeSettingsView(
-                        yamlConfig: Binding(
-                            get: { provider.yamlConfig ?? "" },
-                            set: { provider.yamlConfig = $0; onFieldChanged() }
-                        ),
+                        yamlConfig: optionalStringBinding(\.yamlConfig),
+                        composeFilePath: optionalStringBinding(\.composeFilePath),
                         isLocked: isLocked,
                         onSave: onFieldChanged
                     )
                 } else {
                     DockerComposeSettingsView(
-                        yamlConfig: Binding(
-                            get: { provider.yamlConfig ?? "" },
-                            set: { provider.yamlConfig = $0; onFieldChanged() }
-                        ),
+                        yamlConfig: optionalStringBinding(\.yamlConfig),
+                        composeFilePath: optionalStringBinding(\.composeFilePath),
                         isLocked: isLocked,
                         onSave: onFieldChanged
                     )
@@ -32,15 +28,23 @@ public struct InspectorComposeFormSection: View {
                 KumaDivider(opacity: 0.06, verticalPadding: 2)
 
                 InitialScriptSettingsView(
-                    initialScript: Binding(
-                        get: { provider.initialScript ?? "" },
-                        set: { provider.initialScript = $0.isEmpty ? nil : $0; onFieldChanged() }
-                    ),
+                    initialScript: optionalStringBinding(\.initialScript),
+                    initialScriptPath: optionalStringBinding(\.initialScriptPath),
                     isLocked: isLocked,
                     onSave: onFieldChanged
                 )
             }
             .disabled(isLocked)
         }
+    }
+
+    private func optionalStringBinding(_ keyPath: WritableKeyPath<Provider, String?>) -> Binding<String> {
+        Binding(
+            get: { provider[keyPath: keyPath] ?? "" },
+            set: {
+                provider[keyPath: keyPath] = $0.isEmpty ? nil : $0
+                onFieldChanged()
+            }
+        )
     }
 }

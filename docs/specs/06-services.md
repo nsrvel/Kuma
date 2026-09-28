@@ -63,6 +63,10 @@
 - **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift)
 - **Resolution**: Clear logs calls `LogAggregator.shared.clear(serviceID:)` scoped to the active service only.
 
+### UX: Inspector header Start / Stop
+- **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift), [`KumaPrimaryButton.swift`](Kuma/Presentation/Components/KumaPrimaryButton.swift)
+- **Behavior**: Compact header toggle uses `KumaPrimaryButtonStyle.inspectorToggle` — **Start** fill is `Color.accentColor` (same as onboarding primary); **Stop** fill is `KumaStatus.destructiveButtonFill` (saturated button red, not status-dot coral); white label, shared stroke/shadow/press treatment. Busy states block taps via `allowsHitTesting` so fill does not macOS-disable fade.
+
 ---
 
 ## 4. CRITICAL: Process Lifecycle Race Conditions
@@ -114,7 +118,7 @@
 
 ### LAYER-01: Core → Presentation Import — **Fixed**
 - **Location**: [`ServiceRepository+DeckItems.swift`](Kuma/Core/Database/Repositories/ServiceRepository+DeckItems.swift), [`ServiceDeckItem.swift`](Kuma/Domain/Models/ServiceDeckItem.swift), [`ServiceCardSnapshot.swift`](Kuma/Presentation/Features/Services/Models/ServiceCardSnapshot.swift)
-- **Resolution**: Repository returns **Domain** `ServiceDeckItem` only (`fetchDeckItems` / `fetchDeckItem`). Presentation maps to `ServiceCardSnapshot` (search key, subtitle fallback, provider label chrome).
+- **Resolution**: Repository returns **Domain** `ServiceDeckItem` only (`fetchDeckItems` / `fetchDeckItem`). Presentation maps to `ServiceCardSnapshot`: card subtitle is **service description** when set, else **active provider `resolvedTarget`**, else empty (UI falls back to provider category label); **search key** indexes name, description, target, provider labels, and local ports for deck filter.
 
 ### LAYER-02: Domain Imports SwiftUI — **Fixed**
 - **Resolution**: Provider chrome (`Color`, `LinearGradient`) moved to [`ProviderCategory+Theme.swift`](Kuma/Presentation/Theme/ProviderCategory+Theme.swift). Domain [`ProviderCategory.swift`](Kuma/Domain/Enums/ProviderCategory.swift) is Foundation-only.
@@ -170,13 +174,31 @@
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckRuntimeObservation.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckRuntimeObservation.swift)
 - **Resolution**: Idle gate on state-changed notifications; `notifyExecutionStatesChanged()` skips filter recompute unless status filter/sort active. **TC-E05**, **TC-E05b**.
 
+### UX-01 / PERF-11: Deck Card Grid Layout — **Fixed**
+- **Location**: [`ServicesDeckContentBodyView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServicesDeckContentBodyView.swift), [`KumaTheme.Deck`](Kuma/Presentation/Theme/KumaTheme.swift)
+- **Resolution**: Native `LazyVGrid` + `GridItem(.adaptive(minimum:maximum:))` (capped card width, no `maximum: .infinity`); filter/sort does not spring-animate the grid. **TC-G03** source audit.
+
 ---
 
 ## 8. HIGH: Broken / Incomplete Runner Features
 
-### RUN-01: Docker/Podman YAML Config Ignored — **Fixed**
+### RUN-01: Docker/Podman Compose Sources — **Fixed**
+- **Location**: [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift), [`ComposeStackContext.swift`](Kuma/Core/Execution/Compose/ComposeStackContext.swift)
+- **Resolution**: Compose resolves in order: (1) on-disk `composeFilePath` → working dir = file parent unless `workingDirectory` set; (2) inline `yamlConfig` → ephemeral `kuma-compose-{serviceID}/docker-compose.kuma.yml` (removed on stop); (3) neither → `invalidConfiguration`.
+- **Lifecycle (best practice)**: Detached `docker|podman compose -p kuma-<serviceUUID> -f <file> up -d` via short-lived [`EphemeralCLI`](Kuma/Core/Execution/Subprocess/EphemeralCLI.swift) / [`ComposeCLI`](Kuma/Core/Execution/Compose/ComposeCLI.swift) (not `ProcessRegistry`). Stop runs `compose stop` then `compose down` with the same `-p`/`-f`. Browse-file and paste-YAML share [`ComposeStackResolver`](Kuma/Core/Execution/Compose/ComposeStackResolver.swift). Legacy stacks started without `-p kuma-…` are not torn down by stop — use the same compose file with matching project or manual `compose down`. **TC-D05**, **TC-D05b–f**.
+- **UI state**: After start/stop, deck and inspector call [`ServiceExecutionStateSync`](Kuma/Core/Execution/ServiceExecutionStateSync.swift) so `.running` follows `ServiceExecutionEngine.isServiceRunning` (compose/K8s without registry PID use `pid: 0`). Runner log capture is gated by [`ServiceExecutionLoggingPolicy`](Kuma/Core/Execution/ServiceExecutionLoggingPolicy.swift) (off until Live Logs wiring returns).
+
+### PROC-05: Bounded shutdown waits — **Fixed**
+- **Location**: [`SubprocessWait.swift`](Kuma/Core/Execution/SubprocessWait.swift), [`ServiceExecutionEngine.swift`](Kuma/Core/Execution/ServiceExecutionEngine.swift), [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift)
+- **Detail**: `compose down` (45s), startup script (120s), full service stop (90s then `ProcessRegistry` SIGINT→SIGKILL). `ProcessRegistry.stop` already escalates signals (~2.5s). Prevents UI stuck on “Waiting for a clean shutdown.” **TC-E06b**.
+
+### RUN-01b: Docker/Podman Startup Script Paths — **Fixed**
 - **Location**: [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift)
-- **Resolution**: Inline `yamlConfig` written to `docker-compose.kuma.yml` with `compose -f`. **TC-D05**.
+- **Resolution**: Pre-`compose up` script: (1) `initialScriptPath` via `/bin/sh` if file exists; (2) else inline `initialScript` (zsh bootstrap). Same working directory as compose. **TC-D05e**.
+
+### Compose / startup script sources (UI)
+- **Location**: [`ComposeSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/ComposeSettingsView.swift), [`InitialScriptSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/Docker/InitialScriptSettingsView.swift), `Provider.composeFilePath` / `Provider.initialScriptPath` (migration `v6_provider_compose_and_script_paths`).
+- **Detail**: Compose and startup script expanded editors use **Choose File** vs **Paste YAML** / **Paste Script** (`KumaDualSourceSegment`); collapsed startup script still shows a file card when a path is set. Docker and Podman share `ContainerRunner`.
 
 ### RUN-02: SSH Runner Ignores Key Path — **Fixed**
 - **Location**: [`SSHTunnelRunner.swift`](Kuma/Core/Execution/Runners/SSHTunnelRunner.swift)

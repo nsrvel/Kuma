@@ -26,7 +26,11 @@ struct WorkspaceServicesDeckHost: View {
         )
         .task(id: workspaceID) {
             viewModel.stateStore = serviceStateStore
+            syncSidebarFiltersToViewModel()
             await viewModel.loadWorkspaceAsync(workspaceID: workspaceID)
+        }
+        .onChange(of: selectedSidebarID) { _, _ in
+            syncSidebarFiltersToViewModel(animated: true)
         }
         .onChange(of: isStarredOnly) { _, newStarred in
             withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
@@ -37,6 +41,20 @@ struct WorkspaceServicesDeckHost: View {
             withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
                 viewModel.filterGroupID = newGroupID
             }
+        }
+    }
+
+    private func syncSidebarFiltersToViewModel(animated: Bool = false) {
+        let apply = {
+            viewModel.isStarredOnly = isStarredOnly
+            viewModel.filterGroupID = filterGroupID
+        }
+        if animated {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+                apply()
+            }
+        } else {
+            apply()
         }
     }
 }

@@ -11,7 +11,14 @@ struct SyncedServiceRuntime: ViewModifier {
             .onAppear { runtime = serviceStateStore.runtime(for: serviceID) }
             .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { note in
                 guard note.object as? UUID == serviceID else { return }
-                runtime = serviceStateStore.runtime(for: serviceID)
+                if let execState = ServiceStateNotification.executionState(
+                    from: note.userInfo,
+                    existing: serviceStateStore.state(for: serviceID)
+                ) {
+                    runtime = ServiceRuntimeState(executionState: execState)
+                } else {
+                    runtime = serviceStateStore.runtime(for: serviceID)
+                }
             }
     }
 }

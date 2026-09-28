@@ -29,7 +29,7 @@ public struct InspectorOptionsSection: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Disable Service")
                             .font(KumaFont.body)
-                        Text(isRunning ? "Stop the service before disabling." : "When disabled, this service is locked and excluded from bulk operations.")
+                        Text("Excluded from bulk actions.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -52,7 +52,7 @@ public struct InspectorOptionsSection: View {
                         Text("Delete Service")
                             .font(KumaFont.body)
                             .foregroundStyle(.red)
-                        Text(isRunning ? "Stop the service before deleting." : "Permanently remove this service.")
+                        Text("Permanent removal.")
                             .font(KumaFont.caption)
                             .foregroundStyle(.secondary)
                     }

@@ -57,7 +57,7 @@ public struct ProviderItemRowView: View {
             if isSelected {
                 Text("Active")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color.green)
+                    .foregroundStyle(KumaStatus.runningIndicator)
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }

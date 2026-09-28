@@ -38,7 +38,8 @@ public nonisolated struct ServiceCardSnapshot: Identifiable, Sendable, Equatable
         providerCategory: ProviderCategory = .shell,
         portDisplays: [Int] = [],
         providerOptions: [ProviderOption] = [],
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        searchKey: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -50,7 +51,7 @@ public nonisolated struct ServiceCardSnapshot: Identifiable, Sendable, Equatable
         self.portDisplays = portDisplays
         self.providerOptions = providerOptions
         self.createdAt = createdAt
-        self.searchKey = "\(name) \(subtitle)".lowercased()
+        self.searchKey = (searchKey ?? "\(name) \(subtitle)").lowercased()
     }
 
     public func toggling(starred: Bool) -> Self {
@@ -63,11 +64,11 @@ public nonisolated struct ServiceCardSnapshot: Identifiable, Sendable, Equatable
 extension ServiceCardSnapshot {
     public nonisolated init(deckItem: ServiceDeckItem) {
         let subtitle: String = {
-            let target = deckItem.resolvedTarget.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !target.isEmpty { return target }
             if let desc = deckItem.serviceDescription?.trimmingCharacters(in: .whitespacesAndNewlines), !desc.isEmpty {
                 return desc
             }
+            let target = deckItem.resolvedTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !target.isEmpty { return target }
             return ""
         }()
 
@@ -92,8 +93,27 @@ extension ServiceCardSnapshot {
             providerCategory: deckItem.activeProviderCategory,
             portDisplays: deckItem.localPorts,
             providerOptions: options,
-            createdAt: deckItem.createdAt
+            createdAt: deckItem.createdAt,
+            searchKey: Self.deckSearchKey(for: deckItem)
         )
+    }
+
+    private nonisolated static func deckSearchKey(for item: ServiceDeckItem) -> String {
+        var parts: [String] = [item.name.trimmingCharacters(in: .whitespacesAndNewlines)]
+        if let desc = item.serviceDescription?.trimmingCharacters(in: .whitespacesAndNewlines), !desc.isEmpty {
+            parts.append(desc)
+        }
+        let target = item.resolvedTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !target.isEmpty { parts.append(target) }
+        parts.append(item.activeProviderCategory.sidebarLabel)
+        for opt in item.providerOptions {
+            let trimmed = opt.label.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { parts.append(trimmed) }
+        }
+        for port in item.localPorts {
+            parts.append(String(port))
+        }
+        return parts.joined(separator: " ").lowercased()
     }
 }
 

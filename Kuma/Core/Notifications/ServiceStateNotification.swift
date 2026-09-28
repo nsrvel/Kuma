@@ -36,15 +36,29 @@ public enum ServiceStateNotification {
 
         switch state {
         case .stopped:
+            // Ignore teardown noise while starting; during stopping, process exit should clear the UI.
+            if existing == .starting {
+                return nil
+            }
             return .idle
         case .starting:
             return .starting
         case .running:
+            if existing == .stopping {
+                return nil
+            }
             let pid = int32(in: userInfo, key: pidKey)
                 ?? existing.processIdentifier
                 ?? 0
             return .running(pid: pid)
         case .stopping:
+            // Stale `.stopping` notifications can arrive after stop already cleared the store to `.idle`.
+            if existing == .idle {
+                return nil
+            }
+            if case .crashed = existing {
+                return nil
+            }
             return .stopping
         case .crashed:
             if let code = int32(in: userInfo, key: exitCodeKey) {

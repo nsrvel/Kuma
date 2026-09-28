@@ -56,7 +56,7 @@ public struct TunnelSettingsView: View {
                 KumaSecureField(
                     label: "Ngrok Auth Token",
                     value: $ngrokAuthToken,
-                    placeholder: "Leave blank if already configured in ~/.config/ngrok"
+                    placeholder: "Uses ngrok config if empty"
                 )
             }
         }

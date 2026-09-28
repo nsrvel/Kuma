@@ -56,6 +56,9 @@ struct LoggingPipelineTests {
     @Test("TC-L05: ServiceLogPipeline batches lines to LogAggregator")
     @MainActor
     func testPipelineBatching() async {
+        let priorCapture = ServiceExecutionLoggingPolicy.capturesRunnerOutput
+        ServiceExecutionLoggingPolicy.capturesRunnerOutput = true
+        defer { ServiceExecutionLoggingPolicy.capturesRunnerOutput = priorCapture }
         let serviceID = UUID()
         LogAggregator.shared.retainUISubscriber()
         defer { LogAggregator.shared.releaseUISubscriber() }
@@ -142,6 +145,9 @@ struct LoggingPipelineTests {
     @Test("TC-E03: ServiceLogPipeline coalesces high-volume lines")
     @MainActor
     func testRapidLogStreamBatchesToAggregator() async {
+        let priorCapture = ServiceExecutionLoggingPolicy.capturesRunnerOutput
+        ServiceExecutionLoggingPolicy.capturesRunnerOutput = true
+        defer { ServiceExecutionLoggingPolicy.capturesRunnerOutput = priorCapture }
         LogAggregator.shared.retainUISubscriber()
         defer { LogAggregator.shared.releaseUISubscriber() }
         let serviceID = UUID()

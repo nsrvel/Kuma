@@ -3,6 +3,17 @@ import os
 
 extension ServicesDeckViewModel {
     public func toggleService(id: UUID) {
+        if isOperational(id) {
+            stateStore?.setExecutionState(.stopping, for: id, publish: false)
+            let store = stateStore
+            Task.detached(priority: .userInitiated) {
+                await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: store)
+                await MainActor.run { [weak self] in
+                    self?.notifyExecutionStatesChanged()
+                }
+            }
+            return
+        }
         Task {
             await toggleServiceAsync(id: id)
         }
@@ -12,18 +23,13 @@ extension ServicesDeckViewModel {
         let wasRunning = isOperational(id)
 
         if wasRunning {
-            stateStore?.setExecutionState(.stopping, for: id)
-            await ServiceExecutionEngine.shared.stop(serviceID: id)
-            stateStore?.setExecutionState(.idle, for: id)
+            stateStore?.setExecutionState(.stopping, for: id, publish: false)
+            await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: stateStore)
         } else {
             stateStore?.setExecutionState(.starting, for: id)
             do {
                 try await ServiceExecutionEngine.shared.start(serviceID: id)
-                if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: id) {
-                    stateStore?.setExecutionState(.running(pid: proc.pid), for: id)
-                } else {
-                    stateStore?.setExecutionState(.running(pid: 0), for: id)
-                }
+                await ServiceExecutionStateSync.applyAfterSuccessfulStart(serviceID: id, stateStore: stateStore)
             } catch {
                 Self.logger.error("Failed to start service \(id): \(error.localizedDescription)")
                 stateStore?.setExecutionState(.crashed(exitCode: 1), for: id)
@@ -45,8 +51,10 @@ extension ServicesDeckViewModel {
                 stateStore?.setExecutionState(.starting, for: snapshot.id)
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
-                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
-                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
+                    await ServiceExecutionStateSync.applyAfterSuccessfulStart(
+                        serviceID: snapshot.id,
+                        stateStore: stateStore
+                    )
                 } catch {
                     Self.logger.error("Failed to start service \(snapshot.name): \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
@@ -64,12 +72,8 @@ extension ServicesDeckViewModel {
             let runningIDs = bulkActionSnapshots.map(\.id).filter { isOperational($0) }
 
             for id in runningIDs {
-                stateStore?.setExecutionState(.stopping, for: id)
-            }
-
-            for id in runningIDs {
-                await ServiceExecutionEngine.shared.stop(serviceID: id)
-                stateStore?.setExecutionState(.idle, for: id)
+                stateStore?.setExecutionState(.stopping, for: id, publish: false)
+                await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: stateStore)
             }
 
             notifyExecutionStatesChanged()
@@ -78,15 +82,14 @@ extension ServicesDeckViewModel {
 
     public func restartService(id: UUID) {
         Task {
-            stateStore?.setExecutionState(.stopping, for: id)
-            await ServiceExecutionEngine.shared.stop(serviceID: id)
+            stateStore?.setExecutionState(.stopping, for: id, publish: false)
+            await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: stateStore)
             try? await Task.sleep(nanoseconds: 300_000_000)
 
             stateStore?.setExecutionState(.starting, for: id)
             do {
                 try await ServiceExecutionEngine.shared.start(serviceID: id)
-                let pid = await ProcessRegistry.shared.getSnapshot(serviceID: id)?.pid ?? 0
-                stateStore?.setExecutionState(.running(pid: pid), for: id)
+                await ServiceExecutionStateSync.applyAfterSuccessfulStart(serviceID: id, stateStore: stateStore)
             } catch {
                 Self.logger.error("Failed to restart service \(id): \(error.localizedDescription)")
                 stateStore?.setExecutionState(.crashed(exitCode: 1), for: id)

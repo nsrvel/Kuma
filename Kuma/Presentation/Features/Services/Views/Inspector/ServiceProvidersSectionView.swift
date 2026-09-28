@@ -14,7 +14,6 @@ public struct ServiceProvidersSectionView: View {
     @State private var editingProviderID: UUID? = nil
     @State private var formType: ProviderCategory = .docker
     @State private var formLabel: String = ""
-    @State private var isAddHovered: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var providerToDelete: Provider? = nil
 
@@ -89,8 +88,14 @@ public struct ServiceProvidersSectionView: View {
     private var emptyStateView: some View {
         VStack(alignment: .center, spacing: 8) {
             Text("No providers configured.").font(.caption).foregroundStyle(.secondary)
-            Button { openAddForm() } label: { Label("Add Provider", systemImage: "plus") }
-                .buttonStyle(.bordered).disabled(isLocked)
+            KumaFormAddActionButton(
+                style: .bordered,
+                title: "Add Provider",
+                helpWhenEnabled: "Add new provider",
+                helpWhenDisabled: "Stop service to add providers",
+                action: openAddForm
+            )
+            .disabled(isLocked)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 12)
@@ -139,7 +144,6 @@ public struct ServiceProvidersSectionView: View {
             let newProv = Provider(id: UUID(), serviceID: serviceID, type: formType, label: label)
             onAddProvider(newProv)
         }
-
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = false }
     }
 }

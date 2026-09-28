@@ -108,4 +108,13 @@ struct DataPortVisualAndAccessibilityTests {
         #expect(pane.hasConflict == false)
         #expect(pane.portMappings.count == 1)
     }
+
+    @Test("Import preview table ports render as plain comma-separated numbers")
+    func testImportPortsSummaryPlainText() {
+        let providerID = UUID()
+        let same = DataPortService.ExportPortMapping(providerID: providerID, localPort: 9000, remotePort: 9000)
+        let mapped = DataPortService.ExportPortMapping(providerID: providerID, localPort: 3000, remotePort: 80)
+        #expect(ImportPortsBadgeView.summary(portMappings: [same, mapped], maxVisible: 2) == "9000, 3000")
+        #expect(ImportPortsBadgeView.summary(portMappings: [same, mapped, same], maxVisible: 2) == "9000, 3000, +1")
+    }
 }

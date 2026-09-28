@@ -25,13 +25,15 @@ public struct ServiceInspectorView: View {
     public var body: some View {
         VStack(spacing: 0) {
             if let service = inspectorVM.service {
+                let isSynced = service.id == serviceID
+                let showStaleShell = !isSynced && inspectorVM.isLoadingServiceDetail
+                if isSynced || showStaleShell {
                 let executionState = serviceStateStore.state(for: serviceID)
                 let isRunning = executionState.isOperational
                 let isLocked = service.isDisabled || isRunning || executionState == .starting
 
                 let isViewingLogs = inspectorVM.isViewingLogs
 
-                // Zone 1: Native macOS Status Header (Icon turns into Back button when viewing logs)
                 InspectorStatusHeader(
                     service: service,
                     provider: inspectorVM.activeProvider,
@@ -46,15 +48,15 @@ public struct ServiceInspectorView: View {
                         }
                     }
                 )
+                .allowsHitTesting(isSynced)
 
                 Divider()
                     .padding(.horizontal, KumaSpacing.lg)
 
                 Group {
                     if isViewingLogs {
-                        // Dedicated Full-Height Seamless Live Terminal Viewport
                         InspectorLiveConsoleView(
-                            serviceID: service.id,
+                            serviceID: serviceID,
                             serviceName: service.name,
                             isRunning: isRunning
                         )
@@ -73,14 +75,31 @@ public struct ServiceInspectorView: View {
                         )
                     }
                 }
+                .opacity(isSynced ? 1 : 0.88)
+                .allowsHitTesting(isSynced)
                 .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isViewingLogs)
-                .animation(.easeInOut(duration: 0.18), value: isRunning)
+                }
+            } else if inspectorVM.isLoadingServiceDetail {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading service…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
                     title: "No Selection",
                     description: "Select a service to view configuration details."
                 )
+            }
+        }
+        .onChange(of: serviceID) { _, newID in
+            if inspectorVM.service?.id != newID {
+                inspectorVM.isLoadingServiceDetail = true
+                inspectorVM.isViewingLogs = false
             }
         }
         .task(id: serviceID) {
@@ -111,9 +130,7 @@ public struct ServiceInspectorView: View {
             inspectorVM.clearAfterExternalDeletion()
         }
         .onDisappear {
-            Task {
-                await inspectorVM.flushPendingAutoSave()
-            }
+            Task { await inspectorVM.flushPendingAutoSave() }
         }
         .confirmationDialog(
             "Delete Service?",

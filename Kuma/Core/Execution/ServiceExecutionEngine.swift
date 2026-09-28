@@ -41,16 +41,19 @@ public final class ServiceExecutionEngine: Sendable {
     private let healthCheckRunner: HealthCheckRunner
     private let tunnelRunner: TunnelRunner
     private let processMonitorRunner: ProcessMonitorRunner
+    private let processRegistry: ProcessRegistry
+    private let stopGate = ServiceStopGate()
 
     public init(
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
         processRegistry: ProcessRegistry = .shared
     ) {
         self.serviceRepository = serviceRepository
-        self.kubernetesRunner = KubernetesRunner(processRegistry: processRegistry, serviceRepository: serviceRepository)
-        self.shellRunner = ShellRunner(processRegistry: processRegistry)
+        self.processRegistry = processRegistry
         let processLauncher = ProcessRegistryLauncher(registry: processRegistry)
-        self.containerRunner = ContainerRunner(processLauncher: processLauncher)
+        self.kubernetesRunner = KubernetesRunner(processLauncher: processLauncher, serviceRepository: serviceRepository)
+        self.shellRunner = ShellRunner(processRegistry: processRegistry)
+        self.containerRunner = ContainerRunner(processLauncher: processLauncher, composeCLI: LiveComposeCLI())
         self.sshRunner = SSHTunnelRunner(processLauncher: processLauncher, serviceRepository: serviceRepository)
         self.healthCheckRunner = HealthCheckRunner()
         self.tunnelRunner = TunnelRunner(processRegistry: processRegistry)
@@ -94,20 +97,65 @@ public final class ServiceExecutionEngine: Sendable {
         }
     }
 
-    /// Stops a running service across all possible runner implementations.
+    /// Stops a running service using its active provider runner (bounded subprocess waits per runner).
     public func stop(serviceID: UUID) async {
+        await stopGate.runOnce(serviceID: serviceID) {
+            await self.performStop(serviceID: serviceID)
+        }
+    }
+
+    /// Best-effort release when `stop` hits the global wall timeout (UI must not stay `.stopping`).
+    func forceReleaseService(serviceID: UUID) async {
+        if let provider = await resolveActiveProvider(for: serviceID),
+           provider.type == .docker || provider.type == .podman {
+            await containerRunner.forceComposeTeardown(serviceID: serviceID, provider: provider)
+        }
+        await containerRunner.forceUnregister(serviceID: serviceID)
+        await processRegistry.stop(serviceID: serviceID)
+        if let pipeline = removePipeline(for: serviceID) {
+            await pipeline.finish()
+        }
+    }
+
+    private func performStop(serviceID: UUID) async {
         Self.logger.info("Stopping service \(serviceID)...")
 
+        let provider = await resolveActiveProvider(for: serviceID)
+
+        if let provider {
+            switch provider.type {
+            case .docker, .podman:
+                await containerRunner.stop(serviceID: serviceID, provider: provider)
+            default:
+                await runner(for: provider.type).stop(serviceID: serviceID)
+            }
+        } else {
+            await stopAllRunners(serviceID: serviceID)
+        }
+
+        if await processRegistry.isRunning(serviceID: serviceID) {
+            await processRegistry.stop(serviceID: serviceID)
+        }
+
+        if let pipeline = removePipeline(for: serviceID) {
+            await pipeline.finish()
+        }
+    }
+
+    private func resolveActiveProvider(for serviceID: UUID) async -> Provider? {
+        guard let service = try? await serviceRepository.fetchService(id: serviceID) else { return nil }
+        guard let providers = try? await serviceRepository.fetchProviders(forService: serviceID) else { return nil }
+        return providers.first(where: { $0.id == service.activeProviderID }) ?? providers.first
+    }
+
+    private func stopAllRunners(serviceID: UUID) async {
         await kubernetesRunner.stop(serviceID: serviceID)
         await shellRunner.stop(serviceID: serviceID)
-        await containerRunner.stop(serviceID: serviceID)
+        await containerRunner.stop(serviceID: serviceID, provider: nil)
         await sshRunner.stop(serviceID: serviceID)
         await healthCheckRunner.stop(serviceID: serviceID)
         await tunnelRunner.stop(serviceID: serviceID)
         await processMonitorRunner.stop(serviceID: serviceID)
-
-        let pipeline = removePipeline(for: serviceID)
-        await pipeline?.finish()
     }
 
     /// Checks if a service is actively running under any runner.

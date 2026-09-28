@@ -58,7 +58,6 @@ stateDiagram-v2
 
     state GlobalServices {
         [*] --> AlertBus : AlertService.shared (activeAlert modal)
-        [*] --> MenuBarScene : MenuBarExtra (persistent status item)
         [*] --> CommandShortcuts : KumaCommands (⌘, ⌘F ⌘1..9 ⇧⌘N ⌘?)
         [*] --> NotificationHandler : Foreground banner + sound (.banner, .sound, .badge)
     }
@@ -110,7 +109,7 @@ stateDiagram-v2
 5. **`[INV-APP-05]` Master Key Security & POSIX Permission Lockdown**: `CryptoVault` wajib mengamankan file kunci simetris AES-256 (`master.key`) dengan atribut permission POSIX `0600` (hanya owner read/write) dan direktori penampungnya dengan `0700`. Enkripsi wajib menggunakan format terotentikasi `nonce:tag:ciphertext`.
 6. **`[INV-APP-06]` Idempotent Audio Asset Synchronization**: Pengecekan file audio sistem `kuma-alert.caf` ke `~/Library/Sounds/` wajib bersifat idempoten: jika file sudah ada di folder tujuan, sistem tidak boleh melakukan operasi penulisan disk ulang saat app startup. Volume playback dibatasi aman pada ~45%.
 7. **`[INV-APP-07]` Menu Command & Shortcut HIG Compliance**: Global menu commands (`KumaCommands`) wajib mematuhi standar keyboard shortcut macOS (Preferences `⌘,`, Find `⌘F`, Workspace switching `⌘1`..`⌘9`, New Workspace `⇧⌘N`, Onboarding Help `⌘?`).
-8. **`[INV-APP-08]` Dynamic Design System & Color Tokens**: Token visual pada `KumaTheme` wajib adaptif dan stabil di semua container (Window, Popover, MenuBarExtra) tanpa me-reset state internal view saat appearance mode berubah.
+8. **`[INV-APP-08]` Dynamic Design System & Color Tokens**: Token visual pada `KumaTheme` wajib adaptif dan stabil di semua container window (Window, Popover) tanpa me-reset state internal view saat appearance mode berubah.
 9. **`[INV-APP-09]` Foreground Notification Delivery Contract**: Delegate notifikasi lokal wajib menyajikan banner, suara, dan badge (`[.banner, .sound, .badge]`) bahkan ketika jendela aplikasi sedang aktif/fokus, agar user tidak kehilangan peringatan penting mengenai lifecycle servis.
 
 ---

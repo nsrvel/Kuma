@@ -63,8 +63,8 @@ extension ServicesDeckViewModel {
         Task {
             do {
                 if isCurrentlyRunning {
-                    stateStore?.setExecutionState(.stopping, for: serviceID)
-                    await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
+                    stateStore?.setExecutionState(.stopping, for: serviceID, publish: false)
+                    await ServiceStopSupport.stopOffMainActor(serviceID: serviceID, stateStore: stateStore)
                 }
 
                 if var svc = try await serviceRepository.fetchService(id: serviceID) {
@@ -77,8 +77,10 @@ extension ServicesDeckViewModel {
                     if isCurrentlyRunning {
                         stateStore?.setExecutionState(.starting, for: serviceID)
                         try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
-                        let pid = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID)?.pid ?? 0
-                        stateStore?.setExecutionState(.running(pid: pid), for: serviceID)
+                        await ServiceExecutionStateSync.applyAfterSuccessfulStart(
+                            serviceID: serviceID,
+                            stateStore: stateStore
+                        )
                     }
                 }
             } catch {

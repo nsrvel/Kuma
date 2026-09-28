@@ -3,6 +3,7 @@ import SwiftUI
 public struct KubeConfigItemRowView: View {
     let config: KubeConfig
     let isSelected: Bool
+    let isLocked: Bool
     let isLoadingNamespaces: Bool
     let hasConnectionError: Bool
     let contextToTest: String
@@ -16,6 +17,7 @@ public struct KubeConfigItemRowView: View {
     public init(
         config: KubeConfig,
         isSelected: Bool,
+        isLocked: Bool = false,
         isLoadingNamespaces: Bool,
         hasConnectionError: Bool,
         contextToTest: String,
@@ -26,6 +28,7 @@ public struct KubeConfigItemRowView: View {
     ) {
         self.config = config
         self.isSelected = isSelected
+        self.isLocked = isLocked
         self.isLoadingNamespaces = isLoadingNamespaces
         self.hasConnectionError = hasConnectionError
         self.contextToTest = contextToTest
@@ -77,15 +80,23 @@ public struct KubeConfigItemRowView: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .contextMenu {
-            if !config.isDefault {
-                Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
-                Divider()
-                Button(role: .destructive) { onDelete() } label: { Label("Delete", systemImage: "trash") }
-            } else {
-                Button { onRefresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+            if !isLocked {
+                if !config.isDefault {
+                    Button { onEdit() } label: { Label("Edit", systemImage: "pencil") }
+                    Divider()
+                    Button(role: .destructive) { onDelete() } label: { Label("Delete", systemImage: "trash") }
+                } else {
+                    Button { onRefresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                }
             }
         }
-        .onTapGesture { onSelect() }
+        .onTapGesture {
+            if !isLocked {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
+                    onSelect()
+                }
+            }
+        }
     }
 
     private var subtitleText: String {
@@ -110,11 +121,11 @@ public struct KubeConfigItemRowView: View {
         } else if hasConnectionError {
             Text("Unreachable")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.orange)
+                .foregroundStyle(KumaStatus.transitionalIndicator)
         } else {
             Text("Connected")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.green)
+                .foregroundStyle(KumaStatus.runningIndicator)
         }
     }
 }
