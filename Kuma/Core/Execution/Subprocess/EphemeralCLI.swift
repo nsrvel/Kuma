@@ -72,7 +72,7 @@ enum EphemeralCLI {
             async let stderrData = Task.detached {
                 stderrPipe.fileHandleForReading.readDataToEndOfFile()
             }.value
-            await withTaskCancellationHandler {
+            _ = await withTaskCancellationHandler {
                 await SubprocessWait.waitForExit(of: process, timeout: timeout)
             } onCancel: {
                 if process.isRunning {

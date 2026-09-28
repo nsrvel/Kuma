@@ -110,7 +110,7 @@ public final class ServiceExecutionEngine: Sendable {
            provider.type == .docker || provider.type == .podman {
             await containerRunner.forceComposeTeardown(serviceID: serviceID, provider: provider)
         }
-        await containerRunner.forceUnregister(serviceID: serviceID)
+        containerRunner.forceUnregister(serviceID: serviceID)
         await processRegistry.stop(serviceID: serviceID)
         if let pipeline = removePipeline(for: serviceID) {
             await pipeline.finish()

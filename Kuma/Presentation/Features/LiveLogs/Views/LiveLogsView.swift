@@ -69,6 +69,9 @@ public struct LiveLogsView: View {
         .task {
             logAggregator.retainUISubscriber()
             defer { logAggregator.releaseUISubscriber() }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+            }
         }
     }
 
