@@ -10,7 +10,6 @@
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsCLIToolsSection.swift`
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsPortsConnectionsSection.swift`
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsTunnelingToolsSection.swift`  
-> - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsLogsSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsDataSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Components/AppearanceCard.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Components/BinaryStatusBadge.swift`  
@@ -63,13 +62,9 @@ graph TD
         ShellPicker --> ShellRunner[ShellRunner via KumaShellLaunchConfiguration]
     end
 
-    subgraph PortsLogsData [3. Ports, Logs & Data]
+    subgraph PortsAndData [3. Ports & Data]
         Nav --> PortSec[SettingsPortsConnectionsSection]
         PortSec --> PortPolicy[portConflictPolicy warn / kill]
-        
-        Nav --> LogSec[SettingsLogsSection]
-        LogSec --> LogBuf[LogRetentionLimit: memory lines + disk MB tier]
-        LogSec --> ClearBuf[Clear Buffer on Restart Toggle]
     end
 
     subgraph DataManagement [4. Data]

@@ -1,6 +1,6 @@
 # Feature 06: Services — Deep Architectural Audit & Feature Spec
 
-> **Scope**: Services Deck, Inspector, CreateService, Forms, ViewModels, Domain models, DB Records/Repositories, **ExecutionSupervisor** (managed process / compose / poller modes), ProcessRegistry, **LiveLogSession** (inspector-only), and sidebar Live Logs shell (empty state).  
+> **Scope**: Services Deck, Inspector, CreateService, Forms, ViewModels, Domain models, DB Records/Repositories, **ExecutionSupervisor** (managed process / compose / poller modes), ProcessRegistry, **LiveLogSession** (inspector-only).  
 > **Files Audited**: 72+ files across Domain, Core, Stores, and Presentation layers.  
 > **Verdict**: Structurally functional but architecturally **severely degraded** — critical security holes, broken state sync, layer violations, process lifecycle bugs, and 15 files over the 150-line limit.
 
@@ -169,21 +169,13 @@ Example: `forwarder-elasticsearch-stage` is usually a **Deployment** (or Service
 - **Location**: [`LiveLogSession.swift`](Kuma/Presentation/Features/LiveLogs/LiveLogSession.swift)
 - **Resolution**: ~30 Hz coalesced flush to `lines`; incremental NSTextView append when line IDs stable. **TC-L12**, **TC-L11**.
 
-### PERF-04: LiveLogsView Body Computation — **Fixed**
-- **Location**: [`LiveLogsView.swift`](Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift)
-- **Resolution**: `changeToken` drives `displayedLogs`; service picker uses `availableServiceNames` maintained by aggregator.
-
 ### PERF-05: 10 Concurrent Notification Loops — **Fixed**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift)
 - **Resolution**: Single merged `AnyPublisher` + `switch` handler (no per-notification `.task` loops).
 
-### PERF-06: ISO8601DateFormatter Created on Every Flush — **Fixed**
-- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
-- **Resolution**: `isoFormatter` cached on `LogFileWriter` actor.
-
-### PERF-07: Unbounded Disk Log Growth — **Fixed (partial)**
-- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
-- **Resolution**: Flush path reads `KumaSettingsKey.logRetentionLimit` and enforces retention on disk (see Settings log retention picker).
+### PERF-06 / PERF-07: Legacy disk log pipeline — **Removed**
+- **Location**: (removed) `LogFileWriter` / global log aggregation
+- **Resolution**: Runner output spools via [`RunSpool`](Kuma/Core/Execution/Supervision/RunSpool.swift); live UI uses in-memory [`LiveLogSession`](Kuma/Presentation/Features/LiveLogs/LiveLogSession.swift) (1,000-line cap). Legacy `UserDefaults` log keys are cleared on factory reset only.
 
 ### PERF-10: Deck Card Observation Fan-Out — **Fixed**
 - **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`SyncedServiceRuntime.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift), [`ServiceTableColumns.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceTableColumns.swift)
@@ -209,7 +201,7 @@ Example: `forwarder-elasticsearch-stage` is usually a **Deployment** (or Service
 - **Location**: [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift), [`ComposeStackContext.swift`](Kuma/Core/Execution/Compose/ComposeStackContext.swift)
 - **Resolution**: Compose resolves in order: (1) on-disk `composeFilePath` → working dir = file parent unless `workingDirectory` set; (2) inline `yamlConfig` → ephemeral `kuma-compose-{serviceID}/docker-compose.kuma.yml` (removed on stop); (3) neither → `invalidConfiguration`.
 - **Lifecycle (best practice)**: Detached `docker|podman compose -p kuma-<serviceUUID> -f <file> up -d` via short-lived [`EphemeralCLI`](Kuma/Core/Execution/Subprocess/EphemeralCLI.swift) / [`ComposeCLI`](Kuma/Core/Execution/Compose/ComposeCLI.swift) (not `ProcessRegistry`). Stop runs `compose stop` then `compose down` with the same `-p`/`-f`. Browse-file and paste-YAML share [`ComposeStackResolver`](Kuma/Core/Execution/Compose/ComposeStackResolver.swift). Legacy stacks started without `-p kuma-…` are not torn down by stop — use the same compose file with matching project or manual `compose down`. **TC-D05**, **TC-D05b–f**.
-- **UI state**: After start/stop, deck and inspector call [`ServiceExecutionStateSync`](Kuma/Core/Execution/ServiceExecutionStateSync.swift) so `.running` follows `ServiceExecutionEngine.isServiceRunning` (compose/K8s without registry PID use `pid: 0`). Runner log capture is gated by [`ServiceExecutionLoggingPolicy`](Kuma/Core/Execution/ServiceExecutionLoggingPolicy.swift) (off until Live Logs wiring returns).
+- **UI state**: After start/stop, deck and inspector call [`ServiceExecutionStateSync`](Kuma/Core/Execution/ServiceExecutionStateSync.swift) so `.running` follows `ServiceExecutionEngine.isServiceRunning` (compose/K8s without registry PID use `pid: 0`). Live tailing is gated in the Inspector (`LiveLogSession` + `LiveLogSourceRunner`).
 
 ### PROC-05: Bounded shutdown waits — **Fixed**
 - **Location**: [`SubprocessWait.swift`](Kuma/Core/Execution/SubprocessWait.swift), [`ServiceExecutionEngine.swift`](Kuma/Core/Execution/ServiceExecutionEngine.swift), [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift)
@@ -277,7 +269,6 @@ Baseline ~39 component views still without `#Preview`; **TC-F02** guards against
 | ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed** | Deck/Components |
 | ~~`ServiceNonPortBadge.metadata`~~ — **Removed** | `ServiceNonPortBadge.swift` |
 | ~~`InspectorStatusHeader.onToggleStar`~~ — **Removed** (unused closure) | `InspectorStatusHeader.swift` |
-| ~~`LiveLogsView.isAutoScroll`~~ — **Removed** misleading toggle | `LiveLogsView.swift` |
 | ~~Podman/Docker compose duplicate UI~~ — **Fixed** via shared [`ComposeSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/ComposeSettingsView.swift) |
 | **Card toggle stale after deck start (Kube)** — **Fixed**: [`ServiceStateStore`](Kuma/Stores/ServiceStateStore.swift) publishes `.kumaServiceStateChanged` on `setExecutionState`; deck rows use [`SyncedServiceRuntime`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift). **TC-D10**. |
 | `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` (verify / remove if still present) |

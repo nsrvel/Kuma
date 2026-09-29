@@ -19,7 +19,6 @@ struct KumaApp: App {
                 .onAppear {
                     appDelegate.serviceStateStore = serviceStateStore
                     RunSpool.purgeAll()
-                    LegacyDiskLogsMigration.purgeIfNeeded()
                     serviceStateStore.bindExecutionSupervisor()
                 }
         }

@@ -119,8 +119,6 @@ struct ContentView: View {
     private func detailView(for selectedID: UUID?) -> some View {
         if selectedID == .stable("settings") {
             SettingsView(viewModel: settingsViewModel, workspaceStore: workspaceStore)
-        } else if selectedID == .stable("live-logs") {
-            LiveLogsView()
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
 
             WorkspaceServicesDeckHost(

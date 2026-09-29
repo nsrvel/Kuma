@@ -19,8 +19,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         guard let kubectl = await KumaSettingsExecutableResolver.kubectl() else {
             throw ServiceExecutionError.binaryNotFound("kubectl")
@@ -38,10 +37,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         let resolved = try await KubeTargetResolver.resolve(
             provider: provider,
             kubectlPath: kubectl,
-            exec: execConfig,
-            log: { message in
-                await pipeline.emit(level: "INFO", message: message)
-            }
+            exec: execConfig
         )
 
         var args = ["port-forward", resolved.kubectlReference]
@@ -69,8 +65,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             try await LocalPortConflictResolver.shared.ensurePortAvailable(
                 port: mapping.localPort,
                 startingServiceID: service.id,
-                startingServiceName: service.name,
-                pipeline: pipeline
+                startingServiceName: service.name
             )
         }
 

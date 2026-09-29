@@ -55,7 +55,6 @@ graph TD
     subgraph FixedEntries [Fixed Navigation Nodes]
         List --> AllSvc[All Services: UUID.stable 'all-services']
         List --> Starred[Starred Services: UUID.stable 'starred-services']
-        List --> Logs[Live Logs: UUID.stable 'live-logs']
     end
 
     subgraph DynamicGroups [Service Groups Section]
@@ -98,7 +97,7 @@ graph TD
 | Current State | Trigger / Event | Guard / Precondition | Next State | Persistence / System Side Effects |
 | :--- | :--- | :--- | :--- | :--- |
 | **Default Boot** | App launches / `SidebarViewModel.init()` | None | **Fixed Nodes Loaded** | `selectedID = .stable("all-services")`, `expandedIDs` contains `.stable("groups")`. |
-| **Node Selected ($N_A$)** | User clicks node $N_B$ | $N_B \in \text{flattenedRows}$ and navigable | **Node Selected ($N_B$)** | `selectedID = N_B.id`. Details view updates (Deck filter or Settings/LiveLogs). |
+| **Node Selected ($N_A$)** | User clicks node $N_B$ | $N_B \in \text{flattenedRows}$ and navigable | **Node Selected ($N_B$)** | `selectedID = N_B.id`. Details view updates (Deck filter or Settings). |
 | **Node Selected ($N_A$)** | User triggers ⌘, (Settings) | None | **Node Selected (Settings)** | `selectedID = .stable("settings")`. Detail switches to `SettingsView`. Footer button highlighted. |
 | **Any State** | Keyboard `Down` arrow | Current index < max navigable | **Next Row Selected** | `selectedID` moves down 1 position with spring animation. |
 | **Any State** | Keyboard `Up` arrow | Current index > 0 | **Previous Row Selected** | `selectedID` moves up 1 position with spring animation. |
@@ -126,7 +125,6 @@ graph TD
 | `.stable("all-services")` | `WorkspaceServicesDeckHost` | `isStarredOnly = false`, `filterGroupID = nil` |
 | `.stable("starred-services")` | same | `isStarredOnly = true` |
 | Service group UUID | same | `filterGroupID` from `groupIDForSelectedRow(_:)` |
-| `.stable("live-logs")` | `LiveLogsView` (empty state: per-service streaming in Inspector) | N/A |
 | `.stable("settings")` | `SettingsView` via `ContentView.detailView` | N/A; footer Settings button uses active highlight |
 
 **Selection hygiene:** On workspace switch or after `loadGroups`, `reconcileSelectionForLoadedWorkspace()` keeps selection if it is a global nav stable ID or a group in the current workspace; otherwise falls back to `.stable("all-services")`.
@@ -147,7 +145,7 @@ flowchart LR
 ## 3. Invariant Rules (Kontrak Baku / Non-Negotiables)
 
 1. **`[INV-SIDEBAR-01]` Deterministic Stable Identifiers**:
-   - Fixed system nodes MUST use deterministic UUIDs generated via `UUID.stable(String)` (`"all-services"`, `"starred-services"`, `"live-logs"`, `"groups"`, `"settings"`).
+   - Fixed system nodes MUST use deterministic UUIDs generated via `UUID.stable(String)` (`"all-services"`, `"starred-services"`, `"groups"`, `"settings"`).
    - Under no circumstances should random `UUID()` be generated on every view redraw or viewmodel initialization for fixed navigation routes.
 2. **`[INV-SIDEBAR-02]` Workspace-Scoped Group Isolation**:
    - `ServiceGroup` records MUST be strictly filtered by `workspaceID`. Groups belonging to Workspace A must NEVER appear or leak into Workspace B.

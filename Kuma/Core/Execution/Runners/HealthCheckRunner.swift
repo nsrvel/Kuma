@@ -6,8 +6,7 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         guard let rawUrl = provider.httpCheckUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !rawUrl.isEmpty else {
             throw ServiceExecutionError.invalidConfiguration("Health Check Target URL is not specified.")

@@ -20,8 +20,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         let binaryName = provider.type == .docker ? "docker" : "podman"
         let binaryPath: String?
@@ -36,13 +35,9 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
         let context = try ComposeStackResolver.makeContext(service: service, provider: provider, binaryPath: binaryPath)
 
-        try await runInitialScript(provider: provider, workingDir: context.workingDirectory, pipeline: pipeline)
+        try await runInitialScript(provider: provider, workingDir: context.workingDirectory)
 
-        await pipeline.emit(level: "INFO", message: "Starting \(binaryName) compose up (detached)...")
-        let up = try await composeUpResult(
-            context: context,
-            pipeline: pipeline
-        )
+        let up = try await composeUpResult(context: context)
         guard up.exitCode == 0 else {
             throw ServiceExecutionError.processFailed(
                 composeFailureMessage(binaryName: binaryName, context: context, exitCode: up.exitCode, output: up.output)
@@ -123,14 +118,12 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
             _ = try? await ComposeCLI.runDetailed(
                 context: context,
                 arguments: arguments,
-                pipeline: nil,
                 timeout: timeout
             )
         } else {
             _ = try? await composeCLI.run(
                 context: context,
                 arguments: arguments,
-                pipeline: nil,
                 timeout: timeout
             )
         }
@@ -184,8 +177,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
     private func runInitialScript(
         provider: Provider,
-        workingDir: String,
-        pipeline: ServiceLogPipeline
+        workingDir: String
     ) async throws {
         if let rawPath = provider.initialScriptPath?.trimmingCharacters(in: .whitespacesAndNewlines), !rawPath.isEmpty {
             let expanded = NSString(string: rawPath).expandingTildeInPath
@@ -193,37 +185,34 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
             guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), !isDir.boolValue else {
                 throw ServiceExecutionError.invalidConfiguration("Startup script file not found: \(rawPath)")
             }
-            await pipeline.emit(level: "INFO", message: "Running pre-start initialization script...")
-            await executeScriptFile(at: expanded, workingDir: workingDir, pipeline: pipeline)
+            await executeScriptFile(at: expanded, workingDir: workingDir)
             return
         }
 
         if let initialScript = provider.initialScript?.trimmingCharacters(in: .whitespacesAndNewlines), !initialScript.isEmpty {
-            await pipeline.emit(level: "INFO", message: "Running pre-start initialization script...")
-            await executeInlineScript(initialScript, workingDir: workingDir, pipeline: pipeline)
+            await executeInlineScript(initialScript, workingDir: workingDir)
         }
     }
 
-    private func executeInlineScript(_ script: String, workingDir: String, pipeline: ServiceLogPipeline) async {
+    private func executeInlineScript(_ script: String, workingDir: String) async {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         let bootstrap = "[ -f ~/.zprofile ] && source ~/.zprofile 2>/dev/null; [ -f ~/.zshrc ] && source ~/.zshrc 2>/dev/null; [ -f ~/.bash_profile ] && source ~/.bash_profile 2>/dev/null; eval \"$1\""
         proc.arguments = ["-c", bootstrap, "--", script]
         proc.currentDirectoryURL = URL(fileURLWithPath: workingDir)
-        await runScriptProcess(proc, pipeline: pipeline, timeout: KumaExecutionTimeouts.initialScript)
+        await runScriptProcess(proc, timeout: KumaExecutionTimeouts.initialScript)
     }
 
-    private func executeScriptFile(at path: String, workingDir: String, pipeline: ServiceLogPipeline) async {
+    private func executeScriptFile(at path: String, workingDir: String) async {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/sh")
         proc.arguments = [path]
         proc.currentDirectoryURL = URL(fileURLWithPath: workingDir)
-        await runScriptProcess(proc, pipeline: pipeline, timeout: KumaExecutionTimeouts.initialScript)
+        await runScriptProcess(proc, timeout: KumaExecutionTimeouts.initialScript)
     }
 
     private func runScriptProcess(
         _ proc: Process,
-        pipeline: ServiceLogPipeline,
         timeout: TimeInterval? = nil
     ) async {
         let pipe = Pipe()
@@ -235,39 +224,33 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
             try proc.run()
             let completed = await SubprocessWait.waitForExit(of: proc, timeout: timeout)
             if let timeout, !completed {
-                await pipeline.emit(
-                    level: "WARN",
-                    message: "Initial script timed out after \(Int(timeout))s; continuing with compose."
-                )
+                Self.logger.warning("Initial script timed out after \(Int(timeout))s; continuing with compose.")
                 return
             }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
-                await pipeline.emit(level: "INFO", message: output)
+                Self.logger.info("Initial script output: \(output, privacy: .public)")
             }
         } catch {
-            await pipeline.emit(level: "WARN", message: "Initial script failed: \(error.localizedDescription)")
+            Self.logger.warning("Initial script failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
     // MARK: - Compose health
 
     private func composeUpResult(
-        context: ComposeStackContext,
-        pipeline: ServiceLogPipeline
+        context: ComposeStackContext
     ) async throws -> ComposeCLI.RunResult {
         if composeCLI is LiveComposeCLI {
             return try await ComposeCLI.runDetailed(
                 context: context,
                 arguments: context.upArguments,
-                pipeline: pipeline,
                 timeout: 120
             )
         }
         let exitCode = try await composeCLI.run(
             context: context,
             arguments: context.upArguments,
-            pipeline: pipeline,
             timeout: 120
         )
         return ComposeCLI.RunResult(exitCode: exitCode, output: "")

@@ -21,8 +21,7 @@ public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         guard let host = provider.sshHost?.trimmingCharacters(in: .whitespacesAndNewlines), !host.isEmpty else {
             throw ServiceExecutionError.invalidConfiguration("SSH Host is not configured.")
@@ -97,12 +96,9 @@ public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
             try await LocalPortConflictResolver.shared.ensurePortAvailable(
                 port: mapping.localPort,
                 startingServiceID: service.id,
-                startingServiceName: service.name,
-                pipeline: pipeline
+                startingServiceName: service.name
             )
         }
-
-        await pipeline.emit(level: "INFO", message: "Connecting SSH tunnel to \(user)@\(host):\(port)...")
 
         _ = try await processLauncher.launch(
             serviceID: service.id,
@@ -111,7 +107,7 @@ public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
             arguments: args,
             workingDirectory: nil,
             environment: env,
-            onOutput: pipeline.makeOutputHandler()
+            onOutput: nil
         )
     }
 

@@ -44,8 +44,7 @@ public final class LocalPortConflictResolver: Sendable {
     public func ensurePortAvailable(
         port: Int,
         startingServiceID: UUID,
-        startingServiceName: String,
-        pipeline: ServiceLogPipeline
+        startingServiceName: String
     ) async throws {
         let rawPolicy = UserDefaults.standard.string(forKey: KumaSettingsKey.portConflictPolicy)
             ?? PortConflictPolicy.warnAndBlock.rawValue
@@ -57,7 +56,7 @@ public final class LocalPortConflictResolver: Sendable {
         switch policy {
         case .killExisting:
             for pid in pids {
-                await pipeline.emit(level: "WARN", message: "Port \(port) was held by process (PID \(pid)). Releasing port...")
+                Self.logger.info("Port \(port) was held by PID \(pid); sending SIGTERM")
                 kill(pid, SIGTERM)
             }
             try? await Task.sleep(nanoseconds: 200_000_000)
@@ -68,7 +67,6 @@ public final class LocalPortConflictResolver: Sendable {
 
             let collidingLabel = await collidingServiceLabel(forPID: foreignPIDs[0])
             let message = "Port \(port) is in use by \(collidingLabel). Cannot start “\(startingServiceName)” (policy: Warn & Prevent Start)."
-            await pipeline.emit(level: "ERROR", message: message)
             await SystemNotificationCenter.shared.send(.portCollision(port: port, collidingService: collidingLabel))
             throw ServiceExecutionError.processFailed(message)
         }

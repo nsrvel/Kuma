@@ -6,8 +6,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         guard let processName = provider.monitorProcessName?.trimmingCharacters(in: .whitespacesAndNewlines), !processName.isEmpty else {
             throw ServiceExecutionError.invalidConfiguration("Process name to monitor is required.")

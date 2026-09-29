@@ -17,8 +17,8 @@
 ### Kategori A: Initial State & Baseline Contracts (Fixed Nodes, Stable UUIDs, Defaults)
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **TC-A01** | `testSidebarDefaultEntriesStructure` | Inisialisasi `SidebarViewModel.makeDefault()` tanpa argumen | Menghasilkan 4 top-level entries: `all-services`, `starred-services`, `live-logs`, dan `groups` | ✅ Passed |
-| **TC-A02** | `testFixedNodesDeterministicUUIDs` | Memeriksa id dari fixed entries `all-services`, `starred-services`, `live-logs`, `groups` | Sesuai dengan hasil hash `UUID.stable(key)` dan konsisten di seluruh sesi | ✅ Passed |
+| **TC-A01** | `testSidebarDefaultEntriesStructure` | Inisialisasi `SidebarViewModel.makeDefault()` tanpa argumen | Menghasilkan 3 top-level entries: `all-services`, `starred-services`, dan `groups` | ✅ Passed |
+| **TC-A02** | `testFixedNodesDeterministicUUIDs` | Memeriksa id dari fixed entries `all-services`, `starred-services`, `groups` | Sesuai dengan hasil hash `UUID.stable(key)` dan konsisten di seluruh sesi | ✅ Passed |
 | **TC-A03** | `testDefaultSelectedNodeIsAllServices` | Fresh instance `SidebarViewModel` | `selectedID == UUID.stable("all-services")` | ✅ Passed |
 | **TC-A04** | `testGroupsHeaderExpandedByDefault` | Fresh instance `SidebarViewModel` | `expandedIDs` memuat `.stable("groups")`, `isExpanded(.stable("groups")) == true` | ✅ Passed |
 | **TC-A05** | `testFlattenedRowsCountOnFreshBoot` | Cek `flattenedRows` pada fresh boot tanpa groups di database | Terdiri dari 4 row item: 3 fixed navigable rows + 1 empty placeholder row di bawah groups header | ✅ Passed |

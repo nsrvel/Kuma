@@ -22,7 +22,6 @@ public enum KumaUIID: Sendable {
     // MARK: - Sidebar Navigation & Groups
     public static let sidebarAllServices = "sidebar-entry-all-services"
     public static let sidebarStarred = "sidebar-entry-starred"
-    public static let sidebarLiveLogs = "sidebar-entry-live-logs"
     public static let sidebarGroupsHeader = "sidebar-entry-groups"
     public static func sidebarGroupRow(_ id: UUID) -> String { "sidebar-group-row-\(id.uuidString)" }
     public static func sidebarDropIndicator(_ id: UUID) -> String { "sidebar-drop-indicator-\(id.uuidString)" }

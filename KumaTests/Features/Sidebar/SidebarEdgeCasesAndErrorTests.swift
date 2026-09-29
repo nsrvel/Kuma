@@ -29,13 +29,13 @@ struct SidebarEdgeCasesAndErrorTests {
         #expect(vm.selectedID == UUID.stable("starred-services"))
 
         vm.handleMove(.down)
-        #expect(vm.selectedID == UUID.stable("live-logs"))
+        #expect(vm.selectedID == UUID.stable("groups"))
     }
 
     @Test("TC-E03: Keyboard Arrow Up Navigation")
     func testKeyboardArrowUpNavigation() {
         let vm = SidebarViewModel.makeDefault()
-        vm.selectedID = UUID.stable("live-logs")
+        vm.selectedID = UUID.stable("groups")
 
         vm.handleMove(.up)
         #expect(vm.selectedID == UUID.stable("starred-services"))

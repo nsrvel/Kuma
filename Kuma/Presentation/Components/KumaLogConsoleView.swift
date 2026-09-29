@@ -1,17 +1,9 @@
 import SwiftUI
 import AppKit
 
-public enum LogDisplayMode: Sendable, Equatable {
-    /// Stream text only (inspector default).
-    case raw
-    /// Timestamp, service, level prefix (multi-service / future).
-    case structured
-}
-
 /// High-performance AppKit-backed log console for terminal logs.
 public struct KumaLogConsoleView: NSViewRepresentable {
     public let entries: [LiveLogEntry]
-    public let displayMode: LogDisplayMode
     public let isAutoScroll: Bool
     public let wrapsLines: Bool
     public var emptyPlaceholder: String
@@ -20,7 +12,6 @@ public struct KumaLogConsoleView: NSViewRepresentable {
 
     public init(
         entries: [LiveLogEntry],
-        displayMode: LogDisplayMode = .raw,
         isAutoScroll: Bool = true,
         wrapsLines: Bool = true,
         emptyPlaceholder: String = "No logs available",
@@ -28,7 +19,6 @@ public struct KumaLogConsoleView: NSViewRepresentable {
         onUserScrolledAwayFromBottom: (() -> Void)? = nil
     ) {
         self.entries = entries
-        self.displayMode = displayMode
         self.isAutoScroll = isAutoScroll
         self.wrapsLines = wrapsLines
         self.emptyPlaceholder = emptyPlaceholder
@@ -62,6 +52,7 @@ public struct KumaLogConsoleView: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.attach(scrollView: scrollView, textView: textView)
+        context.coordinator.lastWrapsLines = wrapsLines
         context.coordinator.resetRenderState()
 
         updateTextView(textView, context: context, forceFullRebuild: true)
@@ -73,30 +64,13 @@ public struct KumaLogConsoleView: NSViewRepresentable {
               let textView = nsView.documentView as? NSTextView else { return }
 
         context.coordinator.onUserScrolledAwayFromBottom = onUserScrolledAwayFromBottom
-        applyLayout(to: textView, scrollView: scrollView)
+        if context.coordinator.lastWrapsLines != wrapsLines {
+            context.coordinator.lastWrapsLines = wrapsLines
+            applyLayout(to: textView, scrollView: scrollView)
+        }
 
         let canAppend = context.coordinator.canAppendTail(entries: entries)
-        let forceRebuild = !canAppend
-        updateTextView(textView, context: context, forceFullRebuild: forceRebuild)
-
-        // #region agent log
-        let textLen = textView.string.count
-        if entries.isEmpty || (entries.count > 0 && textLen < 8) || forceRebuild {
-            AgentDebugLog.write(
-                hypothesisId: entries.isEmpty ? "A" : (textLen < 8 ? "E" : "C"),
-                location: "KumaLogConsoleView.updateNSView",
-                message: "console_update",
-                data: [
-                    "entryCount": "\(entries.count)",
-                    "canAppend": "\(canAppend)",
-                    "forceRebuild": "\(forceRebuild)",
-                    "textLen": "\(textLen)",
-                    "isAutoScroll": "\(isAutoScroll)",
-                    "lastRendered": "\(context.coordinator.lastRenderedCount)"
-                ]
-            )
-        }
-        // #endregion
+        updateTextView(textView, context: context, forceFullRebuild: !canAppend)
 
         if context.coordinator.contentDirty && isAutoScroll {
             context.coordinator.scrollToBottom(programmatic: true)
@@ -143,7 +117,7 @@ public struct KumaLogConsoleView: NSViewRepresentable {
         }
 
         if forceFullRebuild {
-            let formatted = LogRowFormatter.fullDocument(for: entries, mode: displayMode)
+            let formatted = LogRowFormatter.fullDocument(for: entries)
             textStorage.setAttributedString(formatted)
             context.coordinator.lastRenderedCount = entries.count
             context.coordinator.firstEntryID = entries.first?.id
@@ -155,7 +129,7 @@ public struct KumaLogConsoleView: NSViewRepresentable {
         let startIndex = context.coordinator.lastRenderedCount
         guard startIndex < entries.count else { return }
 
-        let appendBlock = LogRowFormatter.appendBlock(entries: entries, from: startIndex, mode: displayMode)
+        let appendBlock = LogRowFormatter.appendBlock(entries: entries, from: startIndex)
         textStorage.append(appendBlock)
         context.coordinator.lastRenderedCount = entries.count
         context.coordinator.lastEntriesID = entries.last?.id
@@ -174,10 +148,12 @@ public struct KumaLogConsoleView: NSViewRepresentable {
         var contentDirty: Bool = false
         var lastScrollToBottomRequest: Int = 0
         var onUserScrolledAwayFromBottom: (() -> Void)?
+        var lastWrapsLines: Bool = true
 
         private weak var scrollView: LogConsoleScrollView?
         private weak var textView: NSTextView?
         private var isProgrammaticScroll = false
+        private var notifiedScrolledAway = false
 
         fileprivate func attach(scrollView: LogConsoleScrollView, textView: NSTextView) {
             self.scrollView = scrollView
@@ -200,29 +176,14 @@ public struct KumaLogConsoleView: NSViewRepresentable {
             )
         }
 
-        private var lastBoundsLogMs: Int = 0
-
         func handleBoundsChange() {
             guard !isProgrammaticScroll else { return }
             guard let scrollView, let textView else { return }
             let pinned = scrollView.isPinnedToBottom(textView: textView)
-            // #region agent log
-            let nowMs = Int(Date().timeIntervalSince1970 * 1000)
-            if !pinned, nowMs - lastBoundsLogMs > 400 {
-                lastBoundsLogMs = nowMs
-                AgentDebugLog.write(
-                    hypothesisId: "D",
-                    location: "KumaLogConsoleView.handleBoundsChange",
-                    message: "scroll_not_pinned",
-                    data: [
-                        "textLen": "\(textView.string.count)",
-                        "visibleMaxY": "\(scrollView.contentView.documentVisibleRect.maxY)",
-                        "docHeight": "\(textView.bounds.height)"
-                    ]
-                )
-            }
-            // #endregion
-            if !pinned {
+            if pinned {
+                notifiedScrolledAway = false
+            } else if !notifiedScrolledAway {
+                notifiedScrolledAway = true
                 onUserScrolledAwayFromBottom?()
             }
         }
@@ -288,31 +249,26 @@ private enum LogRowFormatter {
         .foregroundColor: NSColor.secondaryLabelColor
     ]
 
-    static func fullDocument(for entries: [LiveLogEntry], mode: LogDisplayMode) -> NSMutableAttributedString {
+    static func fullDocument(for entries: [LiveLogEntry]) -> NSMutableAttributedString {
         let formatted = NSMutableAttributedString()
         for (index, entry) in entries.enumerated() {
-            formatted.append(row(entry, mode: mode, appendNewline: index < entries.count - 1))
+            formatted.append(row(entry, appendNewline: index < entries.count - 1))
         }
         return formatted
     }
 
-    static func appendBlock(entries: [LiveLogEntry], from startIndex: Int, mode: LogDisplayMode) -> NSMutableAttributedString {
+    static func appendBlock(entries: [LiveLogEntry], from startIndex: Int) -> NSMutableAttributedString {
         let block = NSMutableAttributedString()
         if startIndex > 0 {
             block.append(NSAttributedString(string: "\n", attributes: messageAttributes))
         }
         for index in startIndex..<entries.count {
-            block.append(row(entries[index], mode: mode, appendNewline: index < entries.count - 1))
+            block.append(row(entries[index], appendNewline: index < entries.count - 1))
         }
         return block
     }
 
-    private static let timestampFont = NSFont.monospacedSystemFont(ofSize: 10.5, weight: .regular)
-    private static let nameFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
-    private static let levelFont = NSFont.monospacedSystemFont(ofSize: 10.5, weight: .bold)
     private static let msgFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
-    private static let timeColor = NSColor.secondaryLabelColor.withAlphaComponent(0.65)
-    private static let nameColor = NSColor.controlAccentColor
     private static let msgAttributes: [NSAttributedString.Key: Any] = [
         .font: msgFont,
         .foregroundColor: NSColor.labelColor.withAlphaComponent(0.92)
@@ -322,41 +278,10 @@ private enum LogRowFormatter {
         .foregroundColor: NSColor.labelColor.withAlphaComponent(0.92)
     ]
 
-    private static func row(_ entry: LiveLogEntry, mode: LogDisplayMode, appendNewline: Bool) -> NSAttributedString {
-        switch mode {
-        case .raw:
-            return NSAttributedString(
-                string: entry.message + (appendNewline ? "\n" : ""),
-                attributes: msgAttributes
-            )
-        case .structured:
-            let row = NSMutableAttributedString()
-            row.append(NSAttributedString(
-                string: "\(entry.timestamp) ",
-                attributes: [.font: timestampFont, .foregroundColor: timeColor]
-            ))
-            if !entry.serviceName.isEmpty {
-                row.append(NSAttributedString(
-                    string: "[\(entry.serviceName)] ",
-                    attributes: [.font: nameFont, .foregroundColor: nameColor]
-                ))
-            }
-            let lvlColor: NSColor
-            switch entry.level.uppercased() {
-            case "ERR", "ERROR": lvlColor = NSColor.systemRed
-            case "WARN", "WARNING": lvlColor = NSColor.systemOrange
-            case "OK", "SUCCESS": lvlColor = NSColor.systemGreen
-            default: lvlColor = NSColor.systemTeal
-            }
-            row.append(NSAttributedString(
-                string: "\(entry.level.uppercased()) ",
-                attributes: [.font: levelFont, .foregroundColor: lvlColor]
-            ))
-            row.append(NSAttributedString(
-                string: entry.message + (appendNewline ? "\n" : ""),
-                attributes: msgAttributes
-            ))
-            return row
-        }
+    private static func row(_ entry: LiveLogEntry, appendNewline: Bool) -> NSAttributedString {
+        NSAttributedString(
+            string: entry.message + (appendNewline ? "\n" : ""),
+            attributes: msgAttributes
+        )
     }
 }

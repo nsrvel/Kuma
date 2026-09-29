@@ -75,8 +75,7 @@ public final class ServiceExecutionEngine: Sendable {
         Self.logger.info("Starting service '\(service.name)' with provider '\(provider.type.rawValue)'")
 
         let runner = runner(for: provider.type)
-        let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
     }
 
     public func stop(serviceID: UUID) async {

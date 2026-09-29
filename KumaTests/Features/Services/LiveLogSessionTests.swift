@@ -5,16 +5,6 @@ import Testing
 @Suite("Feature 05: Live log session", .serialized)
 struct LiveLogSessionTests {
 
-    @Test("TC-L01: LogStreamChunker correctly handles fragmented chunks")
-    func testChunkerFragmentedLines() {
-        let chunker = LogStreamChunker()
-        #expect(chunker.ingest("Hello, ").isEmpty)
-        let lines2 = chunker.ingest("World!\nSecond line\nThird part")
-        #expect(lines2 == ["Hello, World!", "Second line"])
-        #expect(chunker.ingest(" finished.\n") == ["Third part finished."])
-        #expect(chunker.flushRemaining() == nil)
-    }
-
     @Test("TC-L03: ANSISanitizer strips terminal escape codes")
     func testANSISanitizerStripsColors() {
         let colored = "\u{001B}[32mSUCCESS\u{001B}[0m: done."

@@ -45,7 +45,7 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **TC-C01** | `testProcessRegistryTerminateAllSpawns` | Daftarkan process dummy (misal: `sleep 60`) ke `ProcessRegistry`, lalu panggil `terminateAll()`. | Process di-kill deterministik, `isRunning == false`, dan unregistered dari registry. | ✅ Passed (0.007s) | `[INV-APP-03]` |
 | **TC-C02** | `testProcessRegistryUnregistersExited` | Process child yang exit mandiri sebelum `terminateAll()` dipanggil. | Status di-update, tidak melempar error saat `terminateAll()` membersihkan list. | ✅ Passed (0.222s) | `[INV-APP-03]` |
-| **TC-C03** | `testLogFileWriterFlushOnTerminate` | Tulis baris log ke buffer `LogFileWriter` lalu panggil `flushAll()`. | Semua buffer tertulis ke file disk dan handle tertutup tanpa byte tertinggal. | ✅ Passed (0.001s) | `[INV-APP-03]` |
+| **TC-C03** | `testRunSpoolRemoveOnTeardown` | Tulis file spool run lalu `RunSpool.remove(for:)`. | File spool dihapus dari disk. | ✅ Passed | `[INV-APP-03]` |
 | **TC-C04** | `testMultipleProcessesConcurrentKill` | Daftarkan beberapa process paralel (3+ dummy processes) dan terminate serentak. | Semua process terbunuh tanpa dead lock atau race condition di actor registry. | ✅ Passed (0.001s) | `[INV-APP-03]` |
 | **TC-C05** | `testProcessRegistryTerminateAllIdempotency` | Panggil `terminateAll()` dua kali berurutan dengan task yang sudah mati. | Berjalan aman (idempoten), zero crash, zero memory leak. | ✅ Passed (0.000s) | `[INV-APP-03]` |
 

@@ -34,23 +34,7 @@ public struct InspectorLiveConsoleView: View {
     }
 
     private var entries: [LiveLogEntry] {
-        guard session.bufferedServiceID == serviceID else {
-            // #region agent log
-            if !session.lines.isEmpty {
-                AgentDebugLog.write(
-                    hypothesisId: "B",
-                    location: "InspectorLiveConsoleView.entries",
-                    message: "buffer_mismatch_empty_entries",
-                    data: [
-                        "serviceID": serviceID.uuidString,
-                        "buffered": session.bufferedServiceID?.uuidString ?? "nil",
-                        "lineCount": "\(session.lines.count)"
-                    ]
-                )
-            }
-            // #endregion
-            return []
-        }
+        guard session.bufferedServiceID == serviceID else { return [] }
         return session.lines.map { line in
             LiveLogEntry(
                 id: line.id,
@@ -99,7 +83,6 @@ public struct InspectorLiveConsoleView: View {
                 } else {
                     KumaLogConsoleView(
                         entries: entries,
-                        displayMode: .raw,
                         isAutoScroll: isLogAutoScrollEnabled,
                         wrapsLines: logWrapsLines,
                         emptyPlaceholder: "Awaiting service logs...",

@@ -20,7 +20,6 @@ extension SidebarViewModel {
         let globalNavIDs: Set<UUID> = [
             .stable("all-services"),
             .stable("starred-services"),
-            .stable("live-logs"),
             .stable("settings"),
             .stable("groups"),
         ]

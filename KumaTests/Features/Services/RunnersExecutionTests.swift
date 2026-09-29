@@ -11,10 +11,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Shell Test")
         let provider = Provider(serviceID: serviceID, type: .shell, runCommand: "echo 'Kuma Runner OK'")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ShellRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(await runner.isRunning(serviceID: serviceID) == true)
 
         // Wait for process to finish
@@ -29,11 +28,10 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Shell Empty")
         let provider = Provider(serviceID: serviceID, type: .shell, runCommand: "")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ShellRunner()
 
         await #expect(throws: ServiceExecutionError.self) {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
+            try await runner.start(service: service, provider: provider)
         }
     }
 
@@ -43,10 +41,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Health Test")
         let provider = Provider(serviceID: serviceID, type: .httpCheck, httpCheckUrl: "google.com", httpCheckInterval: 5)
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = HealthCheckRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(await runner.isRunning(serviceID: serviceID) == true)
 
         await runner.stop(serviceID: serviceID)
@@ -59,10 +56,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Monitor Test")
         let provider = Provider(serviceID: serviceID, type: .processMonitor, monitorProcessName: "launchd", monitorInterval: 3)
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ProcessMonitorRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(await runner.isRunning(serviceID: serviceID) == true)
 
         await runner.stop(serviceID: serviceID)
@@ -75,10 +71,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Env Test")
         let provider = Provider(serviceID: serviceID, type: .shell, runCommand: "which zsh")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ShellRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         try? await Task.sleep(nanoseconds: 200_000_000)
         await runner.stop(serviceID: serviceID)
         #expect(await runner.isRunning(serviceID: serviceID) == false)
@@ -90,11 +85,10 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "SSH Empty Host")
         let provider = Provider(serviceID: serviceID, type: .ssh, sshHost: "")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = SSHTunnelRunner(processLauncher: ProcessRegistryLauncher())
 
         await #expect(throws: ServiceExecutionError.self) {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
+            try await runner.start(service: service, provider: provider)
         }
     }
 
@@ -127,9 +121,8 @@ struct RunnersExecutionTests {
 
         let composeCLI = RecordingComposeCLI()
         let runner = ContainerRunner(processLauncher: RecordingProcessLaunching(), composeCLI: composeCLI)
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
 
         let invocation = composeCLI.lastInvocation
         #expect(invocation != nil)
@@ -174,9 +167,8 @@ struct RunnersExecutionTests {
 
         let composeCLI = RecordingComposeCLI()
         let runner = ContainerRunner(processLauncher: RecordingProcessLaunching(), composeCLI: composeCLI)
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
 
         let invocation = composeCLI.lastInvocation
         #expect(invocation?.context.composeFilePath == composeURL.path)
@@ -214,9 +206,8 @@ struct RunnersExecutionTests {
 
         let composeCLI = RecordingComposeCLI()
         let runner = ContainerRunner(processLauncher: RecordingProcessLaunching(), composeCLI: composeCLI)
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
 
         let invocation = composeCLI.lastInvocation
         #expect(invocation?.context.binaryPath == "/usr/bin/true")
@@ -246,10 +237,9 @@ struct RunnersExecutionTests {
             processLauncher: RecordingProcessLaunching(),
             composeCLI: RecordingComposeCLI()
         )
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
         await #expect(throws: ServiceExecutionError.self) {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
+            try await runner.start(service: service, provider: provider)
         }
     }
 
@@ -307,9 +297,8 @@ struct RunnersExecutionTests {
             processLauncher: RecordingProcessLaunching(),
             composeCLI: RecordingComposeCLI()
         )
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(FileManager.default.fileExists(atPath: markerURL.path))
 
         await runner.stop(serviceID: serviceID)
@@ -343,9 +332,8 @@ struct RunnersExecutionTests {
             processLauncher: recorder,
             serviceRepository: harness.serviceRepository
         )
-        let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
 
-        try await runner.start(service: service, provider: sshProvider, pipeline: pipeline)
+        try await runner.start(service: service, provider: sshProvider)
 
         let launch = recorder.lastLaunch
         #expect(launch?.executable == "/usr/bin/ssh")
@@ -403,9 +391,8 @@ struct RunnersExecutionTests {
             processLauncher: recorder,
             serviceRepository: harness.serviceRepository
         )
-        let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
 
-        try await runner.start(service: service, provider: k8sProvider, pipeline: pipeline)
+        try await runner.start(service: service, provider: k8sProvider)
 
         let launch = recorder.lastLaunch
         #expect(launch?.executable == fakeKubectl.path)

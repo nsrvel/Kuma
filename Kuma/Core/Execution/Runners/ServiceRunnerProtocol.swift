@@ -10,8 +10,7 @@ public protocol ServiceRunnerProtocol: Sendable {
     /// Starts execution of a service using the specified provider configuration.
     func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws
 
     /// Stops any running process or background polling task associated with the service.
