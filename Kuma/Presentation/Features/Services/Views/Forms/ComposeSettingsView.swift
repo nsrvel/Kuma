@@ -1,35 +1,27 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Shared compose YAML editor for Docker and Podman providers.
 public struct ComposeSettingsView: View {
-    public let engineTitle: String
-    public let emptySummary: String
+    public let filePrompt: String
     public let editorPlaceholder: String
-    public let composeFilePlaceholder: String
     @Binding public var yamlConfig: String
     @Binding public var composeFilePath: String
     public var isLocked: Bool
     public var onSave: () -> Void
 
-    @State private var isExpanded: Bool = false
     @State private var sourceMode: KumaDualSourceMode = .chooseFile
-    @State private var draftYAML: String = ""
-    @State private var draftPath: String = ""
 
     public init(
-        engineTitle: String,
-        emptySummary: String,
+        filePrompt: String,
         editorPlaceholder: String,
-        composeFilePlaceholder: String = "~/path/to/docker-compose.yml",
         yamlConfig: Binding<String>,
         composeFilePath: Binding<String>,
         isLocked: Bool = false,
         onSave: @escaping () -> Void = {}
     ) {
-        self.engineTitle = engineTitle
-        self.emptySummary = emptySummary
+        self.filePrompt = filePrompt
         self.editorPlaceholder = editorPlaceholder
-        self.composeFilePlaceholder = composeFilePlaceholder
         self._yamlConfig = yamlConfig
         self._composeFilePath = composeFilePath
         self.isLocked = isLocked
@@ -37,109 +29,62 @@ public struct ComposeSettingsView: View {
     }
 
     public var body: some View {
-        Group {
-            if !isExpanded {
-                collapsedRow
-            } else {
-                expandedPanel
+        KumaSourceField(
+            label: "Compose File",
+            mode: $sourceMode,
+            path: pathBinding,
+            text: yamlBinding,
+            filePrompt: filePrompt,
+            editorPlaceholder: editorPlaceholder,
+            allowedContentTypes: ComposeFileTypes.allowed,
+            isLocked: isLocked
+        )
+        .onAppear { syncModeFromBindings() }
+    }
+
+    private var pathBinding: Binding<String> {
+        Binding(
+            get: { composeFilePath },
+            set: { newPath in
+                let trimmed = newPath.trimmingCharacters(in: .whitespacesAndNewlines)
+                composeFilePath = trimmed
+                if !trimmed.isEmpty, !yamlConfig.isEmpty {
+                    yamlConfig = ""
+                }
+                onSave()
             }
-        }
-        .onChange(of: isLocked) { _, locked in
-            if locked && isExpanded { collapseEditor() }
-        }
-        .onDisappear { isExpanded = false }
-        .onChange(of: draftPath) { _, newPath in
-            guard isExpanded, sourceMode == .chooseFile else { return }
-            applyFileSelection(newPath)
-        }
+        )
     }
 
-    private var collapsedRow: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Compose File")
-                    .font(KumaFont.body)
-                Text(summaryText)
-                    .font(KumaFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+    private var yamlBinding: Binding<String> {
+        Binding(
+            get: { yamlConfig },
+            set: { newYAML in
+                yamlConfig = newYAML
+                if !newYAML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                   !composeFilePath.isEmpty {
+                    composeFilePath = ""
+                }
+                onSave()
             }
-            Spacer()
-            Button("Configure") { openEditor() }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(isLocked)
-        }
+        )
     }
 
-    private var expandedPanel: some View {
-        KumaFormInlinePanel(
-            headerTitle: engineTitle,
-            headerIcon: "doc.text.fill",
-            closeAccessibilityLabel: "Close compose editor",
-            primaryTitle: "Done",
-            showsCommitFooter: sourceMode == .pasteYAML,
-            onCancel: { cancelEditor() },
-            onPrimary: { commitPasteAndCollapse() }
-        ) {
-            ComposeSettingsExpandedContent(
-                sourceMode: $sourceMode,
-                draftPath: $draftPath,
-                draftYAML: $draftYAML,
-                composeFilePlaceholder: composeFilePlaceholder,
-                editorPlaceholder: editorPlaceholder
-            )
-        }
+    private func syncModeFromBindings() {
+        sourceMode = KumaDualSourceMode.inferred(
+            path: composeFilePath,
+            text: yamlConfig,
+            fallback: .chooseFile
+        )
     }
+}
 
-    private var summaryText: String {
-        let path = composeFilePath.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !path.isEmpty {
-            return "\((path as NSString).lastPathComponent) · \(KumaFileMetadata.truncatedParentPath(path: path))"
-        }
-        let trimmed = yamlConfig.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return emptySummary }
-        let lineCount = trimmed.components(separatedBy: .newlines).count
-        return "Paste YAML · \(lineCount) \(lineCount == 1 ? "line" : "lines")"
-    }
-
-    private func openEditor() {
-        draftYAML = yamlConfig
-        draftPath = composeFilePath
-        sourceMode = inferredMode(path: composeFilePath, yaml: yamlConfig)
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isExpanded = true }
-    }
-
-    private func applyFileSelection(_ path: String) {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        composeFilePath = trimmed
-        if !trimmed.isEmpty { yamlConfig = "" }
-        onSave()
-    }
-
-    private func commitPasteAndCollapse() {
-        yamlConfig = draftYAML
-        composeFilePath = ""
-        onSave()
-        collapseEditor()
-    }
-
-    private func cancelEditor() {
-        if sourceMode == .pasteYAML {
-            draftYAML = yamlConfig
-        } else {
-            draftPath = composeFilePath
-        }
-        collapseEditor()
-    }
-
-    private func collapseEditor() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isExpanded = false }
-    }
-
-    private func inferredMode(path: String, yaml: String) -> KumaDualSourceMode {
-        if !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .chooseFile }
-        if !yaml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .pasteYAML }
-        return .chooseFile
-    }
+public enum ComposeFileTypes {
+    public static let allowed: [UTType] = {
+        var types: [UTType] = []
+        if let yml = UTType(filenameExtension: "yml") { types.append(yml) }
+        if let yaml = UTType(filenameExtension: "yaml") { types.append(yaml) }
+        types.append(.plainText)
+        return types
+    }()
 }

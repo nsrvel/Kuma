@@ -6,26 +6,19 @@ struct KubeConfigEditorExpandedContent: View {
     @Binding var draftYAML: String
 
     var body: some View {
-        KumaDualSourceSegment(mode: $sourceMode, pasteLabel: "Paste Config")
-
-        if sourceMode == .chooseFile {
-            KumaFilePickerField(
-                label: "",
-                path: $draftPath,
-                placeholder: KubeConfigFilePickerSupport.defaultConfigPlaceholder,
-                chooseFiles: true,
-                chooseDirectories: false,
-                allowedContentTypes: KubeConfigFilePickerSupport.allowedContentTypes,
-                allowsOtherFileTypes: true,
-                browseDirectory: KubeConfigFilePickerSupport.browseDirectoryURL
-            )
-        } else {
-            KumaCodeEditor(
-                code: $draftYAML,
-                placeholder: "Paste kubeconfig YAML…",
-                minHeight: 120,
-                maxHeight: 160
-            )
-        }
+        KumaSourceField(
+            label: "Config",
+            mode: $sourceMode,
+            path: $draftPath,
+            text: $draftYAML,
+            pasteTabLabel: "Paste Config",
+            filePrompt: KubeConfigFilePickerSupport.defaultConfigPlaceholder,
+            editorPlaceholder: "Paste kubeconfig YAML…",
+            editorMinHeight: 120,
+            editorMaxHeight: 160,
+            allowedContentTypes: KubeConfigFilePickerSupport.allowedContentTypes,
+            allowsOtherFileTypes: true,
+            browseDirectory: { KubeConfigFilePickerSupport.browseDirectoryURL(for: $0) }
+        )
     }
 }

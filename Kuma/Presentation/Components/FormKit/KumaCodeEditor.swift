@@ -1,6 +1,21 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Shared code editor typography (NSTextView + SwiftUI placeholder)
+
+public enum KumaCodeEditorStyle {
+    public static let fontSize: CGFloat = 11.5
+    public static let textInset: CGFloat = 6
+
+    public static var swiftUIFont: Font {
+        .system(size: fontSize, weight: .regular, design: .monospaced)
+    }
+
+    public static var nsFont: NSFont {
+        .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+    }
+}
+
 // MARK: - KumaCodeEditor
 
 /// Professional Code & Configuration (YAML/Shell/JSON) Editor for Kuma.
@@ -16,9 +31,22 @@ public struct KumaCodeEditor: View {
     public var minHeight: CGFloat
     public var maxHeight: CGFloat?
     public var isReadOnly: Bool
+    public var showsChrome: Bool
+    /// When `false`, the text view ignores automatic first-responder until the user clicks inside it.
+    private var allowsKeyboardFocusBinding: Binding<Bool>?
 
-    @State private var isFocused: Bool = false
+    private var focusBinding: Binding<Bool>?
+    @State private var defaultFocus: Bool = false
+    @State private var defaultAllowsKeyboardFocus: Bool = true
     @State private var copiedRecently: Bool = false
+
+    private var effectiveFocus: Binding<Bool> {
+        focusBinding ?? $defaultFocus
+    }
+
+    private var effectiveAllowsKeyboardFocus: Binding<Bool> {
+        allowsKeyboardFocusBinding ?? $defaultAllowsKeyboardFocus
+    }
 
     public init(
         label: String = "",
@@ -26,7 +54,10 @@ public struct KumaCodeEditor: View {
         placeholder: String = "",
         minHeight: CGFloat = 140,
         maxHeight: CGFloat? = nil,
-        isReadOnly: Bool = false
+        isReadOnly: Bool = false,
+        showsChrome: Bool = true,
+        isFocused: Binding<Bool>? = nil,
+        allowsKeyboardFocus: Binding<Bool>? = nil
     ) {
         self.label = label
         self._code = code
@@ -34,6 +65,9 @@ public struct KumaCodeEditor: View {
         self.minHeight = minHeight
         self.maxHeight = maxHeight
         self.isReadOnly = isReadOnly
+        self.showsChrome = showsChrome
+        self.focusBinding = isFocused
+        self.allowsKeyboardFocusBinding = allowsKeyboardFocus
     }
 
     public var body: some View {
@@ -63,34 +97,66 @@ public struct KumaCodeEditor: View {
                 }
             }
 
-            ZStack(alignment: .topLeading) {
-                KumaNativeCodeTextView(
-                    text: $code,
-                    minHeight: minHeight,
-                    maxHeight: maxHeight,
-                    isReadOnly: isReadOnly,
-                    isFocused: $isFocused
-                )
-                .frame(minHeight: minHeight, maxHeight: maxHeight)
+            editorViewport
+        }
+    }
 
-                if code.isEmpty {
-                    Text(placeholder)
-                        .font(.system(size: 11.5, weight: .regular, design: .monospaced))
-                        .foregroundStyle(Color(nsColor: .placeholderTextColor))
-                        .padding(.leading, 7)
-                        .padding(.top, 7)
-                        .allowsHitTesting(false)
+    private var placeholderLeadingInset: CGFloat {
+        let chromePad: CGFloat = showsChrome ? 2 : 0
+        return chromePad + KumaCodeEditorStyle.textInset
+    }
+
+    private var placeholderTopInset: CGFloat {
+        let chromePad: CGFloat = showsChrome ? 2 : 0
+        return chromePad + KumaCodeEditorStyle.textInset
+    }
+
+    @ViewBuilder
+    private var editorViewport: some View {
+        let viewport = ZStack(alignment: .topLeading) {
+            KumaNativeCodeTextView(
+                text: $code,
+                minHeight: minHeight,
+                maxHeight: maxHeight,
+                isReadOnly: isReadOnly,
+                isFocused: effectiveFocus,
+                allowsKeyboardFocus: effectiveAllowsKeyboardFocus,
+                onUserRequestedFocus: {
+                    effectiveAllowsKeyboardFocus.wrappedValue = true
                 }
-            }
-            .padding(2)
-            .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
-                    .stroke(
-                        isFocused ? Color.accentColor : KumaColors.inputFieldStroke,
-                        lineWidth: isFocused ? 1.5 : 0.5
-                    )
             )
+            .frame(minHeight: minHeight, maxHeight: maxHeight)
+
+            if code.isEmpty {
+                Text(placeholder)
+                    .font(KumaCodeEditorStyle.swiftUIFont)
+                    .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                    .padding(.leading, placeholderLeadingInset)
+                    .padding(.top, placeholderTopInset)
+                    .allowsHitTesting(false)
+            }
+        }
+
+        if showsChrome {
+            viewport
+                .padding(2)
+                .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
+                        .stroke(
+                            effectiveFocus.wrappedValue ? Color.accentColor : KumaColors.inputFieldStroke,
+                            lineWidth: effectiveFocus.wrappedValue ? 1.5 : 0.5
+                        )
+                )
+        } else {
+            viewport
+                .overlay(
+                    RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
+                        .stroke(
+                            effectiveFocus.wrappedValue ? Color.accentColor : Color.clear,
+                            lineWidth: effectiveFocus.wrappedValue ? 1.5 : 0
+                        )
+                )
         }
     }
 
@@ -112,6 +178,8 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
     let maxHeight: CGFloat?
     let isReadOnly: Bool
     @Binding var isFocused: Bool
+    @Binding var allowsKeyboardFocus: Bool
+    let onUserRequestedFocus: () -> Void
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -123,6 +191,7 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
 
         let contentSize = scrollView.contentSize
         let textView = CodeNSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.focusGate = context.coordinator
         textView.onFocusChange = { [weak coordinator = context.coordinator] focused in
             Task { @MainActor in
                 coordinator?.setFocused(focused)
@@ -136,7 +205,10 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
         textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainerInset = NSSize(width: 6, height: 6)
+        textView.textContainerInset = NSSize(
+            width: KumaCodeEditorStyle.textInset,
+            height: KumaCodeEditorStyle.textInset
+        )
 
         textView.drawsBackground = false
         textView.backgroundColor = .clear
@@ -146,7 +218,7 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
         textView.isSelectable = true
 
         // Developer code settings (disable autocorrect / smart punctuation, match native text field colors)
-        textView.font = NSFont.monospacedSystemFont(ofSize: 11.5, weight: .regular)
+        textView.font = KumaCodeEditorStyle.nsFont
         textView.textColor = NSColor.labelColor
         textView.insertionPointColor = NSColor.controlAccentColor
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -169,6 +241,19 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
             textView.selectedRanges = selectedRanges
         }
         textView.isEditable = !isReadOnly
+        context.coordinator.onUserRequestedFocus = onUserRequestedFocus
+
+        if allowsKeyboardFocus {
+            context.coordinator.allowsKeyboardFocus = true
+        } else if nsView.window?.firstResponder !== textView {
+            context.coordinator.allowsKeyboardFocus = false
+        }
+
+        if !context.coordinator.allowsKeyboardFocus,
+           nsView.window?.firstResponder === textView {
+            nsView.window?.makeFirstResponder(nil)
+            if isFocused { isFocused = false }
+        }
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
@@ -188,9 +273,16 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: KumaNativeCodeTextView
         var isDismantled = false
+        var allowsKeyboardFocus = true
+        var onUserRequestedFocus: (() -> Void)?
 
         init(_ parent: KumaNativeCodeTextView) {
             self.parent = parent
+        }
+
+        func grantKeyboardFocusFromUserClick() {
+            onUserRequestedFocus?()
+            allowsKeyboardFocus = true
         }
 
         func textDidChange(_ notification: Notification) {
@@ -210,12 +302,26 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
 // MARK: - CodeNSTextView (Custom Key Events for Tab Indentation)
 
 private final class CodeNSTextView: NSTextView {
+    weak var focusGate: KumaNativeCodeTextView.Coordinator?
     var onFocusChange: ((Bool) -> Void)?
 
     override func becomeFirstResponder() -> Bool {
+        guard focusGate?.allowsKeyboardFocus ?? true else { return false }
         let became = super.becomeFirstResponder()
         if became { onFocusChange?(true) }
         return became
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let gateOpen = focusGate?.allowsKeyboardFocus ?? true
+        if !gateOpen {
+            focusGate?.grantKeyboardFocusFromUserClick()
+            window?.makeFirstResponder(self)
+        }
+        super.mouseDown(with: event)
+        if window?.firstResponder !== self {
+            window?.makeFirstResponder(self)
+        }
     }
 
     override func resignFirstResponder() -> Bool {

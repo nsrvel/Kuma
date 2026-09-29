@@ -9,13 +9,12 @@ struct CreateServiceComposeConfigurationSection: View {
 
     var body: some View {
         KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: KumaSpacing.md) {
                 if isPodman {
                     PodmanComposeSettingsView(yamlConfig: $yamlConfig, composeFilePath: $composeFilePath)
                 } else {
                     DockerComposeSettingsView(yamlConfig: $yamlConfig, composeFilePath: $composeFilePath)
                 }
-                KumaDivider(opacity: 0.06, verticalPadding: 2)
                 InitialScriptSettingsView(
                     initialScript: $initialScript,
                     initialScriptPath: $initialScriptPath

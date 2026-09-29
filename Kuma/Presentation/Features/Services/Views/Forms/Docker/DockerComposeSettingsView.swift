@@ -20,10 +20,8 @@ public struct DockerComposeSettingsView: View {
 
     public var body: some View {
         ComposeSettingsView(
-            engineTitle: "Docker Compose",
-            emptySummary: "No docker-compose.yml configured.",
+            filePrompt: "~/path/to/docker-compose.yml",
             editorPlaceholder: "version: '3.8'\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"80:80\"",
-            composeFilePlaceholder: "~/path/to/docker-compose.yml",
             yamlConfig: $yamlConfig,
             composeFilePath: $composeFilePath,
             isLocked: isLocked,

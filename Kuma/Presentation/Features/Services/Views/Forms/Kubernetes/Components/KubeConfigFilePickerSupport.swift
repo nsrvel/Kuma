@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import UniformTypeIdentifiers
 
@@ -45,10 +44,5 @@ enum KubeConfigFilePickerSupport {
         }
 
         return fm.homeDirectoryForCurrentUser
-    }
-
-    static func revealInFinder(path: String) {
-        let expanded = NSString(string: path).expandingTildeInPath
-        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: expanded)])
     }
 }

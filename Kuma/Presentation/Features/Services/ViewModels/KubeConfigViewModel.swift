@@ -178,9 +178,7 @@ public final class KubeConfigViewModel {
     }
 
     public func inferredSourceMode(path: String, yaml: String) -> KumaDualSourceMode {
-        if !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .chooseFile }
-        if !yaml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .pasteYAML }
-        return .chooseFile
+        KumaDualSourceMode.inferred(path: path, text: yaml, fallback: .chooseFile)
     }
 
     public func isSaveDisabled(sourceMode: KumaDualSourceMode, draftPath: String, draftYAML: String) -> Bool {

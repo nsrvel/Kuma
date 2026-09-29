@@ -28,9 +28,10 @@ public struct KubeConfigInlineEditorView: View {
             headerTitle: viewModel.editingKubeConfigID == nil ? "New Kube Config" : "Edit Kube Config",
             headerIcon: "doc.text.fill",
             closeAccessibilityLabel: "Close kube config editor",
-            primaryTitle: "Save",
+            primaryTitle: sourceMode == .pasteYAML ? "Save" : "Save",
             primaryDisabled: saveDisabled,
-            showsCommitFooter: true,
+            showsCommitFooter: sourceMode == .pasteYAML || !draftPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            showsCancelInFooter: sourceMode == .pasteYAML,
             onCancel: {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     onDismiss()
@@ -49,17 +50,11 @@ public struct KubeConfigInlineEditorView: View {
 
                 Divider().opacity(0.3)
 
-                VStack(alignment: .leading, spacing: KumaSpacing.sm) {
-                    Text("Config")
-                        .font(KumaFont.caption)
-                        .foregroundStyle(.secondary)
-
-                    KubeConfigEditorExpandedContent(
-                        sourceMode: $sourceMode,
-                        draftPath: $draftPath,
-                        draftYAML: $draftYAML
-                    )
-                }
+                KubeConfigEditorExpandedContent(
+                    sourceMode: $sourceMode,
+                    draftPath: $draftPath,
+                    draftYAML: $draftYAML
+                )
             }
             .padding(.top, KumaSpacing.xs)
             .padding(.bottom, KumaSpacing.xs)

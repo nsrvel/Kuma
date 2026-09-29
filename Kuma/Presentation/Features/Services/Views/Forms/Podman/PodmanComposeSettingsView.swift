@@ -20,10 +20,8 @@ public struct PodmanComposeSettingsView: View {
 
     public var body: some View {
         ComposeSettingsView(
-            engineTitle: "Podman Compose",
-            emptySummary: "No podman-compose.yml configured.",
+            filePrompt: "~/path/to/compose.yml",
             editorPlaceholder: "version: '3.8'\nservices:\n  app:\n    image: quay.io/podman/hello\n    ports:\n      - \"8080:8080\"",
-            composeFilePlaceholder: "~/path/to/compose.yml",
             yamlConfig: $yamlConfig,
             composeFilePath: $composeFilePath,
             isLocked: isLocked,
