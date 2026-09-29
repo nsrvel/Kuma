@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Form stack container for Service Inspector's single unified scrollable configuration view.
 public struct InspectorConfigFormStack: View {
+    @Environment(ServiceStateStore.self) private var serviceStateStore
+
     public let serviceID: UUID
     public let isLocked: Bool
     public let isRunning: Bool
@@ -29,6 +31,7 @@ public struct InspectorConfigFormStack: View {
                 InspectorRunningBanner(
                     runtime: ServiceRuntimeState(executionState: inspectorVM.executionState),
                     isDisabled: service.isDisabled,
+                    crashDetail: serviceStateStore.lastFailure(for: serviceID),
                     onViewLogs: {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                             inspectorVM.isViewingLogs = true
@@ -110,6 +113,9 @@ public struct InspectorConfigFormStack: View {
                         isLocked: isLocked,
                         onFieldChanged: {
                             inspectorVM.scheduleAutoSave()
+                        },
+                        onPortsChanged: {
+                            inspectorVM.scheduleAutoSave(portsTouched: true)
                         }
                     )
                 }

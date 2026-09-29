@@ -18,6 +18,9 @@ struct KumaApp: App {
                 .kumaMainWorkspaceChrome()
                 .onAppear {
                     appDelegate.serviceStateStore = serviceStateStore
+                    RunSpool.purgeAll()
+                    LegacyDiskLogsMigration.purgeIfNeeded()
+                    serviceStateStore.bindExecutionSupervisor()
                 }
         }
         .defaultSize(width: 1100, height: 750)

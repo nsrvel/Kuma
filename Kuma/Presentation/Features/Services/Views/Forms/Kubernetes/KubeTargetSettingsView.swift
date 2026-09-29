@@ -15,11 +15,18 @@ public struct KubeTargetSettingsView: View {
         self._usePattern = usePattern
     }
 
+    private var showsStableWorkloadHint: Bool {
+        guard targetType == .pod, !usePattern else { return false }
+        let name = targetName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return false }
+        return KubeTargetNamingHints.looksLikeStableWorkloadName(name)
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             KumaRowPickerField(
                 label: "Target Type",
-                description: "Resource type to port-forward.",
+                description: "Resource kind for port-forward.",
                 options: KubeTargetType.allCases,
                 selection: $targetType,
                 titleResolver: { $0.label }
@@ -30,7 +37,7 @@ public struct KubeTargetSettingsView: View {
             KumaToggleField(
                 label: "Pattern Matching",
                 value: $usePattern,
-                description: "Match resources using substring pattern."
+                description: "Match names with * wildcards."
             )
 
             Divider().opacity(0.3)
@@ -40,6 +47,12 @@ public struct KubeTargetSettingsView: View {
                 value: $targetName,
                 placeholder: targetType.placeholder(usePattern: usePattern)
             )
+
+            if showsStableWorkloadHint {
+                Text("Try Deployment or Service as target type if start fails.")
+                    .font(KumaFont.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

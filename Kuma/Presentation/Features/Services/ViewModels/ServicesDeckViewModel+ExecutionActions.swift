@@ -4,13 +4,10 @@ import os
 extension ServicesDeckViewModel {
     public func toggleService(id: UUID) {
         if isOperational(id) {
-            stateStore?.setExecutionState(.stopping, for: id, publish: false)
+            stateStore?.setExecutionState(.stopping, for: id)
             let store = stateStore
             Task.detached(priority: .userInitiated) {
                 await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: store)
-                await MainActor.run {
-                    ServiceStateNotification.post(serviceID: id, state: .stopped)
-                }
             }
             return
         }
@@ -23,7 +20,7 @@ extension ServicesDeckViewModel {
         let wasRunning = isOperational(id)
 
         if wasRunning {
-            stateStore?.setExecutionState(.stopping, for: id, publish: false)
+            stateStore?.setExecutionState(.stopping, for: id)
             await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: stateStore)
         } else {
             stateStore?.setExecutionState(.starting, for: id)
@@ -72,7 +69,7 @@ extension ServicesDeckViewModel {
             let runningIDs = bulkActionSnapshots.map(\.id).filter { isOperational($0) }
 
             for id in runningIDs {
-                stateStore?.setExecutionState(.stopping, for: id, publish: false)
+                stateStore?.setExecutionState(.stopping, for: id)
                 await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: stateStore)
             }
 
@@ -82,7 +79,7 @@ extension ServicesDeckViewModel {
 
     public func restartService(id: UUID) {
         Task {
-            stateStore?.setExecutionState(.stopping, for: id, publish: false)
+            stateStore?.setExecutionState(.stopping, for: id)
             await ServiceStopSupport.stopOffMainActor(serviceID: id, stateStore: stateStore)
             try? await Task.sleep(nanoseconds: 300_000_000)
 

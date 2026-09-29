@@ -251,7 +251,7 @@ extension DataPortRepository {
                     DataPortService.ExportKubeConfig(
                         id: row.id,
                         name: row.name,
-                        path: nil,
+                        path: row.sourceFilePath,
                         encryptedConfigContent: row.configContent,
                         createdAt: row.createdAt,
                         updatedAt: row.updatedAt

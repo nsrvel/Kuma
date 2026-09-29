@@ -121,6 +121,32 @@ struct ServicesValidationAndSecurityTests {
         #expect(content.contains("apiVersion: v1"))
     }
 
+    @Test("TC-B04d: kubeconfig sourceFilePath is used directly for kubectl")
+    func testKubeConfigSourceFilePathUsedForExecution() async throws {
+        let harness = ServicesTestHarness()
+        let configID = UUID()
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent("kuma-kube-\(UUID().uuidString).yaml")
+        let yaml = "apiVersion: v1\nkind: Config\n"
+        try yaml.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let encryptedEmpty = try CryptoVault.shared.encrypt(plainText: "")
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(
+            KubeConfig(
+                id: configID,
+                name: "FileBacked",
+                configContent: encryptedEmpty,
+                sourceFilePath: fileURL.path
+            )
+        )
+
+        let provider = Provider(serviceID: UUID(), type: .kubernetes, kubeConfigID: configID)
+        let path = try await KubeConfigMaterializer.kubectlKubeconfigPath(for: provider, repo: kubeRepo)
+        #expect(path == fileURL.path)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
     // MARK: - [TC-B04b] Kube target name pattern matching
     @Test("TC-B04b: KubeTargetNameMatcher resolves wildcard and exact names")
     func testKubeTargetNameMatcher() {
@@ -128,6 +154,32 @@ struct ServicesValidationAndSecurityTests {
         #expect(KubeTargetNameMatcher.firstMatch(pattern: "mongo-svc-*", in: names) == "mongo-svc-prod")
         #expect(KubeTargetNameMatcher.firstMatch(pattern: "redis-svc", in: names) == "redis-svc")
         #expect(KubeTargetNameMatcher.firstMatch(pattern: "missing-*", in: names) == nil)
+    }
+
+    @Test("TC-B04d: KubeTargetNameMatcher exact mode does not prefix-match")
+    func testKubeTargetNameMatcherExactOnly() {
+        let names = ["redis-svc-prod", "redis-svc"]
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "redis-svc", in: names) == "redis-svc")
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "redis", in: names) == nil)
+    }
+
+    @Test("TC-B04e: Pod pattern can match replica pod prefix")
+    func testKubeTargetNameMatcherPodReplicaPrefix() {
+        let pods = ["padiumkm-ms-product-7f8d9b2c3d-abcde", "other-pod"]
+        #expect(
+            KubeTargetNameMatcher.firstMatch(
+                pattern: "padiumkm-ms-product",
+                in: pods,
+                allowPodReplicaPrefix: true
+            ) == "padiumkm-ms-product-7f8d9b2c3d-abcde"
+        )
+        #expect(
+            KubeTargetNameMatcher.firstMatch(
+                pattern: "padiumkm-ms-product",
+                in: pods,
+                allowPodReplicaPrefix: false
+            ) == nil
+        )
     }
 
     @Test("TC-B04c: KubeTargetType maps to kubectl port-forward kinds")
@@ -152,6 +204,32 @@ struct ServicesValidationAndSecurityTests {
             cluster: staging
         """
         #expect(KubeConfigYAMLParser.resolveContextName(stored: "c1-ins-abc-prod", in: yaml) == "staging")
+    }
+
+    // MARK: - [TC-B05c] Default kubeconfig row always present
+    @Test("TC-B05c: Default kubeconfig row is always listed with resolved file path")
+    func testDefaultKubeconfigRowAlwaysListed() async throws {
+        let harness = ServicesTestHarness()
+        let tempDir = FileManager.default.temporaryDirectory
+        let kubeFile = tempDir.appendingPathComponent("kuma-kube-\(UUID().uuidString).yaml")
+        try "apiVersion: v1\nkind: Config\n".write(to: kubeFile, atomically: true, encoding: .utf8)
+
+        let suiteName = "TC-B05c-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.set(kubeFile.path, forKey: KumaSettingsKey.customKubeconfigPath)
+
+        let vm = KubeConfigViewModel(
+            repo: KubeConfigRepository(dbWriter: harness.databaseQueue),
+            userDefaults: defaults
+        )
+        await vm.loadConfigs()
+
+        let defaultRow = vm.availableKubeConfigs.first(where: { $0.id == KubeConfig.defaultID })
+        #expect(defaultRow != nil)
+        #expect(defaultRow?.isDefault == true)
+        #expect(defaultRow?.sourceFilePath == kubeFile.path)
+        try? FileManager.default.removeItem(at: kubeFile)
     }
 
     // MARK: - [TC-B05b] Stale Kube Context Dropped On Config Switch
@@ -303,27 +381,6 @@ struct ServicesValidationAndSecurityTests {
         let afterKey = try await harness.serviceRepository.fetchProviders(forService: service.id).first
         #expect(afterKey?.sshPassword == nil)
         #expect(afterKey?.sshKeyPath == keyURL.path)
-    }
-
-    // MARK: - [TC-E02] Clear Logs Scoped To Service ID
-    @Test("TC-E02: LogAggregator.clear(serviceID:) removes only target service logs")
-    func testClearLogsScopedToServiceID() async {
-        let aggregator = LogAggregator.shared
-        let serviceA = UUID()
-        let serviceB = UUID()
-
-        aggregator.append(serviceID: serviceA, serviceName: "Service A", level: "INFO", message: "Log from A 1")
-        aggregator.append(serviceID: serviceB, serviceName: "Service B", level: "INFO", message: "Log from B 1")
-        aggregator.append(serviceID: serviceA, serviceName: "Service A", level: "INFO", message: "Log from A 2")
-
-        #expect(aggregator.entries.contains(where: { $0.serviceID == serviceA }))
-        #expect(aggregator.entries.contains(where: { $0.serviceID == serviceB }))
-
-        // Clear only service A
-        aggregator.clear(serviceID: serviceA)
-
-        #expect(!aggregator.entries.contains(where: { $0.serviceID == serviceA }), "Service A logs must be cleared")
-        #expect(aggregator.entries.contains(where: { $0.serviceID == serviceB }), "Service B logs must remain intact")
     }
 
     // MARK: - [TC-B06b] Kubeconfig not exported as plaintext YAML

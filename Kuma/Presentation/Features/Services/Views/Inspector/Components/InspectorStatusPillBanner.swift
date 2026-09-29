@@ -1,25 +1,48 @@
 import SwiftUI
 
 public struct InspectorStatusPillBanner: View {
-    /// Original pill chrome; stopped-state tint for every status (no per-state green/amber/red).
-    private static let bannerTint = KumaStatus.indicatorColor(for: .stopped)
-
     public let title: String
     public let subtitle: String
-    public var onViewLogs: (() -> Void)? = nil
+    public let tone: Color
+    public let showsOrbit: Bool
+    public let showsGlow: Bool
+    public let washStrength: Double
+    public var onViewLogs: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var breatheHigh = false
 
     public init(
         title: String,
         subtitle: String,
+        tone: Color,
+        showsOrbit: Bool = false,
+        showsGlow: Bool = false,
+        washStrength: Double = 0.10,
         onViewLogs: (() -> Void)? = nil
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.tone = tone
+        self.showsOrbit = showsOrbit
+        self.showsGlow = showsGlow
+        self.washStrength = washStrength
         self.onViewLogs = onViewLogs
+    }
+
+    private var effectiveWashOpacity: Double {
+        guard washStrength > 0 else { return 0 }
+        if showsOrbit && !reduceMotion {
+            return breatheHigh ? 0.13 : 0.07
+        }
+        return washStrength
     }
 
     public var body: some View {
         HStack(alignment: .center, spacing: 10) {
+            StatusPillLeadingIndicator(color: tone, showsOrbit: showsOrbit, showsGlow: showsGlow)
+                .frame(width: 12, height: 12)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
@@ -40,13 +63,27 @@ public struct InspectorStatusPillBanner: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Self.bannerTint.opacity(0.06))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Self.bannerTint.opacity(0.25), lineWidth: 0.8)
+        .background {
+            KumaToneWashBackground(
+                tone: tone,
+                washOpacity: effectiveWashOpacity,
+                strokeOpacity: 0.18
+            )
+        }
+        .animation(.smooth(duration: 0.3), value: effectiveWashOpacity)
+        .onAppear { startBreathingIfNeeded() }
+        .onChange(of: showsOrbit) { _, _ in startBreathingIfNeeded() }
+        .onChange(of: reduceMotion) { _, _ in startBreathingIfNeeded() }
+    }
+
+    private func startBreathingIfNeeded() {
+        guard showsOrbit, !reduceMotion else {
+            breatheHigh = false
+            return
+        }
+        breatheHigh = false
+        withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+            breatheHigh = true
         }
     }
 

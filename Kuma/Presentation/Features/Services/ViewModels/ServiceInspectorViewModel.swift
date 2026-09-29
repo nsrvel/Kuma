@@ -19,6 +19,9 @@ public final class ServiceInspectorViewModel {
     public var draftPorts: [KumaPortMappingItem] = []
 
     public var isViewingLogs: Bool = false
+    public var isLogAutoScrollEnabled: Bool = true
+    public var logWrapsLines: Bool = true
+    public var logScrollToBottomRequest: Int = 0
     public var showDeleteConfirmation: Bool = false
     public var stateStore: ServiceStateStore?
     public var kubeConfigVM: KubeConfigViewModel? = nil
@@ -26,6 +29,8 @@ public final class ServiceInspectorViewModel {
     var autoSaveTask: Task<Void, Never>? = nil
     var pendingSaveRevision: UInt = 0
     var lastCommittedRevision: UInt = 0
+    /// True after the user edits port rows; avoids wiping DB ports on unrelated auto-saves.
+    var portsDraftDirty: Bool = false
 
     public var sshAuthType: SSHAuthType = .key
 
@@ -54,6 +59,7 @@ public final class ServiceInspectorViewModel {
         providers = []
         activeProviderID = nil
         draftPorts = []
+        portsDraftDirty = false
         cancelAutoSave()
     }
 

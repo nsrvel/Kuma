@@ -58,7 +58,7 @@ public struct StatusPillView: View {
 
 // MARK: - Leading indicator (fixed footprint — avoids layout flicker on state change)
 
-private struct StatusPillLeadingIndicator: View {
+struct StatusPillLeadingIndicator: View {
     let color: Color
     let showsOrbit: Bool
     let showsGlow: Bool

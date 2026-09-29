@@ -54,34 +54,20 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(ServiceStateNotification.executionState(from: runningInfo, existing: .idle) == .running(pid: 99))
     }
 
-    @Test("TC-D10: ServiceStateStore publishes kumaServiceStateChanged on setExecutionState")
-    func testStorePublishesOnSetExecutionState() async {
+    @Test("TC-D10: ServiceStateStore updates execution state without duplicate writes")
+    @MainActor
+    func testStoreUpdatesExecutionState() {
         let store = ServiceStateStore()
         let serviceID = UUID()
-        let counter = LockIsolated(0)
-        let token = NotificationCenter.default.addObserver(
-            forName: .kumaServiceStateChanged,
-            object: nil,
-            queue: .main
-        ) { note in
-            guard let id = note.object as? UUID, id == serviceID else { return }
-            counter.withValue { $0 += 1 }
-        }
-        defer { NotificationCenter.default.removeObserver(token) }
 
         store.setExecutionState(.starting, for: serviceID)
         #expect(store.state(for: serviceID) == .starting)
-        await drainPostedNotifications()
-        #expect(counter.value == 1)
 
         store.setExecutionState(.starting, for: serviceID)
-        await drainPostedNotifications()
-        #expect(counter.value == 1)
+        #expect(store.state(for: serviceID) == .starting)
 
         store.setExecutionState(.running(pid: 42), for: serviceID)
         #expect(store.state(for: serviceID) == .running(pid: 42))
-        await drainPostedNotifications()
-        #expect(counter.value == 2)
     }
 
     @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
@@ -147,31 +133,11 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(snapshot != nil)
         #expect(snapshot?.pid == pid)
 
-        let stoppedFlag = LockIsolated(false)
-        let token = NotificationCenter.default.addObserver(
-            forName: .kumaServiceStateChanged,
-            object: nil,
-            queue: .main
-        ) { notif in
-            guard let changedID = notif.object as? UUID, changedID == serviceID else { return }
-            let legacy = notif.userInfo?[ServiceStateNotification.stateKey] as? ServiceState
-            if legacy == .stopped {
-                stoppedFlag.withValue { $0 = true }
-            }
-        }
-        defer { NotificationCenter.default.removeObserver(token) }
-
         await registry.stop(serviceID: serviceID)
 
         let isRunningAfter = await registry.isRunning(serviceID: serviceID)
         #expect(isRunningAfter == false)
-
-        let deadline = Date().addingTimeInterval(3.0)
-        while !stoppedFlag.value && Date() < deadline {
-            await Task.yield()
-            try? await Task.sleep(nanoseconds: 25_000_000)
-        }
-        #expect(stoppedFlag.value == true)
+        #expect(await registry.getSnapshot(serviceID: serviceID) == nil)
     }
 
     // MARK: - [TC-D06] ProcessRegistry Output Capture
@@ -180,22 +146,17 @@ struct ServicesRuntimeAndExecutionTests {
         let registry = ProcessRegistry.shared
         let serviceID = UUID()
 
-        let captured = LockIsolated<[String]>([])
-
         _ = try await registry.launch(
             serviceID: serviceID,
             executable: "/bin/echo",
-            arguments: ["hello-kuma-runtime"],
-            onOutput: { text in
-                captured.withValue { $0.append(text) }
-            }
+            arguments: ["hello-kuma-runtime"]
         )
 
-        // Wait brief moment for echo process to exit and flush pipe
         try await Task.sleep(nanoseconds: 300_000_000)
 
-        let outputs = captured.value
-        #expect(outputs.joined().contains("hello-kuma-runtime"))
+        let tail = RunSpool.tail(for: serviceID) ?? ""
+        #expect(tail.contains("hello-kuma-runtime"))
+        RunSpool.remove(for: serviceID)
     }
 
     // MARK: - [TC-D07] Apply Runtime Diff Performance & Version Stability

@@ -16,7 +16,6 @@ extension ServicesDeckView {
     private static var deckNotificationPublisher: AnyPublisher<Notification, Never> {
         NotificationCenter.default.publisher(for: .kumaServiceUpdated)
             .merge(with: NotificationCenter.default.publisher(for: .kumaServiceCreated))
-            .merge(with: NotificationCenter.default.publisher(for: .kumaServiceStateChanged))
             .merge(with: NotificationCenter.default.publisher(for: .kumaServiceDeleted))
             .merge(with: NotificationCenter.default.publisher(for: .kumaGroupsUpdated))
             .merge(with: NotificationCenter.default.publisher(for: .kumaFocusSearch))
@@ -42,17 +41,6 @@ extension ServicesDeckView {
             } else {
                 viewModel.loadWorkspace(workspaceID: workspaceID)
             }
-        case .kumaServiceStateChanged:
-            guard let serviceID = notif.object as? UUID,
-                  let execState = ServiceStateNotification.executionState(
-                      from: notif.userInfo,
-                      existing: serviceStateStore.state(for: serviceID)
-                  ) else { return }
-            serviceStateStore.setExecutionState(execState, for: serviceID, publish: false)
-            guard ServicesDeckRuntimeObservation.shouldHandleExecutionStateNotifications(
-                store: serviceStateStore
-            ) else { return }
-            viewModel.notifyExecutionStatesChanged()
         case .kumaServiceDeleted:
             if let deletedID = notif.object as? UUID {
                 viewModel.snapshots.removeAll(where: { $0.id == deletedID })

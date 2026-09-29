@@ -357,4 +357,30 @@ struct DataPortPersistenceAndSyncTests {
         #expect(row != nil)
         #expect(row?.name == "Remote")
     }
+
+    @Test("TC-C21b: importData restores kube_config sourceFilePath")
+    func testImportRestoresKubeConfigSourcePath() async throws {
+        let harness = DataPortTestHarness()
+        defer { harness.cleanup() }
+
+        let kubeID = UUID()
+        let backup = DataPortService.KumaBackup(
+            services: [],
+            providers: [],
+            portMappings: [],
+            kubeConfigs: [
+                DataPortService.ExportKubeConfig(
+                    id: kubeID,
+                    name: "OnDisk",
+                    path: "/tmp/kubeconfig.yaml",
+                    encryptedConfigContent: ""
+                )
+            ]
+        )
+        try await harness.repository.importData(backup: backup, strategy: .preserveOrMerge)
+
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        let row = try await kubeRepo.fetch(id: kubeID)
+        #expect(row?.sourceFilePath == "/tmp/kubeconfig.yaml")
+    }
 }

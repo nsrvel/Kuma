@@ -16,7 +16,7 @@ extension ServiceInspectorViewModel {
             let portList = detail.portMappings
 
             self.service = srv
-            self.providers = provs
+            self.providers = provs.map { $0.withKubernetesDefaults() }
             self.activeProviderID = srv.activeProviderID ?? provs.first?.id
 
             if portList.isEmpty && (self.activeCategory == .kubernetes || self.activeCategory == .ssh) {
@@ -37,6 +37,7 @@ extension ServiceInspectorViewModel {
             }
             pendingSaveRevision = 0
             lastCommittedRevision = 0
+            portsDraftDirty = false
         } catch {
             Self.logger.error("Failed to load service details for \(id): \(error.localizedDescription)")
         }
@@ -56,6 +57,7 @@ extension ServiceInspectorViewModel {
                     KumaPortMappingItem(id: $0.id, local: "\($0.localPort)", remote: "\($0.remotePort)")
                 }
             }
+            portsDraftDirty = false
         } catch {
             Self.logger.error("Failed to load port mappings for provider \(providerID): \(error.localizedDescription)")
         }

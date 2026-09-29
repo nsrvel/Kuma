@@ -57,7 +57,9 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
         }
 
         registerStack(context)
-        await pipeline.emit(level: "INFO", message: "Compose stack “\(context.projectName)” is running.")
+        await ExecutionSupervisor.shared.register(
+            .composeStack(serviceID: service.id, serviceName: service.name, context: context)
+        )
     }
 
     public func stop(serviceID: UUID) async {

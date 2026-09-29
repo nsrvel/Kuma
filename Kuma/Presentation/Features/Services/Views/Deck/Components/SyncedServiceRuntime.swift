@@ -8,18 +8,14 @@ struct SyncedServiceRuntime: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onAppear { runtime = serviceStateStore.runtime(for: serviceID) }
-            .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { note in
-                guard note.object as? UUID == serviceID else { return }
-                if let execState = ServiceStateNotification.executionState(
-                    from: note.userInfo,
-                    existing: serviceStateStore.state(for: serviceID)
-                ) {
-                    runtime = ServiceRuntimeState(executionState: execState)
-                } else {
-                    runtime = serviceStateStore.runtime(for: serviceID)
-                }
+            .onAppear { syncRuntime() }
+            .onChange(of: serviceStateStore.executionStates[serviceID]) { _, _ in
+                syncRuntime()
             }
+    }
+
+    private func syncRuntime() {
+        runtime = serviceStateStore.runtime(for: serviceID)
     }
 }
 

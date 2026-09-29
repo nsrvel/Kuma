@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public struct DependencyStatus: Sendable, Equatable {
     public var kubectlInstalled: Bool
@@ -104,32 +105,22 @@ public nonisolated enum DependencyChecker {
         return await resolver.resolveExecutablePath(for: command)
     }
 
+    /// Real user home (`getpwuid`), not the app container home when they differ.
+    public static func userHomePath() -> String {
+        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
+            return String(cString: dir)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser.path(percentEncoded: false)
+    }
+
+    /// Absolute path to `~/.kube/config` (file may or may not exist).
+    public static func standardKubeconfigFilePath() -> String {
+        (userHomePath() as NSString).appendingPathComponent(".kube/config")
+    }
+
     /// Checks if ~/.kube/config or $KUBECONFIG exists.
     public static func isKubeconfigPresent(customPath: String? = nil) -> Bool {
-        let fm = FileManager.default
-        if let customPath, !customPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let nsPath = NSString(string: customPath).expandingTildeInPath
-            return fm.fileExists(atPath: nsPath)
-        }
-
-        // 1. Env variable KUBECONFIG
-        if let envKube = ProcessInfo.processInfo.environment["KUBECONFIG"], !envKube.isEmpty {
-            let paths = envKube.split(separator: ":").map(String.init)
-            if paths.contains(where: { fm.fileExists(atPath: NSString(string: $0).expandingTildeInPath) }) {
-                return true
-            }
-        }
-
-        // 2. Default ~/.kube/config (resolved via real user home directory to survive App Sandbox)
-        let homePath: String
-        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
-            homePath = String(cString: dir)
-        } else {
-            homePath = fm.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        }
-
-        let kubeconfigPath = (homePath as NSString).appendingPathComponent(".kube/config")
-        return fm.fileExists(atPath: kubeconfigPath)
+        resolvedKubeconfigPath(customPath: customPath) != nil
     }
 
     /// Resolves the absolute path to the active kubeconfig file if it exists.
@@ -148,13 +139,7 @@ public nonisolated enum DependencyChecker {
             }
         }
 
-        let homePath: String
-        if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
-            homePath = String(cString: dir)
-        } else {
-            homePath = fm.homeDirectoryForCurrentUser.path(percentEncoded: false)
-        }
-        let defaultPath = (homePath as NSString).appendingPathComponent(".kube/config")
+        let defaultPath = standardKubeconfigFilePath()
         if fm.fileExists(atPath: defaultPath) {
             return defaultPath
         }

@@ -53,17 +53,15 @@ struct LifecycleTeardownTests {
         #expect(isRunning == false)
     }
 
-    // MARK: - [TC-C03] LogFileWriter Buffer Flush on Terminate
-    @Test("TC-C03: LogFileWriter flushAll writes queued logs immediately")
-    func testLogFileWriterFlushOnTerminate() async {
-        let writer = LogFileWriter.shared
-        let testServiceID = UUID()
-
-        await writer.append(serviceID: testServiceID, level: "INFO", message: "Lifecycle teardown verification log")
-        await writer.flushAll()
-
-        // Ensure subsequent buffer operations proceed smoothly
-        #expect(true)
+    // MARK: - [TC-C03] Run spool cleanup on terminate path
+    @Test("TC-C03: RunSpool remove clears per-service output file")
+    func testRunSpoolRemoveOnTeardown() throws {
+        let serviceID = UUID()
+        let url = RunSpool.url(for: serviceID)
+        try "teardown".write(to: url, atomically: true, encoding: .utf8)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        RunSpool.remove(for: serviceID)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
     }
 
     // MARK: - [TC-C04] Multiple Processes Concurrent Kill

@@ -2,54 +2,86 @@ import SwiftUI
 
 /// Dedicated full-height live terminal log viewport for Service Inspector.
 public struct InspectorLiveConsoleView: View {
-    private static let awaitingOutputPlaceholderID = UUID(uuidString: "E7A1C4B2-9F3D-4A1E-8C0B-000000000001")!
-
     public let serviceID: UUID
-    public let serviceName: String
+    public let service: Service
+    public let provider: Provider
     public let isRunning: Bool
 
-    @State private var logAggregator = LogAggregator.shared
-    @State private var isAutoScroll: Bool = true
+    @Binding var isLogAutoScrollEnabled: Bool
+    @Binding var logWrapsLines: Bool
+    @Binding var logScrollToBottomRequest: Int
 
-    private static func awaitingOutputEntry(serviceID: UUID, serviceName: String) -> LiveLogEntry {
-        LiveLogEntry(
-            id: awaitingOutputPlaceholderID,
-            serviceID: serviceID,
-            serviceName: serviceName,
-            timestamp: "—",
-            level: "INFO",
-            message: "Process runner initialized (Awaiting output)"
-        )
-    }
+    @State private var session = LiveLogSession.shared
+    @State private var trimNoticeDismissed = false
 
-    private var serviceLogs: [LiveLogEntry] {
-        let list = logAggregator.logs(for: serviceID)
-        if list.isEmpty && isRunning {
-            return [Self.awaitingOutputEntry(serviceID: serviceID, serviceName: serviceName)]
-        }
-        return list
-    }
-
-    public init(serviceID: UUID, serviceName: String, isRunning: Bool) {
+    public init(
+        serviceID: UUID,
+        serviceName: String,
+        service: Service,
+        provider: Provider,
+        isRunning: Bool,
+        isLogAutoScrollEnabled: Binding<Bool>,
+        logWrapsLines: Binding<Bool>,
+        logScrollToBottomRequest: Binding<Int>
+    ) {
         self.serviceID = serviceID
-        self.serviceName = serviceName
+        self.service = service
+        self.provider = provider
         self.isRunning = isRunning
+        self._isLogAutoScrollEnabled = isLogAutoScrollEnabled
+        self._logWrapsLines = logWrapsLines
+        self._logScrollToBottomRequest = logScrollToBottomRequest
+    }
+
+    private var entries: [LiveLogEntry] {
+        guard session.bufferedServiceID == serviceID else {
+            // #region agent log
+            if !session.lines.isEmpty {
+                AgentDebugLog.write(
+                    hypothesisId: "B",
+                    location: "InspectorLiveConsoleView.entries",
+                    message: "buffer_mismatch_empty_entries",
+                    data: [
+                        "serviceID": serviceID.uuidString,
+                        "buffered": session.bufferedServiceID?.uuidString ?? "nil",
+                        "lineCount": "\(session.lines.count)"
+                    ]
+                )
+            }
+            // #endregion
+            return []
+        }
+        return session.lines.map { line in
+            LiveLogEntry(
+                id: line.id,
+                serviceID: serviceID,
+                serviceName: "",
+                message: line.text
+            )
+        }
     }
 
     public var body: some View {
-        let logs = serviceLogs
         VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Toggle("Auto-scroll", isOn: $isAutoScroll)
-                    .toggleStyle(.checkbox)
-                    .font(KumaFont.caption)
+            if session.didTrimToMaxLines && !trimNoticeDismissed {
+                HStack {
+                    Text("Showing last 1,000 lines")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("OK") {
+                        trimNoticeDismissed = true
+                        session.acknowledgeTrimNotice()
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.system(size: 10.5, weight: .medium))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
 
             ZStack {
-                if logs.isEmpty && !isRunning {
+                if entries.isEmpty && !isRunning {
                     VStack(spacing: 8) {
                         Image(systemName: "terminal")
                             .font(.system(size: 24))
@@ -57,7 +89,7 @@ public struct InspectorLiveConsoleView: View {
                         Text("No logs available")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
-                        Text("Start the service to observe real-time terminal output.")
+                        Text("Start the service to stream live output here.")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
@@ -66,20 +98,47 @@ public struct InspectorLiveConsoleView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     KumaLogConsoleView(
-                        entries: logs,
-                        isAutoScroll: isAutoScroll,
-                        emptyPlaceholder: "Awaiting service logs..."
+                        entries: entries,
+                        displayMode: .raw,
+                        isAutoScroll: isLogAutoScrollEnabled,
+                        wrapsLines: logWrapsLines,
+                        emptyPlaceholder: "Awaiting service logs...",
+                        scrollToBottomRequest: logScrollToBottomRequest,
+                        onUserScrolledAwayFromBottom: {
+                            if isLogAutoScrollEnabled {
+                                isLogAutoScrollEnabled = false
+                            }
+                        }
                     )
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            logAggregator.retainUISubscriber()
-            defer { logAggregator.releaseUISubscriber() }
+        .task(id: LiveLogStreamKey(serviceID: serviceID, isRunning: isRunning)) {
+            guard isRunning else {
+                session.stop()
+                return
+            }
+            trimNoticeDismissed = false
+            session.start(serviceID: serviceID, service: service, provider: provider)
+            defer {
+                session.stop()
+                if session.bufferedServiceID == serviceID {
+                    session.clear()
+                }
+            }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
             }
         }
+        .onChange(of: session.didTrimToMaxLines) { _, trimmed in
+            if trimmed { trimNoticeDismissed = false }
+        }
     }
+}
+
+private struct LiveLogStreamKey: Hashable {
+    let serviceID: UUID
+    let isRunning: Bool
 }

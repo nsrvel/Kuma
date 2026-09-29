@@ -38,12 +38,9 @@ enum EphemeralCLI {
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe
-            let loggingEnabled = ServiceExecutionLoggingPolicy.capturesRunnerOutput
             let captured = OSAllocatedUnfairLock(initialState: "")
             let ingest: @Sendable (String) -> Void = { chunk in
                 captured.withLock { $0 += chunk }
-                guard loggingEnabled, let pipeline else { return }
-                Task { await pipeline.ingestRawChunk(chunk) }
             }
             attachDrain(pipe: pipe, onChunk: ingest)
             try process.run()

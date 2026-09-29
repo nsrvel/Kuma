@@ -126,7 +126,7 @@ graph TD
 | `.stable("all-services")` | `WorkspaceServicesDeckHost` | `isStarredOnly = false`, `filterGroupID = nil` |
 | `.stable("starred-services")` | same | `isStarredOnly = true` |
 | Service group UUID | same | `filterGroupID` from `groupIDForSelectedRow(_:)` |
-| `.stable("live-logs")` | `LiveLogsView` via `ContentView.detailView` | N/A |
+| `.stable("live-logs")` | `LiveLogsView` (empty state: per-service streaming in Inspector) | N/A |
 | `.stable("settings")` | `SettingsView` via `ContentView.detailView` | N/A; footer Settings button uses active highlight |
 
 **Selection hygiene:** On workspace switch or after `loadGroups`, `reconcileSelectionForLoadedWorkspace()` keeps selection if it is a global nav stable ID or a group in the current workspace; otherwise falls back to `.stable("all-services")`.

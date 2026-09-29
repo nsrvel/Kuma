@@ -4,7 +4,7 @@ import os
 extension ServiceInspectorViewModel {
     public func toggleRunning() {
         if isRunning {
-            stateStore?.setExecutionState(.stopping, for: serviceID, publish: false)
+            stateStore?.setExecutionState(.stopping, for: serviceID)
             let sid = serviceID
             let store = stateStore
             Task.detached(priority: .userInitiated) {

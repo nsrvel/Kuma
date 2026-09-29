@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import os
 
@@ -53,20 +54,13 @@ public actor ProcessRegistry {
         let pgid: pid_t
         let signalTarget: SignalTarget
         let startTime: Date
-        let onOutput: (@Sendable (String) -> Void)?
-        var stdoutPipe: Pipe?
-        var stderrPipe: Pipe?
-
         init(
             serviceID: UUID,
             serviceName: String,
             process: Process,
             pgid: pid_t,
             signalTarget: SignalTarget,
-            startTime: Date,
-            stdoutPipe: Pipe?,
-            stderrPipe: Pipe?,
-            onOutput: (@Sendable (String) -> Void)?
+            startTime: Date
         ) {
             self.serviceID = serviceID
             self.serviceName = serviceName
@@ -74,34 +68,6 @@ public actor ProcessRegistry {
             self.pgid = pgid
             self.signalTarget = signalTarget
             self.startTime = startTime
-            self.stdoutPipe = stdoutPipe
-            self.stderrPipe = stderrPipe
-            self.onOutput = onOutput
-        }
-
-        func cleanupPipes(drainRemaining: Bool = false) {
-            if let stdout = stdoutPipe {
-                stdout.fileHandleForReading.readabilityHandler = nil
-                if drainRemaining {
-                    let remaining = stdout.fileHandleForReading.readDataToEndOfFile()
-                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
-                        onOutput?(text)
-                    }
-                }
-                try? stdout.fileHandleForReading.close()
-            }
-            if let stderr = stderrPipe {
-                stderr.fileHandleForReading.readabilityHandler = nil
-                if drainRemaining {
-                    let remaining = stderr.fileHandleForReading.readDataToEndOfFile()
-                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
-                        onOutput?(text)
-                    }
-                }
-                try? stderr.fileHandleForReading.close()
-            }
-            stdoutPipe = nil
-            stderrPipe = nil
         }
     }
 
@@ -121,6 +87,7 @@ public actor ProcessRegistry {
         environment: [String: String]? = nil,
         onOutput: (@Sendable (String) -> Void)? = nil
     ) async throws -> pid_t {
+        _ = onOutput
         // Stop any existing process for this service first
         if activeProcesses[serviceID] != nil {
             await stop(serviceID: serviceID)
@@ -142,17 +109,19 @@ public actor ProcessRegistry {
             process.environment = currentEnv
         }
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
         process.qualityOfService = .userInitiated
-
-        // Setup pipe readability handlers BEFORE run() so early output is never missed
-        setupPipeHandler(pipe: stdoutPipe, serviceID: serviceID, onOutput: onOutput)
-        setupPipeHandler(pipe: stderrPipe, serviceID: serviceID, onOutput: onOutput)
+        let spoolFD = try RunSpool.openAppendFD(for: serviceID)
+        let stdoutHandle = FileHandle(fileDescriptor: spoolFD, closeOnDealloc: false)
+        let stderrFD = dup(spoolFD)
+        process.standardOutput = stdoutHandle
+        if stderrFD >= 0 {
+            process.standardError = FileHandle(fileDescriptor: stderrFD, closeOnDealloc: true)
+        } else {
+            process.standardError = stdoutHandle
+        }
 
         try process.run()
+        try? stdoutHandle.close()
 
         let pid = process.processIdentifier
         let signalTarget: SignalTarget
@@ -166,21 +135,23 @@ public actor ProcessRegistry {
             signalTarget = .singleProcess(pid: pid)
         }
 
+        let startedAt = Date()
         let managed = ManagedProcess(
             serviceID: serviceID,
             serviceName: serviceName,
             process: process,
             pgid: pid,
             signalTarget: signalTarget,
-            startTime: Date(),
-            stdoutPipe: stdoutPipe,
-            stderrPipe: stderrPipe,
-            onOutput: onOutput
+            startTime: startedAt
         )
         activeProcesses[serviceID] = managed
         Self.syncActiveIDs(Array(activeProcesses.keys))
 
         Self.logger.info("Launched process for service \(serviceName) (\(serviceID)) (PID: \(pid), PGID: \(pid))")
+
+        await ExecutionSupervisor.shared.register(
+            .managedProcess(serviceID: serviceID, serviceName: serviceName, pid: pid, startedAt: startedAt)
+        )
 
         // Setup clean termination observer
         process.terminationHandler = { [weak self] proc in
@@ -200,28 +171,12 @@ public actor ProcessRegistry {
         let wasIntentionalStop = intentionallyStopping.remove(serviceID) != nil
         guard let managed = activeProcesses.removeValue(forKey: serviceID) else { return }
         Self.syncActiveIDs(Array(activeProcesses.keys))
-        managed.cleanupPipes(drainRemaining: true)
-
-        let state: ServiceState = (exitCode == 0 || wasIntentionalStop) ? .stopped : .crashed
-        let pid = managed.process.processIdentifier
-
-        Task { @MainActor in
-            if state == .crashed {
-                ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: exitCode)
-            } else {
-                ServiceStateNotification.post(serviceID: serviceID, state: state, pid: pid)
-            }
-        }
-
-        if exitCode != 0 && !wasIntentionalStop && KumaSettingsKey.bool(
-            forKey: KumaSettingsKey.notifyOnServiceFailure,
-            defaultValue: true,
-            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
-        ) {
-            await SystemNotificationCenter.shared.send(
-                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)")
-            )
-        }
+        await ExecutionSupervisor.shared.handleManagedProcessExit(
+            serviceID: serviceID,
+            serviceName: managed.serviceName,
+            exitCode: exitCode,
+            intentionalStop: wasIntentionalStop
+        )
     }
 
     /// Stops a running service process with progressive signal escalation.
@@ -335,22 +290,12 @@ public actor ProcessRegistry {
             if managed.process.isRunning {
                 managed.signalTarget.send(SIGKILL)
             }
-            managed.cleanupPipes(drainRemaining: false)
         }
         activeProcesses.removeAll()
         Self.syncActiveIDs([])
     }
 
-    private func setupPipeHandler(
-        pipe: Pipe,
-        serviceID: UUID,
-        onOutput: (@Sendable (String) -> Void)?
-    ) {
-        let handle = pipe.fileHandleForReading
-        handle.readabilityHandler = { fileHandle in
-            let data = fileHandle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            onOutput?(text)
-        }
+    public func terminateAllAsync() async {
+        terminateAll()
     }
 }

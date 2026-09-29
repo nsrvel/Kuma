@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 import os
 
 // MARK: - KubeConfigViewModel
@@ -31,6 +32,7 @@ public final class KubeConfigViewModel {
     public var showDeleteConfirmation: Bool = false
     public var newKubeConfigName: String = ""
     public var newKubeConfigContent: String = ""
+    public var newKubeConfigSourcePath: String = ""
 
     // Connection testing states
     public var connectionError: String? = nil
@@ -47,10 +49,6 @@ public final class KubeConfigViewModel {
     ) {
         self.repo = repo
         self.userDefaults = userDefaults
-
-        Task {
-            await self.loadConfigs()
-        }
     }
 
     public func loadConfigs(preferredSelectionID: UUID? = nil) async {
@@ -68,7 +66,10 @@ public final class KubeConfigViewModel {
         if let preferredSelectionID,
            finalizedList.contains(where: { $0.id == preferredSelectionID }) {
             self.selectedKubeConfigID = preferredSelectionID
-        } else if self.selectedKubeConfigID == nil, let first = finalizedList.first {
+        } else if let current = selectedKubeConfigID,
+                  finalizedList.contains(where: { $0.id == current }) {
+            // Keep current selection when still valid.
+        } else if let first = finalizedList.first {
             self.selectedKubeConfigID = first.id
         }
         self.refreshContextsForCurrentConfig()
@@ -80,29 +81,45 @@ public final class KubeConfigViewModel {
     ) async -> [KubeConfig] {
         var list: [KubeConfig] = []
 
-        // 1. Resolve default system Kubeconfig (~/.kube/config or custom setting)
-        if let defaultPath = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) {
-            let content = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
-            let defaultConfig = KubeConfig(
+        let defaultPath = DependencyChecker.resolvedKubeconfigPath(customPath: customPath)
+            ?? {
+                let standard = DependencyChecker.standardKubeconfigFilePath()
+                return FileManager.default.fileExists(atPath: standard) ? standard : nil
+            }()
+        let defaultFilePath = defaultPath ?? DependencyChecker.standardKubeconfigFilePath()
+        let defaultContent: String
+        if let defaultPath {
+            defaultContent = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
+        } else {
+            defaultContent = ""
+        }
+        list.append(
+            KubeConfig(
                 id: KubeConfig.defaultID,
                 name: "Default",
-                configContent: content,
+                configContent: defaultContent,
+                sourceFilePath: defaultFilePath,
                 isDefault: true
             )
-            list.append(defaultConfig)
-        }
+        )
 
-        // 2. Fetch custom registered configs from DB and decrypt contents
+        // Fetch custom registered configs from DB and decrypt contents
         do {
             let customConfigs = try await repo.fetchAll()
             var decryptedList: [KubeConfig] = []
-            for config in customConfigs {
+            for config in customConfigs where config.id != KubeConfig.defaultID {
                 var decrypted = config
-                do {
-                    let plain = try CryptoVault.shared.decrypt(cipherText: config.configContent)
-                    decrypted.configContent = plain
-                } catch {
-                    logger.error("Failed to decrypt config '\(config.name)': \(error.localizedDescription)")
+                if let path = config.sourceFilePath?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !path.isEmpty {
+                    let expanded = NSString(string: path).expandingTildeInPath
+                    decrypted.configContent = (try? String(contentsOfFile: expanded, encoding: .utf8)) ?? ""
+                } else {
+                    do {
+                        let plain = try CryptoVault.shared.decrypt(cipherText: config.configContent)
+                        decrypted.configContent = plain
+                    } catch {
+                        logger.error("Failed to decrypt config '\(config.name)': \(error.localizedDescription)")
+                    }
                 }
                 decryptedList.append(decrypted)
             }
@@ -120,7 +137,7 @@ public final class KubeConfigViewModel {
               let config = availableKubeConfigs.first(where: { $0.id == configID }) else {
             return ""
         }
-        return KubeConfigYAMLParser.resolveContextName(stored: storedProviderContext, in: config.configContent) ?? ""
+        return KubeConfigYAMLParser.resolveContextName(stored: storedProviderContext, in: config.resolvedPlainYAML()) ?? ""
     }
 
     /// Provider field value that matches `availableContexts` after a kubeconfig switch.
@@ -139,9 +156,12 @@ public final class KubeConfigViewModel {
             fallbackKey: KumaSettingsKey.legacyKubeconfigPath,
             defaults: userDefaults
         )
-        guard let path = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) else { return }
+        let path = DependencyChecker.resolvedKubeconfigPath(customPath: customPath)
+            ?? DependencyChecker.standardKubeconfigFilePath()
+        guard FileManager.default.fileExists(atPath: path) else { return }
         let content = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
         availableKubeConfigs[index].configContent = content
+        availableKubeConfigs[index].sourceFilePath = path
     }
 
     /// Extract context names from the currently selected kubeconfig YAML content
@@ -152,8 +172,48 @@ public final class KubeConfigViewModel {
             self.activeContextName = nil
             return
         }
-        self.activeContextName = KubeConfigYAMLParser.parseCurrentContext(fromYaml: config.configContent)
-        self.availableContexts = KubeConfigYAMLParser.parseContexts(fromYaml: config.configContent)
+        let yaml = config.resolvedPlainYAML()
+        self.activeContextName = KubeConfigYAMLParser.parseCurrentContext(fromYaml: yaml)
+        self.availableContexts = KubeConfigYAMLParser.parseContexts(fromYaml: yaml)
+    }
+
+    public func inferredSourceMode(path: String, yaml: String) -> KumaDualSourceMode {
+        if !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .chooseFile }
+        if !yaml.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .pasteYAML }
+        return .chooseFile
+    }
+
+    public func isSaveDisabled(sourceMode: KumaDualSourceMode, draftPath: String, draftYAML: String) -> Bool {
+        let name = newKubeConfigName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return true }
+        switch sourceMode {
+        case .chooseFile:
+            let path = draftPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !path.isEmpty else { return true }
+            let expanded = NSString(string: path).expandingTildeInPath
+            return !FileManager.default.fileExists(atPath: expanded)
+        case .pasteYAML:
+            return draftYAML.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    public func resetNewConfigForm() {
+        newKubeConfigName = ""
+        newKubeConfigContent = ""
+        newKubeConfigSourcePath = ""
+        editingKubeConfigID = nil
+    }
+
+    public func beginEditing(config: KubeConfig) {
+        newKubeConfigName = config.name
+        editingKubeConfigID = config.id
+        if let path = config.sourceFilePath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+            newKubeConfigSourcePath = path
+            newKubeConfigContent = ""
+        } else {
+            newKubeConfigSourcePath = ""
+            newKubeConfigContent = config.configContent
+        }
     }
 
     public nonisolated static func parseCurrentContext(fromYaml yaml: String) -> String? {
@@ -164,23 +224,40 @@ public final class KubeConfigViewModel {
         KubeConfigYAMLParser.parseContexts(fromYaml: yaml)
     }
 
-    public func saveConfig() async {
+    public func saveConfig(sourceMode: KumaDualSourceMode) async {
         let name = newKubeConfigName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let plainContent = newKubeConfigContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty && !plainContent.isEmpty else { return }
+        guard !name.isEmpty else { return }
+
+        let encryptedContent: String
+        let sourcePath: String?
 
         do {
-            // Encrypt content using AES-256-GCM MasterKey before writing to database
-            let encryptedContent = try CryptoVault.shared.encrypt(plainText: plainContent)
+            switch sourceMode {
+            case .chooseFile:
+                let rawPath = newKubeConfigSourcePath.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !rawPath.isEmpty else { return }
+                let expanded = NSString(string: rawPath).expandingTildeInPath
+                guard FileManager.default.fileExists(atPath: expanded) else { return }
+                encryptedContent = try CryptoVault.shared.encrypt(plainText: "")
+                sourcePath = rawPath
+            case .pasteYAML:
+                let plainContent = newKubeConfigContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !plainContent.isEmpty else { return }
+                encryptedContent = try CryptoVault.shared.encrypt(plainText: plainContent)
+                sourcePath = nil
+            }
 
             let savedID: UUID
-            if let editID = editingKubeConfigID {
+            let now = Date()
+            if let editID = editingKubeConfigID,
+               let existing = try await repo.fetch(id: editID) {
                 let updated = KubeConfig(
                     id: editID,
                     name: name,
                     configContent: encryptedContent,
-                    createdAt: Date(),
-                    updatedAt: Date()
+                    sourceFilePath: sourcePath,
+                    createdAt: existing.createdAt,
+                    updatedAt: now
                 )
                 try await repo.update(updated)
                 savedID = editID
@@ -190,8 +267,9 @@ public final class KubeConfigViewModel {
                     id: newID,
                     name: name,
                     configContent: encryptedContent,
-                    createdAt: Date(),
-                    updatedAt: Date()
+                    sourceFilePath: sourcePath,
+                    createdAt: now,
+                    updatedAt: now
                 )
                 try await repo.insert(newConfig)
                 savedID = newID
@@ -202,9 +280,7 @@ public final class KubeConfigViewModel {
             triggerBackgroundValidation(forceRefresh: true)
 
             showInlineNewConfigForm = false
-            newKubeConfigName = ""
-            newKubeConfigContent = ""
-            editingKubeConfigID = nil
+            resetNewConfigForm()
         } catch {
             Self.logger.error("Failed to encrypt/save KubeConfig: \(error.localizedDescription)")
         }
@@ -234,7 +310,7 @@ public final class KubeConfigViewModel {
             return
         }
 
-        let content = config.configContent
+        let content = config.resolvedPlainYAML()
         let validationContext = resolvedValidationContext(storedProviderContext: storedProviderContext)
         self.isLoadingNamespaces = true
         self.connectionError = nil

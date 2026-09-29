@@ -13,6 +13,9 @@ public final class ServiceStateStore {
     /// Single source of truth for service execution states
     public private(set) var executionStates: [UUID: ServiceExecutionState] = [:]
 
+    /// Last crash / failure detail from the execution supervisor (inspector banner).
+    public private(set) var lastFailureMessages: [UUID: String] = [:]
+
     private let processRegistry: ProcessRegistry
 
     public init(processRegistry: ProcessRegistry = .shared) {
@@ -47,42 +50,32 @@ public final class ServiceStateStore {
         }
     }
 
-    /// Updates execution state; publishes `.kumaServiceStateChanged` by default so deck rows using `SyncedServiceRuntime` stay in sync.
-    public func setExecutionState(
-        _ state: ServiceExecutionState,
-        for serviceID: UUID,
-        publish: Bool = true
-    ) {
+    public func setExecutionState(_ state: ServiceExecutionState, for serviceID: UUID) {
         guard executionStates[serviceID] != state else { return }
         executionStates[serviceID] = state
-        if publish {
-            publishNotification(for: state, serviceID: serviceID)
+        if case .idle = state {
+            lastFailureMessages.removeValue(forKey: serviceID)
         }
     }
 
-    private func publishNotification(for state: ServiceExecutionState, serviceID: UUID) {
-        switch state {
-        case .idle:
-            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
-        case .starting:
-            ServiceStateNotification.post(serviceID: serviceID, state: .starting)
-        case .running(let pid):
-            ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
-        case .stopping:
-            ServiceStateNotification.post(serviceID: serviceID, state: .stopping)
-        case .crashed(let exitCode):
-            ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: exitCode)
-        case .failed:
-            ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: 1)
+    public func lastFailure(for serviceID: UUID) -> String? {
+        lastFailureMessages[serviceID]
+    }
+
+    func applyLastFailure(_ message: String?, for serviceID: UUID) {
+        if let message {
+            lastFailureMessages[serviceID] = message
+        } else {
+            lastFailureMessages.removeValue(forKey: serviceID)
         }
     }
 
     /// Batch refreshes process states for an array of services via a single actor crossing
     public func refreshProcessStates(for serviceIDs: [UUID]) async {
         guard !serviceIDs.isEmpty else { return }
-        let currentProcessStates = await processRegistry.runningStates(for: serviceIDs)
+        let currentProcessStates = await ExecutionSupervisor.shared.states(for: serviceIDs)
         let idleProcessIDs = Set(currentProcessStates.compactMap { id, state in state == .idle ? id : nil })
-        let runningWithoutProcess = await ServiceExecutionEngine.shared.runningServiceIDs(among: idleProcessIDs)
+        let runningWithoutProcess = await ExecutionSupervisor.shared.runningServiceIDs(among: idleProcessIDs)
 
         for (id, state) in currentProcessStates {
             let existing = executionStates[id] ?? .idle
@@ -93,29 +86,31 @@ public final class ServiceStateStore {
             if existing == .stopping {
                 // User requested stop — never promote back to running while compose teardown is in flight.
                 if state == .idle && !runningWithoutProcess.contains(id) {
-                    setExecutionState(.idle, for: id, publish: true)
+                    setExecutionState(.idle, for: id)
                 }
                 continue
             }
             if state == .idle {
                 if runningWithoutProcess.contains(id) {
                     if !existing.isOperational {
-                        setExecutionState(.running(pid: 0), for: id, publish: true)
+                        setExecutionState(.running(pid: 0), for: id)
                     }
                     continue
                 }
             }
-            setExecutionState(state, for: id, publish: true)
+            setExecutionState(state, for: id)
         }
     }
 
     /// Cleans up state when a service is deleted
     public func removeService(_ serviceID: UUID) {
         executionStates.removeValue(forKey: serviceID)
+        lastFailureMessages.removeValue(forKey: serviceID)
     }
 
     /// Resets all execution states (e.g. on workspace switch)
     public func removeAll() {
         executionStates.removeAll()
+        lastFailureMessages.removeAll()
     }
 }

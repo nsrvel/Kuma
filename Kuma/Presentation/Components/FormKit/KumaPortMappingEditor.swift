@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 public struct KumaPortMappingItem: Identifiable, Equatable, Sendable {
@@ -43,22 +44,12 @@ public struct KumaPortMappingRow: View {
 
     public var body: some View {
         HStack(spacing: KumaSpacing.sm) {
-            // Local Port Input (Full-width Flexible)
-            VStack(alignment: .leading, spacing: 2) {
-                TextField("Local", text: $item.local)
-                    .textFieldStyle(.plain)
-                    .focused($isLocalFocused)
-                    .multilineTextAlignment(.center)
-                    .padding(KumaSpacing.sm)
-                    .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
-                            .stroke(
-                                !isLocalValid ? Color.red.opacity(0.8) : (isLocalFocused ? Color.accentColor : KumaColors.inputFieldStroke),
-                                lineWidth: isLocalFocused || !isLocalValid ? 1.5 : 0.5
-                            )
-                    )
-            }
+            portField(
+                placeholder: "Local",
+                text: $item.local,
+                isFocused: $isLocalFocused,
+                isValid: isLocalValid
+            )
             .frame(maxWidth: .infinity)
 
             Image(systemName: "arrow.right")
@@ -66,22 +57,12 @@ public struct KumaPortMappingRow: View {
                 .foregroundStyle(.tertiary)
                 .padding(.horizontal, 2)
 
-            // Remote Port Input (Full-width Flexible)
-            VStack(alignment: .leading, spacing: 2) {
-                TextField("Remote", text: $item.remote)
-                    .textFieldStyle(.plain)
-                    .focused($isRemoteFocused)
-                    .multilineTextAlignment(.center)
-                    .padding(KumaSpacing.sm)
-                    .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
-                            .stroke(
-                                !isRemoteValid ? Color.red.opacity(0.8) : (isRemoteFocused ? Color.accentColor : KumaColors.inputFieldStroke),
-                                lineWidth: isRemoteFocused || !isRemoteValid ? 1.5 : 0.5
-                            )
-                    )
-            }
+            portField(
+                placeholder: "Remote",
+                text: $item.remote,
+                isFocused: $isRemoteFocused,
+                isValid: isRemoteValid
+            )
             .frame(maxWidth: .infinity)
 
             Button(action: onDelete) {
@@ -93,6 +74,39 @@ public struct KumaPortMappingRow: View {
             .padding(.leading, 2)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Avoids macOS `TextField(_:text:)` prompt shifting when focused (especially with center alignment).
+    private func portField(
+        placeholder: String,
+        text: Binding<String>,
+        isFocused: FocusState<Bool>.Binding,
+        isValid: Bool
+    ) -> some View {
+        ZStack {
+            if text.wrappedValue.isEmpty {
+                Text(placeholder)
+                    .font(KumaFont.body)
+                    .foregroundStyle(Color(nsColor: .placeholderTextColor))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+            }
+
+            TextField("", text: text)
+                .font(KumaFont.body)
+                .textFieldStyle(.plain)
+                .focused(isFocused)
+                .multilineTextAlignment(.center)
+        }
+        .padding(KumaSpacing.sm)
+        .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
+                .stroke(
+                    !isValid ? Color.red.opacity(0.8) : (isFocused.wrappedValue ? Color.accentColor : KumaColors.inputFieldStroke),
+                    lineWidth: isFocused.wrappedValue || !isValid ? 1.5 : 0.5
+                )
+        )
     }
 }
 

@@ -7,14 +7,26 @@ public struct InspectorStatusHeader: View {
     public let provider: Provider?
     public let runtime: ServiceRuntimeState
     public var isViewingLogs: Bool = false
+    @Binding public var isLogAutoScrollEnabled: Bool
+    @Binding public var logWrapsLines: Bool
+    public var onEnableLogAutoScroll: () -> Void
+    public var onClearLogs: () -> Void
+    public var onDownloadLogs: () -> Void
     public let onToggle: () -> Void
     public var onBack: () -> Void = {}
+
+    @State private var logSession = LiveLogSession.shared
 
     public init(
         service: Service,
         provider: Provider?,
         runtime: ServiceRuntimeState,
         isViewingLogs: Bool = false,
+        isLogAutoScrollEnabled: Binding<Bool>,
+        logWrapsLines: Binding<Bool>,
+        onEnableLogAutoScroll: @escaping () -> Void = {},
+        onClearLogs: @escaping () -> Void = {},
+        onDownloadLogs: @escaping () -> Void = {},
         onToggle: @escaping () -> Void,
         onBack: @escaping () -> Void = {}
     ) {
@@ -22,6 +34,11 @@ public struct InspectorStatusHeader: View {
         self.provider = provider
         self.runtime = runtime
         self.isViewingLogs = isViewingLogs
+        self._isLogAutoScrollEnabled = isLogAutoScrollEnabled
+        self._logWrapsLines = logWrapsLines
+        self.onEnableLogAutoScroll = onEnableLogAutoScroll
+        self.onClearLogs = onClearLogs
+        self.onDownloadLogs = onDownloadLogs
         self.onToggle = onToggle
         self.onBack = onBack
     }
@@ -30,12 +47,14 @@ public struct InspectorStatusHeader: View {
         provider?.type ?? .docker
     }
 
+    private var canDownloadLogs: Bool {
+        logSession.bufferedServiceID == service.id && !logSession.lines.isEmpty
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
-            // MARK: Identity Row
             HStack(spacing: 10) {
                 if isViewingLogs {
-                    // Back Button replacing provider icon (matching port chip tile styling)
                     Button {
                         onBack()
                     } label: {
@@ -50,7 +69,7 @@ public struct InspectorStatusHeader: View {
 
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 12.5, weight: .semibold))
-                                .foregroundStyle(Color.secondary)
+                                .foregroundStyle(.primary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -58,7 +77,6 @@ public struct InspectorStatusHeader: View {
                     .help("Back to Configuration")
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {
-                    // Provider gradient icon with Star Overlay Badge
                     ZStack(alignment: .topTrailing) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -109,7 +127,14 @@ public struct InspectorStatusHeader: View {
                         .foregroundStyle(.tertiary)
                         .padding(.trailing, 8)
                 } else if isViewingLogs {
-                    InspectorHeaderLogControls(serviceID: service.id)
+                    InspectorHeaderLogControls(
+                        isLogAutoScrollEnabled: $isLogAutoScrollEnabled,
+                        logWrapsLines: $logWrapsLines,
+                        canDownload: canDownloadLogs,
+                        onEnableAutoScroll: onEnableLogAutoScroll,
+                        onClear: onClearLogs,
+                        onDownload: onDownloadLogs
+                    )
                 } else {
                     InspectorHeaderActionButton(runtime: runtime, onToggle: onToggle)
                 }
@@ -125,8 +150,9 @@ public struct InspectorStatusHeader: View {
         service: Service(name: "Preview Service", workspaceID: UUID()),
         provider: nil,
         runtime: .idle,
+        isLogAutoScrollEnabled: .constant(true),
+        logWrapsLines: .constant(true),
         onToggle: {}
     )
     .frame(width: 400)
 }
-

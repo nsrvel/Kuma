@@ -1,49 +1,19 @@
 import SwiftUI
 
-/// Feature: Live Logs
-/// Aggregated real-time log streaming viewer across all running services in active workspace.
+/// Sidebar Live Logs shell — streaming is per-service in the Inspector.
 public struct LiveLogsView: View {
-    @State private var logAggregator = LogAggregator.shared
     @State private var filterQuery: String = ""
-    @State private var debouncedQuery: String = ""
-    @State private var selectedServiceFilter: String = "All"
-    @State private var debounceTask: Task<Void, Never>? = nil
-    @State private var displayedLogs: [LiveLogEntry] = []
 
     public init() {}
 
     public var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                KumaSearchField(text: $filterQuery, prompt: "Filter logs (substring or /regex/)…")
+                KumaSearchField(text: $filterQuery, prompt: "Filter logs…")
                     .frame(maxWidth: 320)
-                    .onChange(of: filterQuery) { _, newValue in
-                        debounceTask?.cancel()
-                        debounceTask = Task {
-                            try? await Task.sleep(nanoseconds: 150_000_000)
-                            guard !Task.isCancelled else { return }
-                            debouncedQuery = newValue
-                        }
-                    }
-
-                Picker("Service", selection: $selectedServiceFilter) {
-                    Text("All Services").tag("All")
-                    ForEach(logAggregator.availableServiceNames, id: \.self) { srv in
-                        Text(srv).tag(srv)
-                    }
-                }
-                .frame(width: 150)
+                    .disabled(true)
 
                 Spacer()
-
-                Button {
-                    logAggregator.clear()
-                } label: {
-                    Label("Clear", systemImage: "trash")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -53,40 +23,14 @@ public struct LiveLogsView: View {
 
             ZStack {
                 Color.black.opacity(0.85)
-
-                KumaLogConsoleView(
-                    entries: displayedLogs,
-                    emptyPlaceholder: "No live logs yet.\nStart a service to stream real-time logs here."
+                KumaEmptyStateView(
+                    iconName: "terminal",
+                    title: "No live logs here",
+                    description: "Live logs are available per service in the Inspector."
                 )
             }
         }
         .navigationTitle("Live Logs")
         .background(KumaColors.canvasBackground)
-        .onAppear { recomputeDisplayedLogs() }
-        .onChange(of: logAggregator.changeToken) { _, _ in recomputeDisplayedLogs() }
-        .onChange(of: debouncedQuery) { _, _ in recomputeDisplayedLogs() }
-        .onChange(of: selectedServiceFilter) { _, _ in recomputeDisplayedLogs() }
-        .task {
-            logAggregator.retainUISubscriber()
-            defer { logAggregator.releaseUISubscriber() }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(60))
-            }
-        }
-    }
-
-    private func recomputeDisplayedLogs() {
-        var list = logAggregator.entries
-        if selectedServiceFilter != "All" {
-            list = list.filter { $0.serviceName == selectedServiceFilter }
-        }
-        let query = debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !query.isEmpty {
-            list = list.filter {
-                LiveLogTextMatcher.matches($0.message, query: query)
-                    || LiveLogTextMatcher.matches($0.serviceName, query: query)
-            }
-        }
-        displayedLogs = list
     }
 }

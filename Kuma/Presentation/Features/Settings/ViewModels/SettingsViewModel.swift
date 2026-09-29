@@ -32,57 +32,6 @@ public enum DefaultShell: String, CaseIterable, Codable, Sendable {
     }
 }
 
-public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
-    case tenMB = 10
-    case fiftyMB = 50
-    case hundredMB = 100
-    case unlimited = 0
-
-    /// Short label for Settings picker (per-service line cap).
-    public var title: String {
-        switch self {
-        case .unlimited: return "Unlimited"
-        default: return "\(maxLinesPerService)"
-        }
-    }
-
-    public var maxLinesPerService: Int {
-        switch self {
-        case .tenMB: return 250
-        case .fiftyMB: return 500
-        case .hundredMB: return 1_000
-        case .unlimited: return .max
-        }
-    }
-
-    public var maxTotalLines: Int {
-        switch self {
-        case .tenMB: return 1_000
-        case .fiftyMB: return 2_000
-        case .hundredMB: return 5_000
-        case .unlimited: return .max
-        }
-    }
-
-    public static func current(defaults: UserDefaults = .standard) -> LogRetentionLimit {
-        if let saved = defaults.object(forKey: KumaSettingsKey.logRetentionLimit) as? Int,
-           let limit = LogRetentionLimit(rawValue: saved) {
-            return limit
-        }
-        return .fiftyMB
-    }
-
-    /// On-disk log file size cap per service (MB); `unlimited` disables rotation.
-    public var maxDiskMegabytes: Int? {
-        switch self {
-        case .tenMB: return 10
-        case .fiftyMB: return 50
-        case .hundredMB: return 100
-        case .unlimited: return nil
-        }
-    }
-}
-
 public enum PortConflictPolicy: String, CaseIterable, Codable, Sendable {
     case warnAndBlock = "warn_and_block"
     case killExisting = "kill_existing"
@@ -175,19 +124,6 @@ public final class SettingsViewModel {
         didSet { userDefaults.set(portConflictPolicy.rawValue, forKey: Keys.portConflictPolicy) }
     }
 
-    // MARK: - Advanced & Data
-
-    public var logRetentionLimit: LogRetentionLimit {
-        didSet {
-            userDefaults.set(logRetentionLimit.rawValue, forKey: Keys.logRetentionLimit)
-            LogAggregator.shared.refreshRetentionFromSettings()
-        }
-    }
-
-    public var clearLogsOnSwitch: Bool {
-        didSet { userDefaults.set(clearLogsOnSwitch, forKey: Keys.clearLogsOnSwitch) }
-    }
-
     // MARK: - Initialization
 
     public init(userDefaults: UserDefaults = .standard) {
@@ -246,14 +182,6 @@ public final class SettingsViewModel {
         )
         let rawPortPolicy = userDefaults.string(forKey: Keys.portConflictPolicy) ?? PortConflictPolicy.warnAndBlock.rawValue
         self.portConflictPolicy = PortConflictPolicy(rawValue: rawPortPolicy) ?? .warnAndBlock
-
-        if let savedLimit = userDefaults.object(forKey: Keys.logRetentionLimit) as? Int,
-           let limit = LogRetentionLimit(rawValue: savedLimit) {
-            self.logRetentionLimit = limit
-        } else {
-            self.logRetentionLimit = .fiftyMB
-        }
-        self.clearLogsOnSwitch = userDefaults.bool(forKey: Keys.clearLogsOnSwitch)
 
         // Apply appearance theme immediately on initialization
         applyAppearance(self.appearance)
@@ -357,8 +285,6 @@ public final class SettingsViewModel {
         self.customNgrokPath = ""
         self.notifyOnServiceFailure = true
         self.portConflictPolicy = .warnAndBlock
-        self.logRetentionLimit = .fiftyMB
-        self.clearLogsOnSwitch = false
 
         applyAppearance(.system)
         Self.logger.info("All user settings successfully reset to factory defaults.")

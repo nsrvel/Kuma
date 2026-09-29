@@ -234,4 +234,29 @@ struct ServicesPersistenceAndSyncTests {
         #expect(inspectorVM.service == nil)
         #expect(inspectorVM.providers.isEmpty)
     }
+
+    @Test("TC-C13: Inspector commit without port edits preserves port mappings in DB")
+    func testInspectorCommitPreservesPortsWhenPortsNotDirty() async throws {
+        let harness = ServicesTestHarness()
+        let (service, provider) = try await harness.seedServiceWithProvider(
+            name: "SSH Ports",
+            providerType: .ssh,
+            ports: [(2222, 22), (8080, 80), (9090, 90)]
+        )
+
+        let inspectorVM = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await inspectorVM.loadService(id: service.id)
+        inspectorVM.service?.name = "Renamed SSH"
+        await inspectorVM.commitChanges()
+
+        let ports = try await harness.serviceRepository.fetchPortMappings(
+            forService: service.id,
+            providerID: provider.id
+        )
+        #expect(ports.map(\.localPort).sorted() == [2222, 8080, 9090])
+    }
 }

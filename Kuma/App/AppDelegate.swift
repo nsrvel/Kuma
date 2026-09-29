@@ -104,8 +104,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     private func performTeardownAndQuit(sender: NSApplication) {
         Task { @MainActor in
-            await ProcessRegistry.shared.terminateAll()
-            await LogFileWriter.shared.flushAll()
+            await ExecutionSupervisor.shared.stopAll()
+            await ProcessRegistry.shared.terminateAllAsync()
             sender.reply(toApplicationShouldTerminate: true)
             // Safety watchdog: ensure process terminates if teardown stalls before exit
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -117,8 +117,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationWillTerminate(_ notification: Notification) {
         // Fallback synchronous/fire-and-forget cleanup
         Task {
-            await ProcessRegistry.shared.terminateAll()
-            await LogFileWriter.shared.flushAll()
+            await ExecutionSupervisor.shared.stopAll()
+            await ProcessRegistry.shared.terminateAllAsync()
         }
     }
 

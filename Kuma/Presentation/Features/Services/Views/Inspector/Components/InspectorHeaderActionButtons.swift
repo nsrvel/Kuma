@@ -1,65 +1,69 @@
 import SwiftUI
 
-/// Header action button and log control buttons for InspectorStatusHeader.
+/// Log panel controls in the inspector header (auto-scroll, wrap, clear, download).
 public struct InspectorHeaderLogControls: View {
-    public let serviceID: UUID
-    @State private var copiedRecently: Bool = false
+    @Binding public var isLogAutoScrollEnabled: Bool
+    @Binding public var logWrapsLines: Bool
+    public var canDownload: Bool
+    public var onEnableAutoScroll: () -> Void
+    public var onClear: () -> Void
+    public var onDownload: () -> Void
 
-    public init(serviceID: UUID) {
-        self.serviceID = serviceID
+    public init(
+        isLogAutoScrollEnabled: Binding<Bool>,
+        logWrapsLines: Binding<Bool>,
+        canDownload: Bool,
+        onEnableAutoScroll: @escaping () -> Void,
+        onClear: @escaping () -> Void,
+        onDownload: @escaping () -> Void
+    ) {
+        self._isLogAutoScrollEnabled = isLogAutoScrollEnabled
+        self._logWrapsLines = logWrapsLines
+        self.canDownload = canDownload
+        self.onEnableAutoScroll = onEnableAutoScroll
+        self.onClear = onClear
+        self.onDownload = onDownload
     }
 
     public var body: some View {
         HStack(spacing: 6) {
-            Button {
-                copyLogs()
-            } label: {
-                HStack(spacing: 3.5) {
-                    Image(systemName: copiedRecently ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 10))
-                    Text(copiedRecently ? "Copied" : "Copy")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .foregroundStyle(Color.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4.5)
-                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            Toggle(isOn: autoScrollBinding) {
+                Label("Auto-scroll", systemImage: isLogAutoScrollEnabled ? "arrow.down.to.line" : "arrow.down.to.line.slash")
             }
-            .buttonStyle(.plain)
-            .help("Copy logs to clipboard")
+            .toggleStyle(.button)
+            .help(isLogAutoScrollEnabled ? "Pause auto-scroll" : "Enable auto-scroll")
+            .accessibilityLabel(isLogAutoScrollEnabled ? "Auto-scroll on" : "Auto-scroll off")
 
-            Button {
-                LogAggregator.shared.clear(serviceID: serviceID)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(Color.secondary)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4.5)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            Toggle(isOn: $logWrapsLines) {
+                Label("Wrap lines", systemImage: logWrapsLines ? "text.word.spacing" : "arrow.left.and.right")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Clear logs for this service")
-            .help("Clear logs")
+            .toggleStyle(.button)
+            .help(logWrapsLines ? "Wrap long lines" : "No wrap (horizontal scroll)")
+
+            Button(role: .destructive, action: onClear) {
+                Label("Clear", systemImage: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Clear display (stream keeps running while service is up)")
+
+            Button(action: onDownload) {
+                Label("Download", systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.borderless)
+            .disabled(!canDownload)
+            .help("Save visible logs to a text file")
         }
-        .padding(.trailing, 8)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .labelStyle(.iconOnly)
     }
 
-    private func copyLogs() {
-        let entries = LogAggregator.shared.logs(for: serviceID)
-        let content = entries.map { "[\($0.timestamp)] [\($0.level)] \($0.message)" }.joined(separator: "\n")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(content, forType: .string)
-
-        withAnimation {
-            copiedRecently = true
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
-            withAnimation {
-                copiedRecently = false
+    private var autoScrollBinding: Binding<Bool> {
+        Binding(
+            get: { isLogAutoScrollEnabled },
+            set: { newValue in
+                isLogAutoScrollEnabled = newValue
+                if newValue { onEnableAutoScroll() }
             }
-        }
+        )
     }
 }
 

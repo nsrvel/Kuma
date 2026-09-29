@@ -12,7 +12,7 @@ extension ServiceInspectorViewModel {
             guard var srv = service else { return }
 
             if wasRunning {
-                stateStore?.setExecutionState(.stopping, for: serviceID, publish: false)
+                stateStore?.setExecutionState(.stopping, for: serviceID)
                 await ServiceStopSupport.stopOffMainActor(serviceID: serviceID, stateStore: stateStore)
             }
 
@@ -62,11 +62,16 @@ extension ServiceInspectorViewModel {
             self.kubeConfigVM = KubeConfigViewModel()
         }
 
+        if provider.type == .kubernetes {
+            Task { await syncKubeConfigSelectionFromActiveProvider() }
+        }
+
         if provider.type == .kubernetes || provider.type == .ssh {
             draftPorts = [KumaPortMappingItem()]
         } else {
             draftPorts = []
         }
+        portsDraftDirty = false
 
         Task {
             do {
@@ -107,6 +112,8 @@ extension ServiceInspectorViewModel {
                         try await self.serviceRepository.updateService(srv)
                         self.service = srv
                     }
+                    await reloadDraftPortsForActiveProvider()
+                    portsDraftDirty = false
                 }
                 postUpdatedNotification()
             } catch {

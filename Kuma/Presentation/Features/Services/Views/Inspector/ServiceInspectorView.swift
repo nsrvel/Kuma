@@ -39,6 +39,26 @@ public struct ServiceInspectorView: View {
                     provider: inspectorVM.activeProvider,
                     runtime: ServiceRuntimeState(executionState: executionState),
                     isViewingLogs: isViewingLogs,
+                    isLogAutoScrollEnabled: $inspectorVM.isLogAutoScrollEnabled,
+                    logWrapsLines: $inspectorVM.logWrapsLines,
+                    onEnableLogAutoScroll: {
+                        inspectorVM.logScrollToBottomRequest += 1
+                    },
+                    onClearLogs: {
+                        let session = LiveLogSession.shared
+                        if session.bufferedServiceID == service.id {
+                            session.clear()
+                        }
+                    },
+                    onDownloadLogs: {
+                        let session = LiveLogSession.shared
+                        guard session.bufferedServiceID == service.id else { return }
+                        let text = session.lines.map(\.text).joined(separator: "\n")
+                        LiveLogPlainTextExport.save(
+                            defaultFilename: LiveLogPlainTextExport.sanitizedFilename(serviceName: service.name),
+                            text: text
+                        )
+                    },
                     onToggle: {
                         inspectorVM.toggleRunning()
                     },
@@ -58,7 +78,16 @@ public struct ServiceInspectorView: View {
                         InspectorLiveConsoleView(
                             serviceID: serviceID,
                             serviceName: service.name,
-                            isRunning: isRunning
+                            service: service,
+                            provider: inspectorVM.activeProvider ?? Provider(
+                                id: UUID(),
+                                serviceID: serviceID,
+                                type: inspectorVM.activeCategory
+                            ),
+                            isRunning: isRunning,
+                            isLogAutoScrollEnabled: $inspectorVM.isLogAutoScrollEnabled,
+                            logWrapsLines: $inspectorVM.logWrapsLines,
+                            logScrollToBottomRequest: $inspectorVM.logScrollToBottomRequest
                         )
                         .padding(.vertical, 4)
                         .transition(.asymmetric(
@@ -105,15 +134,6 @@ public struct ServiceInspectorView: View {
         .task(id: serviceID) {
             inspectorVM.stateStore = serviceStateStore
             await inspectorVM.loadService(id: serviceID)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { notif in
-            guard let changedID = notif.object as? UUID,
-                  changedID == serviceID,
-                  let execState = ServiceStateNotification.executionState(
-                      from: notif.userInfo,
-                      existing: serviceStateStore.state(for: serviceID)
-                  ) else { return }
-            serviceStateStore.setExecutionState(execState, for: serviceID, publish: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
             if (notif.userInfo?[KumaServiceNotification.sourceKey] as? String) == KumaServiceNotification.sourceInspector {

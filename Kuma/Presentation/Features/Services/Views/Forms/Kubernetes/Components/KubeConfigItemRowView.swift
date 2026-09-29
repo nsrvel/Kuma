@@ -38,6 +38,12 @@ public struct KubeConfigItemRowView: View {
         self.onRefresh = onRefresh
     }
 
+    private var connectionTone: Color {
+        if isLoadingNamespaces { return KumaStatus.transitionalIndicator }
+        if hasConnectionError { return KumaStatus.failedIndicator }
+        return KumaStatus.runningIndicator
+    }
+
     public var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "doc.text")
@@ -60,7 +66,7 @@ public struct KubeConfigItemRowView: View {
             Spacer()
 
             if isSelected {
-                statusIndicator
+                connectionStatusChip
                     .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
@@ -69,14 +75,7 @@ public struct KubeConfigItemRowView: View {
         .animation(.easeInOut(duration: 0.2), value: hasConnectionError)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.06) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(isSelected ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 0.75)
-        }
+        .background { KumaInspectorListRowSelectionChrome(isSelected: isSelected, isHovered: isHovered) }
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .contextMenu {
@@ -100,32 +99,37 @@ public struct KubeConfigItemRowView: View {
     }
 
     private var subtitleText: String {
-        if isSelected {
-            return config.isDefault ? "Active Config · ~/.kube/config" : "Active Config"
-        } else if config.isDefault {
+        if config.isDefault {
+            if let path = config.sourceFilePath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+                return Self.displayPath(path)
+            }
             return "~/.kube/config"
-        } else {
-            return "Custom Config"
         }
+        if let path = config.sourceFilePath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+            return (path as NSString).lastPathComponent
+        }
+        if !config.configContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Paste Config"
+        }
+        return "Custom Config"
+    }
+
+    private static func displayPath(_ path: String) -> String {
+        let home = DependencyChecker.userHomePath()
+        if path.hasPrefix(home + "/") {
+            return "~/" + path.dropFirst(home.count + 1)
+        }
+        return path
     }
 
     @ViewBuilder
-    private var statusIndicator: some View {
+    private var connectionStatusChip: some View {
         if isLoadingNamespaces {
-            HStack(spacing: 5) {
-                KumaActivityIndicator(size: 10, color: .secondary, lineWidth: 1.5)
-                Text("Connecting…")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+            KumaStatusChip(title: "Connecting…", tone: connectionTone, showsOrbit: true)
         } else if hasConnectionError {
-            Text("Unreachable")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(KumaStatus.transitionalIndicator)
+            KumaStatusChip(title: "Unreachable", tone: connectionTone)
         } else {
-            Text("Connected")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(KumaStatus.runningIndicator)
+            KumaStatusChip(title: "Connected", tone: connectionTone, showsGlow: true)
         }
     }
 }

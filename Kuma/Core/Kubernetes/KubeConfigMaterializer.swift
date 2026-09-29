@@ -31,6 +31,15 @@ enum KubeConfigMaterializer {
             throw ServiceExecutionError.invalidConfiguration("Selected kubeconfig no longer exists.")
         }
 
+        if let rawPath = record.sourceFilePath?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !rawPath.isEmpty {
+            let expanded = NSString(string: rawPath).expandingTildeInPath
+            if FileManager.default.fileExists(atPath: expanded) {
+                return expanded
+            }
+            throw ServiceExecutionError.invalidConfiguration("Kubeconfig file not found at \(rawPath).")
+        }
+
         let plain = try CryptoVault.shared.decrypt(cipherText: record.configContent)
         let trimmed = plain.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {

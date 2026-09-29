@@ -11,6 +11,10 @@ public struct KumaFilePickerField: View {
     public var chooseFiles: Bool
     public var chooseDirectories: Bool
     public var allowedContentTypes: [UTType]?
+    /// When true, NSOpenPanel still lists extensionless files (e.g. `~/.kube/config`).
+    public var allowsOtherFileTypes: Bool
+    /// Overrides initial folder for Browse; receives the current path binding value.
+    public var browseDirectory: ((String) -> URL)?
     public var showsHiddenFiles: Bool
     public var error: String?
 
@@ -23,6 +27,8 @@ public struct KumaFilePickerField: View {
         chooseFiles: Bool = true,
         chooseDirectories: Bool = false,
         allowedContentTypes: [UTType]? = nil,
+        allowsOtherFileTypes: Bool = false,
+        browseDirectory: ((String) -> URL)? = nil,
         showsHiddenFiles: Bool = true,
         error: String? = nil
     ) {
@@ -32,6 +38,8 @@ public struct KumaFilePickerField: View {
         self.chooseFiles = chooseFiles
         self.chooseDirectories = chooseDirectories
         self.allowedContentTypes = allowedContentTypes
+        self.allowsOtherFileTypes = allowsOtherFileTypes
+        self.browseDirectory = browseDirectory
         self.showsHiddenFiles = showsHiddenFiles
         self.error = error
     }
@@ -78,13 +86,15 @@ public struct KumaFilePickerField: View {
                     if let allowedContentTypes {
                         panel.allowedContentTypes = allowedContentTypes
                     }
+                    panel.allowsOtherFileTypes = allowsOtherFileTypes
 
-                    // Smart initial directory: focus on current path or placeholder directory if exists
-                    let targetPath = path.isEmpty ? placeholder : path
-                    let expanded = NSString(string: targetPath).expandingTildeInPath
-                    let dirPath = (expanded as NSString).deletingLastPathComponent
-                    if FileManager.default.fileExists(atPath: dirPath) {
-                        panel.directoryURL = URL(fileURLWithPath: dirPath)
+                    if let browseDirectory {
+                        panel.directoryURL = browseDirectory(path)
+                    } else {
+                        panel.directoryURL = Self.defaultBrowseDirectory(
+                            path: path,
+                            placeholder: placeholder
+                        )
                     }
 
                     if panel.runModal() == .OK {
@@ -103,6 +113,23 @@ public struct KumaFilePickerField: View {
                     .foregroundStyle(.red)
             }
         }
+    }
+
+    private static func defaultBrowseDirectory(path: String, placeholder: String) -> URL {
+        let fm = FileManager.default
+        let targetPath = path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? placeholder : path
+        if !targetPath.isEmpty {
+            let expanded = NSString(string: targetPath).expandingTildeInPath
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
+                return URL(fileURLWithPath: expanded, isDirectory: true)
+            }
+            let dirPath = (expanded as NSString).deletingLastPathComponent
+            if fm.fileExists(atPath: dirPath) {
+                return URL(fileURLWithPath: dirPath, isDirectory: true)
+            }
+        }
+        return fm.homeDirectoryForCurrentUser
     }
 }
 

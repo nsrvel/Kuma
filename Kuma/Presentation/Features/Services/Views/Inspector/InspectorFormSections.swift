@@ -7,6 +7,7 @@ public struct InspectorFormSections: View {
     public var kubeConfigVM: KubeConfigViewModel?
     public let isLocked: Bool
     public let onFieldChanged: () -> Void
+    public let onPortsChanged: () -> Void
 
     public init(
         provider: Binding<Provider>,
@@ -14,7 +15,8 @@ public struct InspectorFormSections: View {
         sshAuthType: Binding<SSHAuthType>,
         kubeConfigVM: KubeConfigViewModel? = nil,
         isLocked: Bool = false,
-        onFieldChanged: @escaping () -> Void = {}
+        onFieldChanged: @escaping () -> Void = {},
+        onPortsChanged: @escaping () -> Void = {}
     ) {
         self._provider = provider
         self._ports = ports
@@ -22,6 +24,7 @@ public struct InspectorFormSections: View {
         self.kubeConfigVM = kubeConfigVM
         self.isLocked = isLocked
         self.onFieldChanged = onFieldChanged
+        self.onPortsChanged = onPortsChanged
     }
 
     public var body: some View {
@@ -65,7 +68,7 @@ public struct InspectorFormSections: View {
                     KumaPortMappingEditor(label: "", items: $ports)
                         .disabled(isLocked)
                         .onChange(of: ports) { _, _ in
-                            onFieldChanged()
+                            onPortsChanged()
                         }
                 }
             }

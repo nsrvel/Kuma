@@ -1,14 +1,7 @@
 import Foundation
-import os
 
-/// Runner responsible for background HTTP/HTTPS periodic endpoint health checks.
-/// Supports normalized URLs (google.com, http://..., https://..., localhost:3000).
+/// HTTP health checks — registered with `ExecutionSupervisor` poller (no per-service Task).
 public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable {
-    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "HealthCheckRunner")
-
-    private let stateLock = NSLock()
-    private var activePollTasks: [UUID: Task<Void, Never>] = [:]
-
     public nonisolated init() {}
 
     public func start(
@@ -19,145 +12,31 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
         guard let rawUrl = provider.httpCheckUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !rawUrl.isEmpty else {
             throw ServiceExecutionError.invalidConfiguration("Health Check Target URL is not specified.")
         }
-
-        // Smart URL Normalization
         guard let normalizedUrlString = URLNormalizer.normalize(rawUrl),
               let targetURL = URL(string: normalizedUrlString) else {
-            throw ServiceExecutionError.invalidConfiguration("Invalid Health Check URL: '\(rawUrl)'. Expected format: google.com, http://..., https://..., or localhost:port")
+            throw ServiceExecutionError.invalidConfiguration("Invalid Health Check URL: '\(rawUrl)'.")
         }
-
         let intervalSeconds = max(provider.httpCheckInterval ?? 10, 3)
-        let serviceID = service.id
-
-        // Cancel any existing poller without posting .stopped (avoids Start flash while UI is .starting).
-        cancelPoller(for: serviceID)
-
-        await pipeline.emit(level: "INFO", message: "Starting Health Check for: \(normalizedUrlString) (Interval: \(intervalSeconds)s)")
-
-        let task = Task {
-            let sessionConfig = URLSessionConfiguration.ephemeral
-            sessionConfig.timeoutIntervalForRequest = 10
-            sessionConfig.timeoutIntervalForResource = 10
-            let session = URLSession(configuration: sessionConfig)
-
-            var wasHealthy: Bool? = nil
-            var lastPostedState: ServiceState? = nil
-
-            func postStateIfChanged(_ state: ServiceState) async {
-                guard lastPostedState != state else { return }
-                lastPostedState = state
-                await MainActor.run {
-                    if state == .crashed {
-                        ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: 1)
-                    } else {
-                        ServiceStateNotification.post(serviceID: serviceID, state: state)
-                    }
-                }
-            }
-
-            while !Task.isCancelled {
-                let start = CFAbsoluteTimeGetCurrent()
-                do {
-                    var request = URLRequest(url: targetURL)
-                    request.httpMethod = "GET"
-                    request.setValue("Kuma/4.0 HealthCheck", forHTTPHeaderField: "User-Agent")
-
-                    let (_, response) = try await session.data(for: request)
-                    let latencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-
-                    if let httpResponse = response as? HTTPURLResponse {
-                        let statusCode = httpResponse.statusCode
-                        let statusText = HTTPURLResponse.localizedString(forStatusCode: statusCode)
-                        let isHealthy = (200...399).contains(statusCode)
-
-                        let level = isHealthy ? "INFO" : "WARN"
-                        await pipeline.emit(
-                            level: level,
-                            message: "[HEALTH] GET \(normalizedUrlString) -> \(statusCode) \(statusText) (\(latencyMs)ms)"
-                        )
-
-                        let nextState: ServiceState = isHealthy ? .running : .crashed
-                        await postStateIfChanged(nextState)
-
-                        if wasHealthy == true && !isHealthy && KumaSettingsKey.bool(
-                            forKey: KumaSettingsKey.notifyOnServiceFailure,
-                            defaultValue: true,
-                            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
-                        ) {
-                            await SystemNotificationCenter.shared.send(
-                                .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
-                            )
-                        }
-                        wasHealthy = isHealthy
-                    }
-                } catch {
-                    guard !Task.isCancelled else { break }
-                    let latencyMs = Int((CFAbsoluteTimeGetCurrent() - start) * 1000)
-                    await pipeline.emit(
-                        level: "ERROR",
-                        message: "[HEALTH] GET \(normalizedUrlString) -> Failed: \(error.localizedDescription) (\(latencyMs)ms)"
-                    )
-
-                    await postStateIfChanged(.crashed)
-
-                    if wasHealthy != false && KumaSettingsKey.bool(
-                        forKey: KumaSettingsKey.notifyOnServiceFailure,
-                        defaultValue: true,
-                        fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
-                    ) {
-                        await SystemNotificationCenter.shared.send(
-                            .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
-                        )
-                    }
-                    wasHealthy = false
-                }
-
-                // Sleep interval with cancellation check
-                try? await Task.sleep(nanoseconds: UInt64(intervalSeconds) * 1_000_000_000)
-            }
-        }
-
-        registerTask(task, for: serviceID)
+        await ExecutionSupervisor.shared.register(
+            .pollerHealth(
+                serviceID: service.id,
+                serviceName: service.name,
+                url: targetURL,
+                intervalSeconds: intervalSeconds
+            )
+        )
     }
 
     public func stop(serviceID: UUID) async {
-        cancelPoller(for: serviceID)
-        await MainActor.run {
-            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
-        }
-    }
-
-    private func cancelPoller(for serviceID: UUID) {
-        let task = unregisterTask(for: serviceID)
-        task?.cancel()
+        await ExecutionSupervisor.shared.unregister(serviceID: serviceID)
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
-        checkIsRunning(serviceID: serviceID)
+        if let record = await ExecutionSupervisor.shared.record(for: serviceID) {
+            return record.mode == .poller && record.executionState.isOperational
+        }
+        return false
     }
 
-    public func activeServiceIDs() -> Set<UUID> {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return Set(activePollTasks.compactMap { id, task in task.isCancelled ? nil : id })
-    }
-
-    private func checkIsRunning(serviceID: UUID) -> Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        guard let task = activePollTasks[serviceID] else { return false }
-        return !task.isCancelled
-    }
-
-    private func registerTask(_ task: Task<Void, Never>, for serviceID: UUID) {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        activePollTasks[serviceID] = task
-    }
-
-    private func unregisterTask(for serviceID: UUID) -> Task<Void, Never>? {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return activePollTasks.removeValue(forKey: serviceID)
-    }
+    public func activeServiceIDs() -> Set<UUID> { [] }
 }
