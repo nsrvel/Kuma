@@ -5,6 +5,8 @@ public struct InspectorFormSections: View {
     @Binding public var ports: [KumaPortMappingItem]
     @Binding public var sshAuthType: SSHAuthType
     public var kubeConfigVM: KubeConfigViewModel?
+    public let serviceID: UUID
+    public let isRunning: Bool
     public let isLocked: Bool
     public let onFieldChanged: () -> Void
     public let onPortsChanged: () -> Void
@@ -14,6 +16,8 @@ public struct InspectorFormSections: View {
         ports: Binding<[KumaPortMappingItem]>,
         sshAuthType: Binding<SSHAuthType>,
         kubeConfigVM: KubeConfigViewModel? = nil,
+        serviceID: UUID = UUID(),
+        isRunning: Bool = false,
         isLocked: Bool = false,
         onFieldChanged: @escaping () -> Void = {},
         onPortsChanged: @escaping () -> Void = {}
@@ -22,6 +26,8 @@ public struct InspectorFormSections: View {
         self._ports = ports
         self._sshAuthType = sshAuthType
         self.kubeConfigVM = kubeConfigVM
+        self.serviceID = serviceID
+        self.isRunning = isRunning
         self.isLocked = isLocked
         self.onFieldChanged = onFieldChanged
         self.onPortsChanged = onPortsChanged
@@ -34,6 +40,8 @@ public struct InspectorFormSections: View {
                 InspectorKubernetesFormSection(
                     provider: $provider,
                     kubeConfigVM: kubeConfigVM,
+                    serviceID: serviceID,
+                    isRunning: isRunning,
                     isLocked: isLocked,
                     onFieldChanged: onFieldChanged
                 )

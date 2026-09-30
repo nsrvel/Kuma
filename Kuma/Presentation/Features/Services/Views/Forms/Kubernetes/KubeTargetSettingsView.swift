@@ -4,15 +4,18 @@ public struct KubeTargetSettingsView: View {
     @Binding public var targetName: String
     @Binding public var targetType: KubeTargetType
     @Binding public var usePattern: Bool
+    public var liveResolvedTargetName: String?
 
     public init(
         targetName: Binding<String>,
         targetType: Binding<KubeTargetType>,
-        usePattern: Binding<Bool>
+        usePattern: Binding<Bool>,
+        liveResolvedTargetName: String? = nil
     ) {
         self._targetName = targetName
         self._targetType = targetType
         self._usePattern = usePattern
+        self.liveResolvedTargetName = liveResolvedTargetName
     }
 
     private var showsStableWorkloadHint: Bool {
@@ -47,6 +50,15 @@ public struct KubeTargetSettingsView: View {
                 value: $targetName,
                 placeholder: targetType.placeholder(usePattern: usePattern)
             )
+
+            if let liveResolvedTargetName,
+               !liveResolvedTargetName.isEmpty,
+               usePattern,
+               liveResolvedTargetName != targetName.trimmingCharacters(in: .whitespacesAndNewlines) {
+                Text("Active target: \(liveResolvedTargetName)")
+                    .font(KumaFont.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             if showsStableWorkloadHint {
                 Text("Try Deployment or Service as target type if start fails.")

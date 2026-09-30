@@ -13,6 +13,7 @@ actor ProcessTestIsolation {
 
 enum ProcessTestSupport {
     static func resetProcessWorld() async {
+        KubeLiveTargetDisplay.clearAll()
         await ProcessTestIsolation.shared.resetProcessWorld()
     }
 }

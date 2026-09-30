@@ -44,25 +44,25 @@ public struct ServiceProviderSwitchSubmenu: View {
 
 public struct ServiceGroupsSubmenu: View {
     public let groups: [ServiceGroup]
-    public let selectedGroupIDs: Set<UUID>
+    public let selectedGroupIDsProvider: () -> Set<UUID>
     public let onToggleGroup: (UUID) -> Void
 
     public var body: some View {
         if !groups.isEmpty {
+            let selectedGroupIDs = selectedGroupIDsProvider()
             Menu {
                 ForEach(groups) { group in
-                    Button {
-                        onToggleGroup(group.id)
-                    } label: {
-                        ContextMenuCheckRow(
-                            title: group.name,
-                            isChecked: selectedGroupIDs.contains(group.id)
-                        )
+                    Toggle(isOn: Binding(
+                        get: { selectedGroupIDsProvider().contains(group.id) },
+                        set: { _ in onToggleGroup(group.id) }
+                    )) {
+                        Text(group.name)
                     }
                 }
             } label: {
                 Label("Groups", systemImage: "folder")
             }
+            .id(selectedGroupIDs.sorted { $0.uuidString < $1.uuidString })
         }
     }
 }

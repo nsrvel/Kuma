@@ -5,6 +5,7 @@ public struct ServiceActionContextMenu: View {
     public let snapshot: ServiceCardSnapshot
     public let runtime: ServiceRuntimeState
     public var groupsProvider: () -> [ServiceGroup]
+    public var selectedGroupIDsProvider: () -> Set<UUID>
     public let onToggle: () -> Void
     public let onRestart: () -> Void
     public let onSwitchProvider: (UUID) -> Void
@@ -20,6 +21,7 @@ public struct ServiceActionContextMenu: View {
         snapshot: ServiceCardSnapshot,
         runtime: ServiceRuntimeState,
         groupsProvider: @escaping () -> [ServiceGroup] = { [] },
+        selectedGroupIDsProvider: @escaping () -> Set<UUID> = { [] },
         onToggle: @escaping () -> Void = {},
         onRestart: @escaping () -> Void = {},
         onSwitchProvider: @escaping (UUID) -> Void = { _ in },
@@ -34,6 +36,7 @@ public struct ServiceActionContextMenu: View {
         self.snapshot = snapshot
         self.runtime = runtime
         self.groupsProvider = groupsProvider
+        self.selectedGroupIDsProvider = selectedGroupIDsProvider
         self.onToggle = onToggle
         self.onRestart = onRestart
         self.onSwitchProvider = onSwitchProvider
@@ -67,7 +70,11 @@ public struct ServiceActionContextMenu: View {
 
             ServiceProviderSwitchSubmenu(snapshot: snapshot, onSwitchProvider: onSwitchProvider)
 
-            ServiceGroupsSubmenu(groups: groupsProvider(), selectedGroupIDs: snapshot.groupIDs, onToggleGroup: onToggleGroup)
+            ServiceGroupsSubmenu(
+                groups: groupsProvider(),
+                selectedGroupIDsProvider: selectedGroupIDsProvider,
+                onToggleGroup: onToggleGroup
+            )
 
             Button {
                 onToggleStar()

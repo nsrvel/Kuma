@@ -222,24 +222,21 @@ struct ServicesValidationAndSecurityTests {
         )
     }
 
-    @Test("TC-B04i: resolved kube target updates provider target name")
-    func testKubeResolvedTargetPersistence() {
-        let providerID = UUID()
+    @Test("Services.B04i: resolved kube target is runtime-only and does not mutate provider")
+    func testKubeLiveTargetDisplayDoesNotPersistProvider() {
         let serviceID = UUID()
-        var provider = Provider(
-            id: providerID,
+        let provider = Provider(
             serviceID: serviceID,
             type: .kubernetes,
-            targetName: "redis",
+            targetName: "redis-*",
             usePattern: true
         )
-        let resolved = KubeResolvedTarget(kind: "pod", name: "redis-master-0")
-        let updated = KubeResolvedTargetPersistence.providerApplyingResolvedName(provider: provider, resolved: resolved)
-        #expect(updated?.targetName == "redis-master-0")
-        #expect(updated?.usePattern == false)
-
-        provider.targetName = "redis-master-0"
-        #expect(KubeResolvedTargetPersistence.providerApplyingResolvedName(provider: provider, resolved: resolved) == nil)
+        KubeLiveTargetDisplay.setResolvedName("redis-master-0", for: serviceID)
+        #expect(KubeLiveTargetDisplay.resolvedName(for: serviceID) == "redis-master-0")
+        #expect(provider.targetName == "redis-*")
+        #expect(provider.usePattern == true)
+        KubeLiveTargetDisplay.clear(serviceID: serviceID)
+        #expect(KubeLiveTargetDisplay.resolvedName(for: serviceID) == nil)
     }
 
     @Test("TC-B04h: kubectl port-forward adoption matches command line")

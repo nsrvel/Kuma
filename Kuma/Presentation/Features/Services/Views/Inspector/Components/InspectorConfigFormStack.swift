@@ -110,6 +110,8 @@ public struct InspectorConfigFormStack: View {
                             set: { inspectorVM.sshAuthType = $0 }
                         ),
                         kubeConfigVM: inspectorVM.kubeConfigVM,
+                        serviceID: serviceID,
+                        isRunning: isRunning,
                         isLocked: isLocked,
                         onFieldChanged: {
                             inspectorVM.scheduleAutoSave()

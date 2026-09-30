@@ -8,6 +8,7 @@ enum CreateServiceSaving {
     static func beginCreate(
         workspaceID: UUID,
         inputs: CreateServicePayloadBuilder.DraftInputs,
+        creationDefaults: CreateServiceCreationDefaults,
         serviceRepository: any ServiceRepositoryProtocol,
         onServiceCreated: (() -> Void)?,
         dismiss: @escaping () -> Void,
@@ -16,6 +17,7 @@ enum CreateServiceSaving {
         save(
             workspaceID: workspaceID,
             inputs: inputs,
+            creationDefaults: creationDefaults,
             serviceRepository: serviceRepository,
             onSuccess: {
                 onServiceCreated?()
@@ -29,16 +31,23 @@ enum CreateServiceSaving {
     static func save(
         workspaceID: UUID,
         inputs: CreateServicePayloadBuilder.DraftInputs,
+        creationDefaults: CreateServiceCreationDefaults = CreateServiceCreationDefaults(),
         serviceRepository: any ServiceRepositoryProtocol,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping () -> Void
     ) {
         Task {
             do {
-                let (service, provider, portMappings) = try CreateServicePayloadBuilder.buildPayload(
+                var (service, provider, portMappings) = try CreateServicePayloadBuilder.buildPayload(
                     workspaceID: workspaceID,
                     inputs: inputs
                 )
+                if creationDefaults.starOnCreate {
+                    service.isStarred = true
+                }
+                if let groupID = creationDefaults.initialGroupID {
+                    service.groupIDs = [groupID]
+                }
                 try await serviceRepository.insertService(service, defaultProvider: provider, portMappings: portMappings)
                 onSuccess()
             } catch {

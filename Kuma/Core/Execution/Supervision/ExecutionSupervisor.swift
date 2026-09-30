@@ -156,6 +156,7 @@ public actor ExecutionSupervisor {
             lastFailure: failure
         )
         RunSpool.remove(for: serviceID)
+        KubeLiveTargetDisplay.clear(serviceID: serviceID)
         schedulePublish()
 
         if exitCode != 0 && !intentionalStop && KumaSettingsKey.bool(

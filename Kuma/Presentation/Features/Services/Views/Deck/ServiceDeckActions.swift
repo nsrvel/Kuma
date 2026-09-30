@@ -5,6 +5,7 @@ import SwiftUI
 public struct ServiceDeckActions {
     public let workspaceID: UUID
     public let groups: () -> [ServiceGroup]
+    public let groupIDsForService: (UUID) -> Set<UUID>
     public let onSelect: (UUID) -> Void
     public let onToggle: (UUID) -> Void
     public let onRestart: (UUID) -> Void
@@ -19,6 +20,7 @@ public struct ServiceDeckActions {
     public init(
         workspaceID: UUID,
         groups: @escaping () -> [ServiceGroup],
+        groupIDsForService: @escaping (UUID) -> Set<UUID>,
         onSelect: @escaping (UUID) -> Void,
         onToggle: @escaping (UUID) -> Void,
         onRestart: @escaping (UUID) -> Void,
@@ -32,6 +34,7 @@ public struct ServiceDeckActions {
     ) {
         self.workspaceID = workspaceID
         self.groups = groups
+        self.groupIDsForService = groupIDsForService
         self.onSelect = onSelect
         self.onToggle = onToggle
         self.onRestart = onRestart
@@ -52,6 +55,7 @@ public struct ServiceDeckActions {
             onToggleStar: onToggleStar,
             onToggleDisabled: onToggleDisabled,
             onToggleGroup: onToggleGroup,
+            groupIDsForService: groupIDsForService,
             onDuplicate: onDuplicate,
             onCopyConfig: onCopyConfig,
             onDelete: onDelete,
@@ -76,6 +80,9 @@ extension ServicesDeckViewModel {
         ServiceDeckActions(
             workspaceID: workspaceID,
             groups: { [self] in self.groups },
+            groupIDsForService: { [self] serviceID in
+                self.snapshots.first(where: { $0.id == serviceID })?.groupIDs ?? []
+            },
             onSelect: { [self] id in self.selectService(id) },
             onToggle: { [self] id in self.toggleService(id: id) },
             onRestart: { [self] id in self.restartService(id: id) },

@@ -5,6 +5,7 @@ public struct CreateServiceSheet: View {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "CreateServiceSheet")
 
     public let workspaceID: UUID
+    public let creationDefaults: CreateServiceCreationDefaults
     private let serviceRepository: any ServiceRepositoryProtocol
     public var onServiceCreated: (() -> Void)?
 
@@ -37,10 +38,12 @@ public struct CreateServiceSheet: View {
 
     public init(
         workspaceID: UUID,
+        creationDefaults: CreateServiceCreationDefaults = CreateServiceCreationDefaults(),
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
         onServiceCreated: (() -> Void)? = nil
     ) {
         self.workspaceID = workspaceID
+        self.creationDefaults = creationDefaults
         self.serviceRepository = serviceRepository
         self.onServiceCreated = onServiceCreated
     }
@@ -138,6 +141,7 @@ public struct CreateServiceSheet: View {
         CreateServiceSaving.beginCreate(
             workspaceID: workspaceID,
             inputs: currentDraftInputs,
+            creationDefaults: creationDefaults,
             serviceRepository: serviceRepository,
             onServiceCreated: onServiceCreated,
             dismiss: { dismiss() },

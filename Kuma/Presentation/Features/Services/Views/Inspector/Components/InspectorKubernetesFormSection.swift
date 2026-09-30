@@ -3,8 +3,15 @@ import SwiftUI
 public struct InspectorKubernetesFormSection: View {
     @Binding public var provider: Provider
     public var kubeConfigVM: KubeConfigViewModel?
+    public let serviceID: UUID
+    public let isRunning: Bool
     public let isLocked: Bool
     public let onFieldChanged: () -> Void
+
+    private var liveResolvedTargetName: String? {
+        guard isRunning else { return nil }
+        return KubeLiveTargetDisplay.resolvedName(for: serviceID)
+    }
 
     public var body: some View {
         Group {
@@ -66,7 +73,8 @@ public struct InspectorKubernetesFormSection: View {
                     usePattern: Binding(
                         get: { provider.usePattern ?? true },
                         set: { provider.usePattern = $0; onFieldChanged() }
-                    )
+                    ),
+                    liveResolvedTargetName: liveResolvedTargetName
                 )
                 .disabled(isLocked)
             }
