@@ -27,7 +27,7 @@ Parallel test execution is enabled at the scheme level. Suites that touch global
 
 ## CI
 
-GitHub Actions job **Build & Test (macOS)** on `macos-15` / Xcode 16: SPM cache, DerivedData cache, 15-minute job timeout, up to 4 parallel test workers, 120s per-test allowance, and `TestResults.xcresult` uploaded on failure.
+GitHub Actions job **Build & Test (macOS)** on `macos-15` / Xcode 16: SPM cache, DerivedData cache, 20-minute job timeout, parallel test execution (scheme default), 120s per-test allowance, and `TestResults.xcresult` uploaded on failure.
 
 ## Harnesses
 
