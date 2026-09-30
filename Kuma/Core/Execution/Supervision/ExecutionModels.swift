@@ -15,6 +15,8 @@ public struct ExecutionRecord: Sendable, Equatable {
     public let exitCode: Int32?
     public let startedAt: Date?
     public let lastFailure: String?
+    public let reconnectAttempt: Int?
+    public let reconnectMax: Int?
 
     public nonisolated init(
         serviceID: UUID,
@@ -24,7 +26,9 @@ public struct ExecutionRecord: Sendable, Equatable {
         pid: Int32? = nil,
         exitCode: Int32? = nil,
         startedAt: Date? = nil,
-        lastFailure: String? = nil
+        lastFailure: String? = nil,
+        reconnectAttempt: Int? = nil,
+        reconnectMax: Int? = nil
     ) {
         self.serviceID = serviceID
         self.serviceName = serviceName
@@ -34,6 +38,8 @@ public struct ExecutionRecord: Sendable, Equatable {
         self.exitCode = exitCode
         self.startedAt = startedAt
         self.lastFailure = lastFailure
+        self.reconnectAttempt = reconnectAttempt
+        self.reconnectMax = reconnectMax
     }
 
     public nonisolated var executionState: ServiceExecutionState {
@@ -42,6 +48,10 @@ public struct ExecutionRecord: Sendable, Equatable {
         case .starting: return .starting
         case .running: return .running(pid: pid ?? 0)
         case .stopping: return .stopping
+        case .reconnecting:
+            let attempt = reconnectAttempt ?? 1
+            let max = reconnectMax ?? AutoReconnectPolicy.maxAttempts
+            return .reconnecting(attempt: attempt, maxAttempts: max)
         case .crashed: return .crashed(exitCode: exitCode ?? 1)
         }
     }

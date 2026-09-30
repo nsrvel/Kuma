@@ -18,7 +18,9 @@ struct KumaApp: App {
                 .kumaMainWorkspaceChrome()
                 .onAppear {
                     appDelegate.serviceStateStore = serviceStateStore
-                    RunSpool.purgeAll()
+                    if !SingleInstanceGuard.isTestingEnvironment {
+                        RunSpool.purgeAll()
+                    }
                     serviceStateStore.bindExecutionSupervisor()
                 }
         }

@@ -120,4 +120,22 @@ struct DataPortInitialStateTests {
             #expect(p.category == expectedCategory)
         }
     }
+
+    // MARK: - [TC-A07] Screenshot sample backup decodes
+    @Test("DataPort.A07: docs sample Kuma-Screenshot-Demo.json decodes as KumaBackup")
+    func testScreenshotSampleBackupDecodes() throws {
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot.appendingPathComponent("docs/samples/Kuma-Screenshot-Demo.json")
+        let data = try Data(contentsOf: url)
+        let backup = try DataPortService.parseAnyBackup(from: data)
+        #expect(backup.version == 1)
+        #expect(backup.workspaces.count == 1)
+        #expect(backup.services.count == 8)
+        #expect(backup.providers.count == 8)
+        #expect(Set(backup.providers.map(\.type)).count == 8)
+    }
 }

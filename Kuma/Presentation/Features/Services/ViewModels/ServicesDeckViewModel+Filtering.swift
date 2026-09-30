@@ -32,7 +32,7 @@ extension ServicesDeckViewModel {
                 } else {
                     let state = runtime(for: snapshot.id).status
                     switch state {
-                    case .running, .starting:
+                    case .running, .starting, .reconnecting:
                         if !selectedStatuses.contains(.running) { return false }
                     case .stopped, .stopping:
                         if !selectedStatuses.contains(.stopped) { return false }

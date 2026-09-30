@@ -13,7 +13,7 @@ public enum KumaStatus {
     public static func indicatorColor(for state: ServiceState) -> Color {
         switch state {
         case .stopped:  return idleIndicator
-        case .starting, .stopping: return transitionalIndicator
+        case .starting, .stopping, .reconnecting: return transitionalIndicator
         case .running:  return runningIndicator
         case .crashed:  return failedIndicator
         }
@@ -22,7 +22,7 @@ public enum KumaStatus {
     public static func indicatorColor(for execution: ServiceExecutionState) -> Color {
         switch execution {
         case .idle:     return idleIndicator
-        case .starting, .stopping: return transitionalIndicator
+        case .starting, .stopping, .reconnecting: return transitionalIndicator
         case .running:  return runningIndicator
         case .crashed, .failed: return failedIndicator
         }
@@ -31,7 +31,7 @@ public enum KumaStatus {
     public static func labelColor(for state: ServiceState) -> Color {
         switch state {
         case .stopped:  return Color(nsColor: .secondaryLabelColor)
-        case .starting, .stopping: return Color(nsColor: .secondaryLabelColor)
+        case .starting, .stopping, .reconnecting: return Color(nsColor: .secondaryLabelColor)
         case .running:  return Color(nsColor: .labelColor)
         case .crashed:  return failedIndicator.opacity(0.92)
         }

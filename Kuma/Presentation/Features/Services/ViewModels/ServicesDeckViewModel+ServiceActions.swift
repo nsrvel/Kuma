@@ -122,6 +122,7 @@ extension ServicesDeckViewModel {
         Task {
             do {
                 _ = try await serviceRepository.toggleGroupMembership(serviceID: serviceID, groupID: groupID)
+                await refreshSingleServiceSnapshot(id: serviceID)
                 KumaServiceNotification.postServiceUpdated(serviceID: serviceID, source: KumaServiceNotification.sourceDeck)
             } catch {
                 Self.logger.error("Failed to toggle group membership for service \(serviceID): \(error)")

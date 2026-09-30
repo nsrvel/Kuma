@@ -143,6 +143,7 @@ extension DataPortService {
         public let ngrokAuthToken: String?
         public let monitorProcessName: String?
         public let monitorInterval: Int?
+        public let autoReconnect: Bool?
 
         public nonisolated init(
             id: UUID = UUID(),
@@ -173,7 +174,8 @@ extension DataPortService {
             tunnelTargetUrl: String? = nil,
             ngrokAuthToken: String? = nil,
             monitorProcessName: String? = nil,
-            monitorInterval: Int? = nil
+            monitorInterval: Int? = nil,
+            autoReconnect: Bool? = nil
         ) {
             self.id = id
             self.serviceID = serviceID
@@ -204,6 +206,7 @@ extension DataPortService {
             self.ngrokAuthToken = ngrokAuthToken
             self.monitorProcessName = monitorProcessName
             self.monitorInterval = monitorInterval
+            self.autoReconnect = autoReconnect
         }
 
 

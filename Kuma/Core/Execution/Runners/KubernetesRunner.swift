@@ -39,7 +39,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             kubectlPath: kubectl,
             exec: execConfig
         )
-        try await persistResolvedTargetIfNeeded(service: service, provider: provider, resolved: resolved)
+        KubeLiveTargetDisplay.setResolvedName(resolved.name, for: service.id)
 
         let plan = KubePortForwardPlan.build(
             resolved: resolved,
@@ -82,31 +82,11 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
     public func stop(serviceID: UUID) async {
         await processLauncher.stop(serviceID: serviceID)
+        KubeLiveTargetDisplay.clear(serviceID: serviceID)
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
         await processLauncher.isRunning(serviceID: serviceID)
     }
 
-    private func persistResolvedTargetIfNeeded(
-        service: Service,
-        provider: Provider,
-        resolved: KubeResolvedTarget
-    ) async throws {
-        guard let updated = KubeResolvedTargetPersistence.providerApplyingResolvedName(
-            provider: provider,
-            resolved: resolved
-        ) else { return }
-
-        try await serviceRepository.updateProvider(updated)
-        Self.logger.info(
-            "Persisted resolved Kubernetes target \(resolved.kubectlReference, privacy: .public) for service \(service.name, privacy: .public)"
-        )
-        await MainActor.run {
-            KumaServiceNotification.postServiceUpdated(
-                serviceID: service.id,
-                source: KumaServiceNotification.sourceExecution
-            )
-        }
-    }
 }

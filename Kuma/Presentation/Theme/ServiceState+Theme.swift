@@ -16,6 +16,7 @@ extension ServiceState {
         case .starting: return "play.circle.fill"
         case .running:  return "checkmark.circle.fill"
         case .stopping: return "pause.circle.fill"
+        case .reconnecting: return "arrow.triangle.2.circlepath"
         case .crashed:  return "exclamationmark.triangle.fill"
         }
     }
@@ -36,6 +37,7 @@ extension ServiceExecutionState {
         case .starting: return "play.circle.fill"
         case .running:  return "checkmark.circle.fill"
         case .stopping: return "pause.circle.fill"
+        case .reconnecting: return "arrow.triangle.2.circlepath"
         case .crashed:  return "exclamationmark.triangle.fill"
         case .failed:   return "xmark.octagon.fill"
         }

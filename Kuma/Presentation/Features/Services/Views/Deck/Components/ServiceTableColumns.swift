@@ -96,6 +96,7 @@ public struct ServiceTableActionsCell: View {
                 snapshot: snapshot,
                 runtime: runtime,
                 groupsProvider: groupsProvider,
+                selectedGroupIDsProvider: { handlers.groupIDsForService(snapshot.id) },
                 onToggle: { handlers.onToggle(snapshot.id) },
                 onRestart: { handlers.onRestart(snapshot.id) },
                 onSwitchProvider: { provID in handlers.onSwitchProvider(snapshot.id, provID) },

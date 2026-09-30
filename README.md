@@ -1,8 +1,14 @@
 # Kuma
 
+[![CI](https://github.com/nsrvel/Kuma/actions/workflows/ci.yml/badge.svg)](https://github.com/nsrvel/Kuma/actions/workflows/ci.yml)
+
 Native macOS app for managing local development services — Kubernetes port-forwards, Docker/Podman, shell, SSH tunnels, health checks, and more — organized by workspace.
 
-**Distribution:** [GitHub Releases](https://github.com/nsrvel/Kuma/releases) (not the Mac App Store).
+![Kuma service deck with inspector](docs/images/kuma-deck-screenshot.png)
+
+**Distribution:** [GitHub Releases](https://github.com/nsrvel/Kuma/releases) (not the Mac App Store). DMGs are **not** committed to git (`dist/` is ignored); download binaries from the Releases page.
+
+**Demo workspace for screenshots:** import [`docs/samples/Kuma-Screenshot-Demo.json`](docs/samples/Kuma-Screenshot-Demo.json) via drag-and-drop or deck import (all provider types, fake hosts).
 
 ## Requirements
 
@@ -36,9 +42,9 @@ xcodebuild -scheme Kuma -destination 'platform=macOS' test
 ### Build a DMG locally
 
 ```bash
-chmod +x Scripts/make-dmg.sh
-./Scripts/make-dmg.sh
-# Output: dist/Kuma-<version>.dmg
+make dmg
+# or: ./Scripts/make-dmg.sh
+# Output: dist/Kuma-<version>.dmg (ad-hoc signed unless MACOS_SIGN_IDENTITY is set)
 ```
 
 ### Publish a GitHub Release (maintainers)
@@ -93,11 +99,12 @@ export APPLE_NOTARIZATION_PASSWORD=xxxx-xxxx-xxxx-xxxx
 | `KumaTests/` | Swift Testing suites |
 | `docs/specs/` | Feature specs & invariants |
 | `docs/testing/` | Test matrices |
+| `docs/samples/` | Importable demo workspace JSON |
 | `Scripts/` | DMG packaging & maintainer utilities |
 
 ## Contributing
 
-Issues and PRs welcome on GitHub. For larger changes, check `docs/specs/` and existing patterns in `.agents/AGENTS.md`.
+See [CONTRIBUTING.md](CONTRIBUTING.md). For larger changes, read the relevant file under `docs/specs/`.
 
 ## License
 

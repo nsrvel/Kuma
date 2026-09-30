@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is broken in Kuma
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report. Please redact kubeconfigs, hostnames, and tokens.
+  - type: input
+    id: version
+    attributes:
+      label: Kuma version
+      placeholder: e.g. 1.0.0 from Releases, or main @ commit
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. 14.6, 15.0
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

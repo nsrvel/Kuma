@@ -209,7 +209,8 @@ extension DataPortRepository {
                 tunnelTargetUrl: p.tunnelTargetUrl,
                 ngrokAuthToken: p.ngrokAuthToken,
                 monitorProcessName: p.monitorProcessName,
-                monitorInterval: p.monitorInterval
+                monitorInterval: p.monitorInterval,
+                autoReconnect: p.autoReconnect
             )
         }
 

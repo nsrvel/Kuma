@@ -17,7 +17,7 @@ public struct InspectorHeaderActionButton: View {
 
     public var body: some View {
         let showsStop = showsStopChrome(for: runtime.status)
-        let isBusy = runtime.isLoading || runtime.status == .starting || runtime.status == .stopping
+        let isBusy = runtime.isLoading || runtime.status == .starting || runtime.status == .stopping || runtime.status == .reconnecting
         let startBlocked = !showsStop && isStartDisabled
 
         Button {
@@ -45,7 +45,7 @@ public struct InspectorHeaderActionButton: View {
 
     private func showsStopChrome(for status: ServiceState) -> Bool {
         switch status {
-        case .running, .starting, .stopping:
+        case .running, .starting, .stopping, .reconnecting:
             return true
         case .stopped, .crashed:
             return false

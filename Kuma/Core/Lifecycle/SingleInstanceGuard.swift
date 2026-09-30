@@ -35,6 +35,7 @@ public enum SingleInstanceGuard {
 
     /// Indicates whether the application is running in an automated test environment.
     public static var isTestingEnvironment: Bool {
+        ProcessInfo.processInfo.environment["KUMA_UNIT_TESTS"] != nil ||
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ||
         ProcessInfo.processInfo.environment["XCTestSessionIdentifier"] != nil ||
         ProcessInfo.processInfo.environment["XCTestBundlePath"] != nil ||

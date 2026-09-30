@@ -43,6 +43,8 @@ public enum ServiceStateNotification {
             return .idle
         case .starting:
             return .starting
+        case .reconnecting:
+            return .reconnecting(attempt: 1, maxAttempts: AutoReconnectPolicy.maxAttempts)
         case .running:
             if existing == .stopping {
                 return nil

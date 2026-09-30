@@ -122,6 +122,7 @@ struct UIOptimizationTests {
         let actions = ServiceDeckActions(
             workspaceID: wsID,
             groups: { [] },
+            groupIDsForService: { _ in [] },
             onSelect: { _ in },
             onToggle: { _ in },
             onRestart: { _ in },

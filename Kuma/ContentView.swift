@@ -80,9 +80,6 @@ struct ContentView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaCreateServiceRequested)) { _ in
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
-                sidebarViewModel.selectedID = .stable("all-services")
-            }
             showCreateServiceSheet = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaOpenOnboarding)) { _ in
@@ -97,7 +94,10 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showCreateServiceSheet) {
             if let activeWorkspace = workspaceStore.activeWorkspace {
-                CreateServiceSheet(workspaceID: activeWorkspace.id) {
+                CreateServiceSheet(
+                    workspaceID: activeWorkspace.id,
+                    creationDefaults: createServiceDefaultsForCurrentSidebar()
+                ) {
                     NotificationCenter.default.post(name: .kumaServiceCreated, object: nil)
                 }
             }
@@ -114,6 +114,14 @@ struct ContentView: View {
         .withKumaAlerts()
     }
 
+
+    private func createServiceDefaultsForCurrentSidebar() -> CreateServiceCreationDefaults {
+        let selected = sidebarViewModel.selectedID
+        return CreateServiceCreationDefaults(
+            starOnCreate: selected == .stable("starred-services"),
+            initialGroupID: sidebarViewModel.groupIDForSelectedRow(selected)
+        )
+    }
 
     @ViewBuilder
     private func detailView(for selectedID: UUID?) -> some View {

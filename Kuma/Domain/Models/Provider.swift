@@ -43,6 +43,9 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
     public var monitorProcessName: String?
     public var monitorInterval: Int?
 
+    /// When true, unexpected managed-process disconnects trigger automatic reconnect (Kubernetes, SSH, Shell).
+    public var autoReconnect: Bool?
+
     public var createdAt: Date
     public var updatedAt: Date
 
@@ -76,6 +79,7 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
         ngrokAuthToken: String? = nil,
         monitorProcessName: String? = nil,
         monitorInterval: Int? = nil,
+        autoReconnect: Bool? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -108,8 +112,13 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
         self.ngrokAuthToken = ngrokAuthToken
         self.monitorProcessName = monitorProcessName
         self.monitorInterval = monitorInterval
+        self.autoReconnect = autoReconnect
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    public nonisolated var isAutoReconnectEnabled: Bool {
+        autoReconnect == true && type.supportsAutoReconnect
     }
 
     public nonisolated var displayName: String {

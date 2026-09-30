@@ -25,6 +25,13 @@ if [[ -n "${MACOS_SIGN_IDENTITY:-}" ]]; then
   if [[ -n "${APPLE_TEAM_ID:-}" ]]; then
     XCODEBUILD_ARGS+=(DEVELOPMENT_TEAM="$APPLE_TEAM_ID")
   fi
+else
+  # Local/CI ad-hoc: avoid Xcode Automatic + team when no Mac Development cert is installed.
+  XCODEBUILD_ARGS+=(
+    CODE_SIGN_STYLE=Manual
+    CODE_SIGN_IDENTITY=-
+    DEVELOPMENT_TEAM=
+  )
 fi
 
 xcodebuild "${XCODEBUILD_ARGS[@]}" build

@@ -18,13 +18,14 @@ public struct StatusPillView: View {
             self.showsOrbit = false
             self.showsGlow = false
         } else {
-            self.text = runtime.status.title
+            self.text = runtime.statusTitle
             self.indicatorColor = runtime.status.color
             self.labelColor = runtime.status.labelColor
             self.status = runtime.status
             let transitional = runtime.isLoading
                 || runtime.status == .starting
                 || runtime.status == .stopping
+                || runtime.status == .reconnecting
             self.showsOrbit = transitional
             self.showsGlow = runtime.status == .running && !transitional
         }

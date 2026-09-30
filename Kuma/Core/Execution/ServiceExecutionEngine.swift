@@ -76,6 +76,7 @@ public final class ServiceExecutionEngine: Sendable {
 
         let runner = runner(for: provider.type)
         try await runner.start(service: service, provider: provider)
+        await ExecutionSupervisor.shared.beginReconnectSession(serviceID: serviceID)
     }
 
     public func stop(serviceID: UUID) async {
@@ -106,6 +107,10 @@ public final class ServiceExecutionEngine: Sendable {
         containerRunner.forceUnregister(serviceID: serviceID)
         await processRegistry.stop(serviceID: serviceID)
         await ExecutionSupervisor.shared.unregister(serviceID: serviceID)
+    }
+
+    func activeProvider(for serviceID: UUID) async -> Provider? {
+        await resolveActiveProvider(for: serviceID)
     }
 
     private func resolveActiveProvider(for serviceID: UUID) async -> Provider? {

@@ -106,6 +106,7 @@ public struct ServiceCardView: View, Equatable {
                     snapshot: snapshot,
                     runtime: runtime,
                     groupsProvider: deckActions.groups,
+                    selectedGroupIDsProvider: { deckActions.groupIDsForService(snapshot.id) },
                     onToggle: { deckActions.onToggle(snapshot.id) },
                     onRestart: { deckActions.onRestart(snapshot.id) },
                     onSwitchProvider: { deckActions.onSwitchProvider(snapshot.id, $0) },
@@ -122,6 +123,10 @@ public struct ServiceCardView: View, Equatable {
     }
 
     private var targetSubtitle: String {
+        if snapshot.providerCategory == .kubernetes,
+           let live = KubeLiveTargetDisplay.resolvedName(for: snapshot.id) {
+            return "k8s: \(live)"
+        }
         if !snapshot.subtitle.isEmpty {
             return snapshot.subtitle
         }
