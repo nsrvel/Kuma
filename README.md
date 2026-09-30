@@ -1,5 +1,7 @@
 # Kuma
 
+[![CI](https://github.com/nsrvel/Kuma/actions/workflows/ci.yml/badge.svg)](https://github.com/nsrvel/Kuma/actions/workflows/ci.yml)
+
 Native macOS app for managing local development services — Kubernetes port-forwards, Docker/Podman, shell, SSH tunnels, health checks, and more — organized by workspace.
 
 ![Kuma service deck with inspector](docs/images/kuma-deck-screenshot.png)
@@ -97,11 +99,12 @@ export APPLE_NOTARIZATION_PASSWORD=xxxx-xxxx-xxxx-xxxx
 | `KumaTests/` | Swift Testing suites |
 | `docs/specs/` | Feature specs & invariants |
 | `docs/testing/` | Test matrices |
+| `docs/samples/` | Importable demo workspace JSON |
 | `Scripts/` | DMG packaging & maintainer utilities |
 
 ## Contributing
 
-Issues and PRs welcome on GitHub. For larger changes, check `docs/specs/` and existing patterns in `.agents/AGENTS.md`.
+See [CONTRIBUTING.md](CONTRIBUTING.md). For larger changes, read the relevant file under `docs/specs/`.
 
 ## License
 

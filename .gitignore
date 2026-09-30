@@ -19,6 +19,9 @@ build_output*.log
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 
+# Stray local screenshots (committed assets live under docs/images/)
+/Screenshot*.png
+
 # macOS system files
 .DS_Store
 .AppleDouble
