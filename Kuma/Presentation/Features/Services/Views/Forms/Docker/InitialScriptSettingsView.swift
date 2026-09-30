@@ -2,138 +2,159 @@ import SwiftUI
 
 // MARK: - InitialScriptSettingsView
 
-/// Pre-startup shell script editor with progressive disclosure inline expansion.
+/// Pre-startup shell script: file on disk (card) or inline snippet.
 public struct InitialScriptSettingsView: View {
     @Binding public var initialScript: String
+    @Binding public var initialScriptPath: String
     public var isLocked: Bool
     public var onSave: () -> Void
 
     @State private var isExpanded: Bool = false
+    @State private var sourceMode: KumaDualSourceMode = .chooseFile
     @State private var draftScript: String = ""
+    @State private var draftPath: String = ""
 
     public init(
         initialScript: Binding<String>,
+        initialScriptPath: Binding<String>,
         isLocked: Bool = false,
         onSave: @escaping () -> Void = {}
     ) {
         self._initialScript = initialScript
+        self._initialScriptPath = initialScriptPath
         self.isLocked = isLocked
         self.onSave = onSave
     }
 
     public var body: some View {
         Group {
-            if !isExpanded {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Startup Script")
-                            .font(KumaFont.body)
-                        Text(summaryText)
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Button("Configure") {
-                        draftScript = initialScript
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            isExpanded = true
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label("Startup Script (sh / bash)", systemImage: "terminal.fill")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                isExpanded = false
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    KumaCodeEditor(
-                        code: $draftScript,
-                        placeholder: "#!/bin/sh\necho 'Preparing database migrations...'\n# Add any pre-startup commands here",
-                        minHeight: 140
-                    )
-
-                    HStack {
-                        Button("Cancel") {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                isExpanded = false
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Button("Done") {
-                            initialScript = draftScript
-                            onSave()
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                isExpanded = false
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                    }
-                }
-                .padding(12)
-                .background(Color.primary.opacity(0.02))
-                .cornerRadius(10)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-                )
-            }
+            if !isExpanded { collapsedContent } else { expandedPanel }
         }
         .onChange(of: isLocked) { _, locked in
-            if locked && isExpanded {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    isExpanded = false
-                }
+            if locked && isExpanded { collapseEditor() }
+        }
+        .onDisappear { isExpanded = false }
+        .onChange(of: draftPath) { _, newPath in
+            guard isExpanded, sourceMode == .chooseFile else { return }
+            applyFileSelection(newPath)
+        }
+    }
+
+    @ViewBuilder
+    private var collapsedContent: some View {
+        let path = initialScriptPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !path.isEmpty {
+            VStack(alignment: .leading, spacing: KumaSpacing.sm) {
+                Text("Startup Script")
+                    .font(KumaFont.body)
+                KumaAttachedFileCard(
+                    path: path,
+                    systemImage: "terminal.fill",
+                    isLocked: isLocked,
+                    onChange: { openEditor(preferInline: false) },
+                    onRemove: {
+                        initialScriptPath = ""
+                        onSave()
+                    },
+                    onRevealInFinder: { KumaScriptFileSupport.revealInFinder(path: path) }
+                )
             }
+        } else {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Startup Script")
+                        .font(KumaFont.body)
+                    Text(summaryText)
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Configure") {
+                    openEditor(preferInline: !initialScript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isLocked)
+            }
+        }
+    }
+
+    private var expandedPanel: some View {
+        KumaFormInlinePanel(
+            headerTitle: "Startup Script (sh / bash)",
+            headerIcon: "terminal.fill",
+            closeAccessibilityLabel: "Close startup script editor",
+            showsCommitFooter: sourceMode == .pasteYAML,
+            onCancel: { cancelEditor() },
+            onPrimary: { commitPasteAndCollapse() }
+        ) {
+            InitialScriptSettingsExpandedContent(
+                sourceMode: $sourceMode,
+                draftPath: $draftPath,
+                draftScript: $draftScript
+            )
         }
     }
 
     private var summaryText: String {
         let trimmed = initialScript.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            return "No startup script configured."
-        }
+        if trimmed.isEmpty { return "No startup script configured." }
         let lineCount = trimmed.components(separatedBy: .newlines).count
-        return "\(lineCount) \(lineCount == 1 ? "line" : "lines") configured"
+        return "Paste Script · \(lineCount) \(lineCount == 1 ? "line" : "lines")"
+    }
+
+    private func openEditor(preferInline: Bool) {
+        draftScript = initialScript
+        draftPath = initialScriptPath
+        sourceMode = inferredMode(path: initialScriptPath, script: initialScript, preferInline: preferInline)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isExpanded = true }
+    }
+
+    private func applyFileSelection(_ path: String) {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        initialScriptPath = trimmed
+        if !trimmed.isEmpty { initialScript = "" }
+        onSave()
+    }
+
+    private func commitPasteAndCollapse() {
+        initialScript = draftScript
+        initialScriptPath = ""
+        onSave()
+        collapseEditor()
+    }
+
+    private func cancelEditor() {
+        if sourceMode == .pasteYAML {
+            draftScript = initialScript
+        } else {
+            draftPath = initialScriptPath
+        }
+        collapseEditor()
+    }
+
+    private func collapseEditor() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isExpanded = false }
+    }
+
+    private func inferredMode(path: String, script: String, preferInline: Bool) -> KumaDualSourceMode {
+        if !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .chooseFile }
+        if !script.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .pasteYAML }
+        return preferInline ? .pasteYAML : .chooseFile
     }
 }
 
 #Preview {
     struct PreviewWrapper: View {
-        @State private var script = "echo 'Running migrations...'\nnpx prisma migrate deploy"
+        @State private var script = ""
+        @State private var path = ""
 
         var body: some View {
-            KumaFormSection(
-                icon: "terminal.fill",
-                title: "Initial Script"
-            ) {
-                InitialScriptSettingsView(initialScript: $script)
+            KumaFormSection(icon: "terminal.fill", title: "Configuration") {
+                InitialScriptSettingsView(initialScript: $script, initialScriptPath: $path)
             }
             .padding()
-            .frame(width: 500)
+            .frame(width: 420)
             .background(KumaColors.canvasBackground)
         }
     }

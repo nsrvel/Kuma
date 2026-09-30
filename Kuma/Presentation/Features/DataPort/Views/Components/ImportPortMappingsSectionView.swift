@@ -32,7 +32,7 @@ public struct ImportPortMappingsSectionView: View {
                             .fill(Color.green)
                             .frame(width: 5, height: 5)
 
-                        Text("localhost:\(port.localPort)")
+                        Text(verbatim: "localhost:\(KumaPortFormatting.plain(port.localPort))")
                             .font(.system(size: 11.5, design: .monospaced))
                             .foregroundStyle(.primary)
 
@@ -40,7 +40,7 @@ public struct ImportPortMappingsSectionView: View {
                             .font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(.tertiary)
 
-                        Text("\(port.remotePort)/TCP")
+                        Text(verbatim: "\(KumaPortFormatting.plain(port.remotePort))/TCP")
                             .font(.system(size: 11.5, design: .monospaced))
                             .foregroundStyle(.secondary)
 

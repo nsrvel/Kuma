@@ -15,7 +15,7 @@
 > - `Kuma/Presentation/Features/Workspace/Views/Components/InactiveWorkspaceRow.swift`  
 > - `Kuma/Presentation/Features/Workspace/Views/Components/NewWorkspaceBottomButton.swift`  
 > - `Kuma/Presentation/Features/Workspace/Views/Components/WorkspaceAvatarPickerView.swift`  
-> - `Kuma/Presentation/Features/Workspace/Views/Components/WorkspaceDangerZoneSection.swift`  
+> - `Kuma/Presentation/Features/Workspace/Views/Components/WorkspaceFormDeleteRow.swift`  
 > **Test Suite Target:** `KumaTests/Features/Workspace/`  
 > - `WorkspaceInitialStateTests.swift` (Kategori A: Baseline Default Workspace & Init)  
 > - `WorkspaceValidationAndSecurityTests.swift` (Kategori B: Name validation, Image downsampling, POSIX permissions, Base64 roundtrip)  
@@ -49,7 +49,7 @@ graph TD
     subgraph FormSheetModal [Workspace Form Sheet]
         FormSheetCreate & FormSheetEdit --> AvatarPicker[WorkspaceAvatarPickerView: Avatar, Hover Camera, OpenPanel]
         FormSheetCreate & FormSheetEdit --> NameField[KumaTextField: Workspace Name autofocus]
-        FormSheetEdit --> DangerZone[WorkspaceDangerZoneSection: Delete button if count > 1]
+        FormSheetEdit --> DeleteRow[WorkspaceFormDeleteRow: Delete if count > 1]
     end
 
     AvatarPicker -->|Choose Image| ImgStore[WorkspaceImageStore.shared.saveWorkspaceImage]
@@ -111,7 +111,7 @@ graph TD
    - `WorkspaceRepository` conforms to `Sendable` via GRDB `DatabaseWriter` thread safety.
    - `WorkspaceImageStore` methods are nonisolated and thread-safe (`atomic` writes, `NSCache`).
 6. **HIG Compliance & View Modularity (< 150 Lines)**:
-   - Every SwiftUI view must stay under ~150 lines. Large sub-sections (e.g. `dangerZoneSection` in `WorkspaceFormSheet`) MUST be decomposed into modular components (`WorkspaceDangerZoneSection.swift`).
+   - Every SwiftUI view must stay under ~150 lines. Destructive actions in the form sheet use `WorkspaceFormDeleteRow` (inline row, no separate danger-zone section).
    - All interactive items (avatar picker, popover rows, bottom button) must have explicit accessibility labels and keyboard shortcuts (`⌘1-⌘9`, `ESC`, `Enter`).
 
 ---

@@ -55,13 +55,17 @@
 ### DATA-01: `customKubeConfigPath` (legacy)
 - **Status**: Column exists via migration `v4_provider_custom_kubeconfig`; `Provider+Record` persists the field. **No UI** writes this value — prefer `kubeConfigID` + Settings default kube path. `KubeConfigMaterializer` still honors legacy path on import/migration for backward compatibility.
 
-### DATA-02: Uncommitted Text Discarded on Inspector Dismiss
-- **Location**: [`ServiceInspectorView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift) — `onDisappear`
-- **Detail**: `onDisappear` calls `inspectorVM.cancelAutoSave()` **without committing**. If a user edits a field and closes the inspector within the 300ms debounce window, changes are permanently dropped.
+### DATA-02: Uncommitted Text Discarded on Inspector Dismiss — **Fixed**
+- **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift), [`ServiceInspectorViewModel+AutoSave.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel+AutoSave.swift)
+- **Resolution**: `onDisappear` flushes pending auto-save; revision counter commits any dirty state even when the debounce task already completed. **TC-E01** / **TC-E01b**.
 
 ### DATA-03: Global Log Wipe Instead of Per-Service Clear — **Fixed**
 - **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift)
 - **Resolution**: Clear logs calls `LogAggregator.shared.clear(serviceID:)` scoped to the active service only.
+
+### UX: Inspector header Start / Stop
+- **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift), [`KumaPrimaryButton.swift`](Kuma/Presentation/Components/KumaPrimaryButton.swift)
+- **Behavior**: Compact header toggle uses `KumaPrimaryButtonStyle.inspectorToggle` — **Start** fill is `Color.accentColor` (same as onboarding primary); **Stop** fill is `KumaStatus.destructiveButtonFill` (saturated button red, not status-dot coral); white label, shared stroke/shadow/press treatment. Busy states block taps via `allowsHitTesting` so fill does not macOS-disable fade.
 
 ---
 
@@ -87,20 +91,12 @@
 
 ## 5. CRITICAL: Deck ↔ Inspector State Desynchronization
 
-### SYNC-01: Inspector Flattens Runtime State to Boolean — **Fixed (partial)**
-- **Location**: [`ServiceInspectorViewModel.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift), [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
-- **Resolution**: Inspector UI and toggles use `ServiceStateStore` / `ServiceExecutionState`; `toggleRunning` mutates the store (`.idle` after stop). Legacy `isRunning` getter may remain for compat but is no longer the source of truth.
-- **Rule Violated**: AGENTS.md §2 — *"Enums Over Multi-Booleans"*
-- **Detail**: Inspector tracks runtime state via `isRunning: Bool`. States `.starting`, `.stopping`, and `.crashed` are **flattened to `false`**. `InspectorRunningBanner` branches for these states are dead code.
-- **Chain**:
-  ```
-  ProcessRegistry → .kumaServiceStateChanged(ServiceState) 
-  → ServiceInspectorView: inspectorVM.isRunning = state.isOperational  // .starting/.crashed → false
-  → InspectorStatusHeader receives ServiceRuntimeState(status: isRunning ? .running : .stopped)
-  → .starting / .stopping / .crashed states NEVER reach UI
-  ```
+### SYNC-01: Inspector Flattens Runtime State to Boolean — **Fixed**
+- **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift), [`ServiceInspectorViewModel`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift)
+- **Resolution**: Inspector reads `ServiceStateStore` via `executionState` / `ServiceRuntimeState(executionState:)` for header, lock, and banner; `.starting` / `.stopping` / `.crashed` are no longer flattened to a lone `isRunning` binding.
 
 ### SYNC-02: Inspector Ignores Deck Mutations — **Fixed (partial)**
+- **SYNC-02b**: [`ServiceInspectorView`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift) handles `.kumaServiceDeleted` via `clearAfterExternalDeletion()` (**TC-C12**).
 - **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
 - **Resolution**: Inspector reloads on `.kumaServiceUpdated` (skips `source == inspector`) and `.kumaGroupsUpdated`; service delete is handled by Deck (close inspector + clear selection). Previously missing observers:
   - `.kumaServiceUpdated` — provider switch, rename, star, disable from Deck
@@ -109,8 +105,8 @@
 - **Impact**: Inspector displays stale data after any Deck-initiated mutation until manually reopened.
 
 ### SYNC-03: Full Workspace Reload on Every Single Keystroke — **Fixed (partial)**
-- **Detail**: Deck now uses `refreshSingleServiceSnapshot` for many single-service mutations; inspector-sourced updates still refresh one card instead of full workspace where possible.
-- **Remaining**: Inspector auto-save may still post `.kumaServiceUpdated` frequently — deck skips self-originated deck actions via `KumaServiceNotification.sourceDeck`.
+- **Detail**: Deck uses `refreshSingleServiceSnapshot` for single-service mutations; duplicate/delete/provider-switch error paths no longer call `loadWorkspaceAsync` (**TC-C11**).
+- **Remaining**: Inspector auto-save may still post `.kumaServiceUpdated` frequently — deck skips deck-sourced events via `KumaServiceNotification.sourceDeck`.
 
 ### SYNC-04: Optimistic Update Overwrite Race — **Fixed (partial)**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckViewModel+ServiceActions.swift`](Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel+ServiceActions.swift)
@@ -120,126 +116,117 @@
 
 ## 6. HIGH: Layer Boundary Violations
 
-### LAYER-01: Core → Presentation Import
-- **Location**: [`ServiceRepository.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Database/Repositories/ServiceRepository.swift) — `fetchSnapshots()`
-- **Rule Violated**: AGENTS.md §1 — *"Lower layers NEVER import higher layers."*
-- **Detail**: `ServiceRepository` (Core layer) directly imports and returns `ServiceCardSnapshot` from `Presentation/Features/Services/Models/`.
+### LAYER-01: Core → Presentation Import — **Fixed**
+- **Location**: [`ServiceRepository+DeckItems.swift`](Kuma/Core/Database/Repositories/ServiceRepository+DeckItems.swift), [`ServiceDeckItem.swift`](Kuma/Domain/Models/ServiceDeckItem.swift), [`ServiceCardSnapshot.swift`](Kuma/Presentation/Features/Services/Models/ServiceCardSnapshot.swift)
+- **Resolution**: Repository returns **Domain** `ServiceDeckItem` only (`fetchDeckItems` / `fetchDeckItem`). Presentation maps to `ServiceCardSnapshot`: card subtitle is **service description** when set, else **active provider `resolvedTarget`**, else empty (UI falls back to provider category label); **search key** indexes name, description, target, provider labels, and local ports for deck filter.
 
-### LAYER-02: Domain Imports SwiftUI
-- **Locations**: 
-  - [`ProviderCategory.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Domain/Enums/ProviderCategory.swift) — `import SwiftUI`, declares `Color`, `LinearGradient`
-  - [`ServiceEnums.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Domain/Enums/ServiceEnums.swift) — `import SwiftUI`, declares `Color`
-- **Rule Violated**: AGENTS.md §1 — *"Domain/ → Pure Swift models, enums (ZERO UI / DB dependencies)"*
-- **Detail**: Presentation tokens (`Color`, `LinearGradient`, SF Symbol mappings) are defined inside Domain enums.
+### LAYER-02: Domain Imports SwiftUI — **Fixed**
+- **Resolution**: Provider chrome (`Color`, `LinearGradient`) moved to [`ProviderCategory+Theme.swift`](Kuma/Presentation/Theme/ProviderCategory+Theme.swift). Domain [`ProviderCategory.swift`](Kuma/Domain/Enums/ProviderCategory.swift) is Foundation-only.
 
-### LAYER-03: UI Enums in Domain Layer
-- **Location**: [`ServiceEnums.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Domain/Enums/ServiceEnums.swift)
-- **Detail**: `DeckViewMode` (`.card` / `.table`) and `ServiceStatusFilterOption` are purely presentation-layer view configs dumped into Domain.
+### LAYER-03: UI Enums in Domain Layer — **Fixed**
+- **Resolution**: `DeckViewMode`, `ServiceStatusFilterOption`, and `ServiceSortOption` live in [`ServicesDeckUIEnums.swift`](Kuma/Presentation/Features/Services/Models/ServicesDeckUIEnums.swift).
 
-### LAYER-04: Struct in Enums Folder
-- **Location**: [`ServiceRuntimeState.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Domain/Enums/ServiceRuntimeState.swift)
-- **Detail**: `ServiceRuntimeState` is a `struct`, not an `enum`, but placed in `Domain/Enums/`.
+### LAYER-04: Struct in Enums Folder — **Fixed**
+- **Location**: [`ServiceRuntimeState.swift`](Kuma/Domain/Models/ServiceRuntimeState.swift)
+- **Resolution**: Moved from `Domain/Enums/` to `Domain/Models/`.
 
 ---
 
 ## 7. HIGH: Performance & Idle Efficiency
 
-### PERF-01: Sequential Actor Crossing Loop (N×Actor Hops)
-- **Location**: [`ServicesDeckViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel.swift) — `loadWorkspaceAsync()`
-- **Detail**: 
-  ```swift
-  for snapshot in loaded {
-      let isProcessActive = await ProcessRegistry.shared.isRunning(serviceID: snapshot.id)
-  }
-  ```
-  For 50 services → 50 serial actor crossings to `ProcessRegistry`. Should be a single batch lookup.
+### PERF-01: Sequential Actor Crossing Loop (N×Actor Hops) — **Fixed**
+- **Location**: [`ServicesDeckViewModel+WorkspaceLoad.swift`](Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel+WorkspaceLoad.swift)
+- **Resolution**: `ServiceStateStore.refreshProcessStates(for: serviceIDs)` batch via `ProcessRegistry.runningStates`. **TC-D04**.
 
-### PERF-02: O(n) Array Truncation in LogAggregator
-- **Location**: [`LogAggregator.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/LogAggregator.swift) line 51
-- **Detail**: `entries.removeFirst(entries.count - maxEntries)` shifts all remaining elements. Under rapid streaming with 2000-element buffer, this repeatedly shifts thousands of elements. Needs circular ring buffer.
+### PERF-02: O(n) Array Truncation in LogAggregator — **Fixed**
+- **Location**: [`LogChronologicalBuffer.swift`](Kuma/Core/Execution/LogChronologicalBuffer.swift), [`LogAggregator.swift`](Kuma/Core/Execution/LogAggregator.swift)
+- **Resolution**: Fixed-capacity ring buffer with O(1) eviction. **TC-E04**.
 
-### PERF-03: MainActor Task Flooding from Log Pipeline
-- **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `makeLogPipeline()`
-- **Detail**: Every stdout line creates **two** unthrottled tasks (`Task { @MainActor in LogAggregator... }` + `Task { await LogFileWriter... }`). At 500 lines/sec → 1,000 tasks/sec flooding the MainActor runloop.
+### PERF-03: MainActor Task Flooding from Log Pipeline — **Fixed**
+- **Location**: [`ServiceLogPipeline.swift`](Kuma/Core/Execution/Logging/ServiceLogPipeline.swift)
+- **Resolution**: ~30Hz batching to `LogAggregator.appendBatch`; UI append gated on `deliversToUI`. **TC-E03**.
 
-### PERF-04: LiveLogsView Body Computation
-- **Location**: [`LiveLogsView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift) line 36
-- **Detail**: `Array(Set(logAggregator.entries.map(\.serviceName))).sorted()` runs inside the view body. Every appended log re-maps, deduplicates, and sorts on the MainActor.
+### PERF-04: LiveLogsView Body Computation — **Fixed**
+- **Location**: [`LiveLogsView.swift`](Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift)
+- **Resolution**: `changeToken` drives `displayedLogs`; service picker uses `availableServiceNames` maintained by aggregator.
 
-### PERF-05: 10 Concurrent Notification Loops — **Fixed (partial)**
+### PERF-05: 10 Concurrent Notification Loops — **Fixed**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift)
-- **Resolution**: Deck uses consolidated `.onReceive` handlers instead of multiple infinite `.task` notification loops (reduces duplicate listeners and rebuild churn).
+- **Resolution**: Single merged `AnyPublisher` + `switch` handler (no per-notification `.task` loops).
 
-### PERF-06: ISO8601DateFormatter Created on Every Flush
-- **Location**: [`LogFileWriter.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/LogFileWriter.swift) line 67
-- **Detail**: `let dateFormatter = ISO8601DateFormatter()` instantiated inside `flushBuffer()` on every flush cycle instead of being cached.
+### PERF-06: ISO8601DateFormatter Created on Every Flush — **Fixed**
+- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
+- **Resolution**: `isoFormatter` cached on `LogFileWriter` actor.
 
 ### PERF-07: Unbounded Disk Log Growth — **Fixed (partial)**
 - **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
 - **Resolution**: Flush path reads `KumaSettingsKey.logRetentionLimit` and enforces retention on disk (see Settings log retention picker).
 
-### PERF-10: Deck Card Observation Fan-Out — **Fixed (partial)**
-- **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`ServiceDeckActions.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServiceDeckActions.swift), [`ServiceCardView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardView.swift)
-- **Detail**: Grid parent read `ServiceStateStore` for every row; each card held `ServicesDeckViewModel` and `groups`, causing O(n) invalidation on unrelated deck mutations.
-- **Resolution**: Runtime isolated in `ServiceCardRow`; cards use `ServiceDeckActions` environment (closures, not `@Observable` VM); table status/actions cells read store per row; Canvas brand icons use `drawingGroup` to reduce repaint cost.
+### PERF-10: Deck Card Observation Fan-Out — **Fixed**
+- **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`SyncedServiceRuntime.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift), [`ServiceTableColumns.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceTableColumns.swift)
+- **Resolution**: Row runtime synced via `@State` + per-ID `.kumaServiceStateChanged` (store not read in `body`); `ServiceDeckActions` environment; **TC-G02** source + headless checks.
 
-### PERF-08: Triple Database Trip on Inspector Open
-- **Location**: [`ServiceInspectorViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift) — `loadService()`
-- **Detail**: Makes 3 distinct DB roundtrips (`fetchService`, `fetchProviders`, `fetchPortMappings`) instead of a single unified query.
+### PERF-08: Triple Database Trip on Inspector Open — **Fixed**
+- **Location**: [`ServiceInspectorViewModel+Loading.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel+Loading.swift), [`ServiceRepository+CRUD.swift`](Kuma/Core/Database/Repositories/ServiceRepository+CRUD.swift)
+- **Resolution**: `fetchServiceDetail` single read transaction. **TC-C01**.
 
-### PERF-09: Idle State Not Zero-Effort
-- **Summary**: When NO services are running:
-  - 10 notification listener tasks still active on Deck
-  - `LogAggregator` still observable (triggers body recompute on any property access)
-  - No throttling/gating on notification observers
-  - **Should be**: Zero active polling, zero timers, zero background work when idle.
+### PERF-09: Idle State Not Zero-Effort — **Fixed**
+- **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckRuntimeObservation.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckRuntimeObservation.swift)
+- **Resolution**: Idle gate on state-changed notifications; `notifyExecutionStatesChanged()` skips filter recompute unless status filter/sort active. **TC-E05**, **TC-E05b**.
+
+### UX-01 / PERF-11: Deck Card Grid Layout — **Fixed**
+- **Location**: [`ServicesDeckContentBodyView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServicesDeckContentBodyView.swift), [`KumaTheme.Deck`](Kuma/Presentation/Theme/KumaTheme.swift)
+- **Resolution**: Native `LazyVGrid` + `GridItem(.adaptive(minimum:maximum:))` (capped card width, no `maximum: .infinity`); filter/sort does not spring-animate the grid. **TC-G03** source audit.
 
 ---
 
 ## 8. HIGH: Broken / Incomplete Runner Features
 
-### RUN-01: Docker/Podman YAML Config Ignored
-- **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `startContainer()`
-- **Detail**: `provider.yamlConfig` is never written to disk or passed via `-f` to `docker compose`. Assumes compose file already exists in `workingDirectory`.
+### RUN-01: Docker/Podman Compose Sources — **Fixed**
+- **Location**: [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift), [`ComposeStackContext.swift`](Kuma/Core/Execution/Compose/ComposeStackContext.swift)
+- **Resolution**: Compose resolves in order: (1) on-disk `composeFilePath` → working dir = file parent unless `workingDirectory` set; (2) inline `yamlConfig` → ephemeral `kuma-compose-{serviceID}/docker-compose.kuma.yml` (removed on stop); (3) neither → `invalidConfiguration`.
+- **Lifecycle (best practice)**: Detached `docker|podman compose -p kuma-<serviceUUID> -f <file> up -d` via short-lived [`EphemeralCLI`](Kuma/Core/Execution/Subprocess/EphemeralCLI.swift) / [`ComposeCLI`](Kuma/Core/Execution/Compose/ComposeCLI.swift) (not `ProcessRegistry`). Stop runs `compose stop` then `compose down` with the same `-p`/`-f`. Browse-file and paste-YAML share [`ComposeStackResolver`](Kuma/Core/Execution/Compose/ComposeStackResolver.swift). Legacy stacks started without `-p kuma-…` are not torn down by stop — use the same compose file with matching project or manual `compose down`. **TC-D05**, **TC-D05b–f**.
+- **UI state**: After start/stop, deck and inspector call [`ServiceExecutionStateSync`](Kuma/Core/Execution/ServiceExecutionStateSync.swift) so `.running` follows `ServiceExecutionEngine.isServiceRunning` (compose/K8s without registry PID use `pid: 0`). Runner log capture is gated by [`ServiceExecutionLoggingPolicy`](Kuma/Core/Execution/ServiceExecutionLoggingPolicy.swift) (off until Live Logs wiring returns).
 
-### RUN-02: SSH Runner Ignores Key Path
-- **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `startSSH()`
-- **Detail**: `provider.sshKeyPath` is never passed with `-i` flag.
+### PROC-05: Bounded shutdown waits — **Fixed**
+- **Location**: [`SubprocessWait.swift`](Kuma/Core/Execution/SubprocessWait.swift), [`ServiceExecutionEngine.swift`](Kuma/Core/Execution/ServiceExecutionEngine.swift), [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift)
+- **Detail**: `compose down` (45s), startup script (120s), full service stop (90s then `ProcessRegistry` SIGINT→SIGKILL). `ProcessRegistry.stop` already escalates signals (~2.5s). Prevents UI stuck on “Waiting for a clean shutdown.” **TC-E06b**.
+
+### RUN-01b: Docker/Podman Startup Script Paths — **Fixed**
+- **Location**: [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift)
+- **Resolution**: Pre-`compose up` script: (1) `initialScriptPath` via `/bin/sh` if file exists; (2) else inline `initialScript` (zsh bootstrap). Same working directory as compose. **TC-D05e**.
+
+### Compose / startup script sources (UI)
+- **Location**: [`ComposeSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/ComposeSettingsView.swift), [`InitialScriptSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/Docker/InitialScriptSettingsView.swift), `Provider.composeFilePath` / `Provider.initialScriptPath` (migration `v6_provider_compose_and_script_paths`).
+- **Detail**: Compose and startup script expanded editors use **Choose File** vs **Paste YAML** / **Paste Script** (`KumaDualSourceSegment`); collapsed startup script still shows a file card when a path is set. Docker and Podman share `ContainerRunner`.
+
+### RUN-02: SSH Runner Ignores Key Path — **Fixed**
+- **Location**: [`SSHTunnelRunner.swift`](Kuma/Core/Execution/Runners/SSHTunnelRunner.swift)
+- **Resolution**: Non-empty `sshKeyPath` passed as `-i` (tilde expansion + file check). **TC-D06**.
 
 ### RUN-03: Shell Runner Hardcodes `/bin/zsh` — **Fixed**
 - **Location**: [`ShellRunner.swift`](Kuma/Core/Execution/Runners/ShellRunner.swift) + [`KumaShellLaunchConfiguration.swift`](Kuma/Core/Environment/KumaShellLaunchConfiguration.swift)
 - **Detail**: Previously ignored `KumaSettingsKey.defaultShell`. Now reads Settings and launches zsh/bash/fish with appropriate bootstrap.
 
-### RUN-04: SSH Auth Type Binding Broken
-- **Location**: [`InspectorFormSections.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/InspectorFormSections.swift) lines 155-157
-- **Detail**: `authType` Binding `set` closure ignores the new value; selected auth type is never persisted to the Provider model.
+### RUN-04: SSH Auth Type Binding Broken — **Fixed**
+- **Location**: [`InspectorRemoteAndNetworkFormSections.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorRemoteAndNetworkFormSections.swift), [`ProviderSSHAuth.swift`](Kuma/Presentation/Features/Services/Models/ProviderSSHAuth.swift), [`ServiceInspectorViewModel`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift)
+- **Resolution**: Inspector tracks `sshAuthType` on the view model; commit normalizes key vs password like create flow. **TC-RUN04**.
 
 ---
 
 ## 9. MEDIUM: View Architecture & Line Count Violations
 
-### 15 Files Exceed 150-Line Limit
+### View files still over 150 lines (2026-09 audit refresh)
 
-| File | Lines | Excess |
-|:-----|:------|:-------|
-| `ServicesDeckViewModel.swift` | 528 | +378 |
-| `ServiceInspectorViewModel.swift` | 353 | +203 |
-| `KubeConfigViewModel.swift` | 271 | +121 |
-| `ServicesDeckView.swift` | 254 | +104 |
-| `ServiceTableView.swift` | 238 | +88 |
-| `CreateServiceSheet.swift` | 237 | +87 |
-| `InspectorStatusHeader.swift` | 207 | +57 |
-| `ServiceInspectorView.swift` | 199 | +49 |
-| `CreateServiceFillDetailsStepView.swift` | 190 | +40 |
-| `ServicesToolbar.swift` | 189 | +39 |
-| `ServiceProvidersSectionView.swift` | 183 | +33 |
-| `ServiceActionContextMenu.swift` | 179 | +29 |
-| `InspectorOptionsSection.swift` | 178 | +28 |
-| `ServiceCardView.swift` | 176 | +26 |
-| `KubeConfigConnectionView.swift` | 153 | +3 |
-| `ContentView.swift` | 152 | +2 |
+| File | Lines (approx.) |
+|:-----|:----------------|
+| `CreateServiceSheet.swift` | ≤151 (sheet); chrome in `+Preview` |
+| `ServicesDeckView.swift` | ≤68 core; dialogs in `+DeckChrome` |
 
-### 21 Views Missing `#Preview` Blocks (See Full List in Audit)
+Deck view models are split across extensions (`ServicesDeckViewModel+ServiceActions.swift` still large — future split). **TC-F01** enforced in `ServicesVisualAndAccessibilityTests`.
+
+### `#Preview` coverage — **Partial**
+Baseline ~39 component views still without `#Preview`; **TC-F02** guards against growth; `CreateServiceSheet+Preview.swift` added.
 
 ---
 
@@ -247,16 +234,16 @@
 
 ### 10 Icon-Only Buttons Missing `.accessibilityLabel(...)`
 
-1. `ServicesToolbar.swift:163` — Sidebar toggle
-2. `ServiceTableView.swift:177` — Row actions ellipsis
+1. ~~`ServicesToolbar.swift` — Inspector sidebar toggle~~ — **Fixed** (accessibility label present)
+2. ~~`ServiceTableColumns.swift` — Row actions ellipsis~~ — **Fixed**
 3. ~~`ServiceCardView.swift:165` — Card toggle switch~~ — **Fixed** via [`CardToggleSwitch.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/CardToggleSwitch.swift) Run/Stop labels
 4. ~~`ServiceCardView.swift:160` — Lock badge~~ — **Fixed** via `CardToggleSwitch` disabled label
-5. `InspectorStatusHeader.swift:42` — Back chevron
-6. `InspectorStatusHeader.swift:133` — Clear logs (trash)
-7. `InspectorOptionsSection.swift:39` — Disable switch
-8. `ServiceProvidersInlineFormView.swift:22` — Cancel xmark
-9. `DockerComposeSettingsView.swift:56` — Close button
-10. `InitialScriptSettingsView.swift:56` — Close button
+5. ~~`InspectorStatusHeader.swift` — Back chevron~~ — **Fixed**
+6. ~~`InspectorHeaderActionButtons.swift` — Clear logs~~ — **Fixed** (prior hardening)
+7. ~~`InspectorOptionsSection.swift` — Disable switch~~ — **Fixed**
+8. ~~`ServiceProvidersInlineFormView.swift` — Cancel xmark~~ — **Fixed**
+9. ~~`DockerComposeSettingsView.swift` / `PodmanComposeSettingsView.swift` — Close button~~ — **Fixed**
+10. ~~`InitialScriptSettingsView.swift` — Close button~~ — **Fixed**
 
 ---
 
@@ -264,13 +251,13 @@
 
 | Issue | Location |
 |:------|:---------|
-| ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed**; production grid is `LazyVGrid` in [`ServicesDeckContentBodyView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServicesDeckContentBodyView.swift) | Deck/Components |
-| `ServiceNonPortBadge.metadata` — 20-line computed property never referenced | `ServiceNonPortBadge.swift` |
-| `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` |
-| `InspectorLiveConsoleView.copiedRecently` — unused `@State` | `InspectorLiveConsoleView.swift` |
-| `InspectorStatusHeader.onToggleStar` — closure never bound to UI | `InspectorStatusHeader.swift` |
-| `LiveLogsView.isAutoScroll` — toggle exists but no `ScrollViewReader` implemented | `LiveLogsView.swift` |
-| `PodmanComposeSettingsView` — 100% duplicate of `DockerComposeSettingsView` | `PodmanComposeSettingsView.swift` |
+| ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed** | Deck/Components |
+| ~~`ServiceNonPortBadge.metadata`~~ — **Removed** | `ServiceNonPortBadge.swift` |
+| ~~`InspectorStatusHeader.onToggleStar`~~ — **Removed** (unused closure) | `InspectorStatusHeader.swift` |
+| ~~`LiveLogsView.isAutoScroll`~~ — **Removed** misleading toggle | `LiveLogsView.swift` |
+| ~~Podman/Docker compose duplicate UI~~ — **Fixed** via shared [`ComposeSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/ComposeSettingsView.swift) |
+| **Card toggle stale after deck start (Kube)** — **Fixed**: [`ServiceStateStore`](Kuma/Stores/ServiceStateStore.swift) publishes `.kumaServiceStateChanged` on `setExecutionState`; deck rows use [`SyncedServiceRuntime`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift). **TC-D10**. |
+| `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` (verify / remove if still present) |
 | Table name inconsistency: `"portMapping"` (camelCase) vs all others (`snake_case`) | `ServicePortMapping+Record.swift` |
 | `Provider.kubeTargetType: String?` raw String instead of typed `KubeTargetType?` | `Provider.swift` |
 | `ServiceRuntimeState` uses multi-boolean (`status` + `isLoading`) instead of single enum | `ServiceRuntimeState.swift` |

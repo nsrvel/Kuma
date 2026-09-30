@@ -29,8 +29,8 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
         let intervalSeconds = max(provider.httpCheckInterval ?? 10, 3)
         let serviceID = service.id
 
-        // Cancel any existing poller for this service
-        await stop(serviceID: serviceID)
+        // Cancel any existing poller without posting .stopped (avoids Start flash while UI is .starting).
+        cancelPoller(for: serviceID)
 
         await pipeline.emit(level: "INFO", message: "Starting Health Check for: \(normalizedUrlString) (Interval: \(intervalSeconds)s)")
 
@@ -121,11 +121,15 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
     }
 
     public func stop(serviceID: UUID) async {
-        let task = unregisterTask(for: serviceID)
-        task?.cancel()
+        cancelPoller(for: serviceID)
         await MainActor.run {
             ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
+    }
+
+    private func cancelPoller(for serviceID: UUID) {
+        let task = unregisterTask(for: serviceID)
+        task?.cancel()
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {

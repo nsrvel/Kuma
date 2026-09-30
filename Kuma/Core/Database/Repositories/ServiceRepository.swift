@@ -2,8 +2,8 @@ import Foundation
 import GRDB
 
 public protocol ServiceRepositoryProtocol: Sendable {
-    func fetchSnapshots(forWorkspace workspaceID: UUID) async throws -> [ServiceCardSnapshot]
-    func fetchSnapshot(serviceID: UUID) async throws -> ServiceCardSnapshot?
+    func fetchDeckItems(forWorkspace workspaceID: UUID) async throws -> [ServiceDeckItem]
+    func fetchDeckItem(serviceID: UUID) async throws -> ServiceDeckItem?
     func fetchService(id: UUID) async throws -> Service?
     func fetchServiceDetail(id: UUID) async throws -> (service: Service, providers: [Provider], portMappings: [ServicePortMapping])?
     func fetchProviders(forService serviceID: UUID) async throws -> [Provider]

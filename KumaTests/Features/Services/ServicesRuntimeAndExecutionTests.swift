@@ -24,6 +24,66 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .running(pid: 9)) == .stopping)
     }
 
+    @Test("TC-D09b: stray stopped notification ignored while execution is starting")
+    func testServiceStateNotificationIgnoresStoppedDuringStarting() {
+        let stoppedInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopped]
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .starting) == nil)
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .idle) == .idle)
+    }
+
+    @Test("TC-D09c: stopped notification clears stopping to idle after process exit")
+    func testServiceStateNotificationStoppedClearsStopping() {
+        let stoppedInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopped]
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .stopping) == .idle)
+        #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .running(pid: 1)) == .idle)
+    }
+
+    @Test("TC-D09e: stale stopping notification ignored after idle")
+    func testStaleStoppingNotificationIgnoredAfterIdle() {
+        let stoppingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopping]
+        #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .idle) == nil)
+    }
+
+    @Test("TC-D09d: late running notification ignored while execution is stopping")
+    func testServiceStateNotificationIgnoresRunningDuringStopping() {
+        let runningInfo: [String: Any] = [
+            ServiceStateNotification.stateKey: ServiceState.running,
+            ServiceStateNotification.pidKey: Int32(99)
+        ]
+        #expect(ServiceStateNotification.executionState(from: runningInfo, existing: .stopping) == nil)
+        #expect(ServiceStateNotification.executionState(from: runningInfo, existing: .idle) == .running(pid: 99))
+    }
+
+    @Test("TC-D10: ServiceStateStore publishes kumaServiceStateChanged on setExecutionState")
+    func testStorePublishesOnSetExecutionState() async {
+        let store = ServiceStateStore()
+        let serviceID = UUID()
+        let counter = LockIsolated(0)
+        let token = NotificationCenter.default.addObserver(
+            forName: .kumaServiceStateChanged,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let id = note.object as? UUID, id == serviceID else { return }
+            counter.withValue { $0 += 1 }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
+        store.setExecutionState(.starting, for: serviceID)
+        #expect(store.state(for: serviceID) == .starting)
+        await drainPostedNotifications()
+        #expect(counter.value == 1)
+
+        store.setExecutionState(.starting, for: serviceID)
+        await drainPostedNotifications()
+        #expect(counter.value == 1)
+
+        store.setExecutionState(.running(pid: 42), for: serviceID)
+        #expect(store.state(for: serviceID) == .running(pid: 42))
+        await drainPostedNotifications()
+        #expect(counter.value == 2)
+    }
+
     @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
     func testServiceStateNotificationExitCode() {
         let userInfo: [String: Any] = [
@@ -160,6 +220,12 @@ struct ServicesRuntimeAndExecutionTests {
         deckVM.notifyExecutionStatesChanged()
         #expect(deckVM.filterVersion > versionWithFilter)
     }
+}
+
+/// Lets NotificationCenter observers on `.main` run before assertions (CI can defer delivery).
+private func drainPostedNotifications() async {
+    await Task.yield()
+    try? await Task.sleep(nanoseconds: 5_000_000)
 }
 
 private final class LockIsolated<Value>: @unchecked Sendable {

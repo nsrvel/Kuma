@@ -19,10 +19,11 @@ extension ServicesDeckViewModel {
 
     public func loadWorkspaceAsync(workspaceID: UUID) async {
         do {
-            async let loadedSnapshots = serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
+            async let loadedItems = serviceRepository.fetchDeckItems(forWorkspace: workspaceID)
             async let loadedGroups = groupRepository.fetchAll(workspaceID: workspaceID)
 
-            let (loaded, groups) = try await (loadedSnapshots, loadedGroups)
+            let (deckItems, groups) = try await (loadedItems, loadedGroups)
+            let loaded = deckItems.asCardSnapshots
             guard !Task.isCancelled else { return }
 
             let serviceIDs = loaded.map(\.id)
@@ -61,16 +62,15 @@ extension ServicesDeckViewModel {
             for snapshot in candidates {
                 guard !isOperational(snapshot.id) else { continue }
                 stateStore?.setExecutionState(.starting, for: snapshot.id)
-                ServiceStateNotification.post(serviceID: snapshot.id, state: .starting)
                 do {
                     try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
-                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
-                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
-                    ServiceStateNotification.post(serviceID: snapshot.id, state: .running, pid: pid)
+                    await ServiceExecutionStateSync.applyAfterSuccessfulStart(
+                        serviceID: snapshot.id,
+                        stateStore: stateStore
+                    )
                 } catch {
                     Self.logger.error("Auto-start failed for '\(snapshot.name)': \(error.localizedDescription)")
                     stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
-                    ServiceStateNotification.post(serviceID: snapshot.id, state: .crashed, exitCode: 1)
                 }
                 try? await Task.sleep(nanoseconds: 150_000_000)
             }
@@ -79,11 +79,12 @@ extension ServicesDeckViewModel {
 
     public func refreshSingleServiceSnapshot(id: UUID) async {
         do {
-            if let updated = try await serviceRepository.fetchSnapshot(serviceID: id) {
+            if let updated = try await serviceRepository.fetchDeckItem(serviceID: id) {
+                let snapshot = ServiceCardSnapshot(deckItem: updated)
                 if let idx = snapshots.firstIndex(where: { $0.id == id }) {
-                    snapshots[idx] = updated
+                    snapshots[idx] = snapshot
                 } else {
-                    snapshots.append(updated)
+                    snapshots.append(snapshot)
                 }
             } else {
                 snapshots.removeAll(where: { $0.id == id })

@@ -5,7 +5,7 @@ public struct ServiceCardRow: View {
     public let snapshot: ServiceCardSnapshot
     public let isSelected: Bool
 
-    @Environment(ServiceStateStore.self) private var serviceStateStore
+    @State private var runtime: ServiceRuntimeState = .idle
 
     public init(snapshot: ServiceCardSnapshot, isSelected: Bool) {
         self.snapshot = snapshot
@@ -15,9 +15,20 @@ public struct ServiceCardRow: View {
     public var body: some View {
         ServiceCardView(
             snapshot: snapshot,
-            runtime: serviceStateStore.runtime(for: snapshot.id),
+            runtime: runtime,
             isSelected: isSelected
         )
         .equatable()
+        .syncingServiceRuntime(serviceID: snapshot.id, runtime: $runtime)
     }
+}
+
+#Preview {
+    ServiceCardRow(
+        snapshot: ServiceCardSnapshot(id: UUID(), name: "Row Preview", providerCategory: .docker),
+        isSelected: true
+    )
+    .environment(ServiceStateStore())
+    .frame(width: KumaTheme.Deck.cardIdealWidth)
+    .padding()
 }

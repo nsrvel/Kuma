@@ -17,7 +17,9 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
 
     // Docker & Podman Compose
     public var yamlConfig: String?
+    public var composeFilePath: String?
     public var initialScript: String?
+    public var initialScriptPath: String?
 
     // Shell Execution
     public var runCommand: String?
@@ -57,7 +59,9 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
         kubeTargetType: String? = nil,
         usePattern: Bool? = nil,
         yamlConfig: String? = nil,
+        composeFilePath: String? = nil,
         initialScript: String? = nil,
+        initialScriptPath: String? = nil,
         runCommand: String? = nil,
         workingDirectory: String? = nil,
         sshHost: String? = nil,
@@ -87,7 +91,9 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
         self.kubeTargetType = kubeTargetType
         self.usePattern = usePattern
         self.yamlConfig = yamlConfig
+        self.composeFilePath = composeFilePath
         self.initialScript = initialScript
+        self.initialScriptPath = initialScriptPath
         self.runCommand = runCommand
         self.workingDirectory = workingDirectory
         self.sshHost = sshHost
@@ -117,6 +123,9 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
     public nonisolated var resolvedTarget: String {
         switch type {
         case .docker:
+            if let path = composeFilePath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+                return "Docker: \((path as NSString).lastPathComponent)"
+            }
             if let yaml = yamlConfig, let image = extractComposeImage(from: yaml) {
                 return "Docker: \(image)"
             }
@@ -126,6 +135,9 @@ public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, 
             return "Docker"
 
         case .podman:
+            if let path = composeFilePath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+                return "Podman: \((path as NSString).lastPathComponent)"
+            }
             if let yaml = yamlConfig, let image = extractComposeImage(from: yaml) {
                 return "Podman: \(image)"
             }

@@ -21,7 +21,9 @@ public enum CreateServicePayloadBuilder {
         var sshKeyPathPlain: String? = nil
         var ngrokTokenPlain: String? = nil
         var yamlConfig: String? = nil
+        var composeFilePath: String? = nil
         var initialScript: String? = nil
+        var initialScriptPath: String? = nil
 
         if inputs.selectedProvider == .ssh {
             if inputs.sshAuthType == .password && !inputs.sshPassword.isEmpty {
@@ -37,11 +39,9 @@ public enum CreateServicePayloadBuilder {
         }
 
         if inputs.selectedProvider == .docker {
-            yamlConfig = inputs.dockerDraft.yamlConfig.isEmpty ? nil : inputs.dockerDraft.yamlConfig
-            initialScript = inputs.dockerDraft.initialScript.isEmpty ? nil : inputs.dockerDraft.initialScript
+            applyComposeDraft(inputs.dockerDraft, yaml: &yamlConfig, composePath: &composeFilePath, script: &initialScript, scriptPath: &initialScriptPath)
         } else if inputs.selectedProvider == .podman {
-            yamlConfig = inputs.podmanDraft.yamlConfig.isEmpty ? nil : inputs.podmanDraft.yamlConfig
-            initialScript = inputs.podmanDraft.initialScript.isEmpty ? nil : inputs.podmanDraft.initialScript
+            applyComposeDraft(inputs.podmanDraft, yaml: &yamlConfig, composePath: &composeFilePath, script: &initialScript, scriptPath: &initialScriptPath)
         }
 
         let providerID = UUID()
@@ -56,7 +56,9 @@ public enum CreateServicePayloadBuilder {
             kubeTargetType: inputs.kubeDraft.targetType.rawValue,
             usePattern: inputs.kubeDraft.usePattern,
             yamlConfig: yamlConfig,
+            composeFilePath: composeFilePath,
             initialScript: initialScript,
+            initialScriptPath: initialScriptPath,
             runCommand: inputs.selectedProvider == .shell && !inputs.shellDraft.runCommand.isEmpty ? inputs.shellDraft.runCommand.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             workingDirectory: inputs.selectedProvider == .shell && !inputs.shellDraft.workingDirectory.isEmpty ? inputs.shellDraft.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             sshHost: inputs.selectedProvider == .ssh && !inputs.sshDraft.host.isEmpty ? inputs.sshDraft.host.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
@@ -126,9 +128,9 @@ public enum CreateServicePayloadBuilder {
             }
             return targetOK && kubeConfigOK && contextOK && hasCompletePort
         case .docker:
-            return !inputs.dockerDraft.yamlConfig.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return composeDraftIsValid(inputs.dockerDraft)
         case .podman:
-            return !inputs.podmanDraft.yamlConfig.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return composeDraftIsValid(inputs.podmanDraft)
         case .shell:
             return !inputs.shellDraft.runCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .ssh:

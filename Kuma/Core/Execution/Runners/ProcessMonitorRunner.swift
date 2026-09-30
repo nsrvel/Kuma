@@ -22,7 +22,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         let intervalSeconds = max(provider.monitorInterval ?? 5, 2)
         let serviceID = service.id
 
-        await stop(serviceID: serviceID)
+        cancelWatchTask(for: serviceID)
 
         await pipeline.emit(level: "INFO", message: "Starting process watchdog for: '\(processName)' (Interval: \(intervalSeconds)s)")
 
@@ -30,7 +30,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
             var lastObservedPID: Int32? = nil
 
             while !Task.isCancelled {
-                let currentPID = Self.lookupProcessPID(named: processName)
+                let currentPID = await Self.lookupProcessPID(named: processName)
 
                 if currentPID != lastObservedPID {
                     lastObservedPID = currentPID
@@ -56,11 +56,15 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
     }
 
     public func stop(serviceID: UUID) async {
-        let task = unregisterTask(for: serviceID)
-        task?.cancel()
+        cancelWatchTask(for: serviceID)
         await MainActor.run {
             ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
+    }
+
+    private func cancelWatchTask(for serviceID: UUID) {
+        let task = unregisterTask(for: serviceID)
+        task?.cancel()
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
@@ -92,7 +96,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         return activeWatchTasks.removeValue(forKey: serviceID)
     }
 
-    private static func lookupProcessPID(named name: String) -> Int32? {
+    private static func lookupProcessPID(named name: String) async -> Int32? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
         process.arguments = ["-f", name]
@@ -103,7 +107,7 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
 
         do {
             try process.run()
-            process.waitUntilExit()
+            await SubprocessWait.waitForExit(of: process)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
                 let pids = output.components(separatedBy: .newlines).compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }

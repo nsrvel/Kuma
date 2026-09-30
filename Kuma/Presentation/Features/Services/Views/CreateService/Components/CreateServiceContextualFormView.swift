@@ -89,22 +89,22 @@ public struct CreateServiceContextualFormView: View {
             }
 
         case .docker:
-            KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
-                VStack(alignment: .leading, spacing: 14) {
-                    DockerComposeSettingsView(yamlConfig: $dockerDraft.yamlConfig)
-                    KumaDivider(opacity: 0.06, verticalPadding: 2)
-                    InitialScriptSettingsView(initialScript: $dockerDraft.initialScript)
-                }
-            }
+            CreateServiceComposeConfigurationSection(
+                isPodman: false,
+                yamlConfig: $dockerDraft.yamlConfig,
+                composeFilePath: $dockerDraft.composeFilePath,
+                initialScript: $dockerDraft.initialScript,
+                initialScriptPath: $dockerDraft.initialScriptPath
+            )
 
         case .podman:
-            KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
-                VStack(alignment: .leading, spacing: 14) {
-                    PodmanComposeSettingsView(yamlConfig: $podmanDraft.yamlConfig)
-                    KumaDivider(opacity: 0.06, verticalPadding: 2)
-                    InitialScriptSettingsView(initialScript: $podmanDraft.initialScript)
-                }
-            }
+            CreateServiceComposeConfigurationSection(
+                isPodman: true,
+                yamlConfig: $podmanDraft.yamlConfig,
+                composeFilePath: $podmanDraft.composeFilePath,
+                initialScript: $podmanDraft.initialScript,
+                initialScriptPath: $podmanDraft.initialScriptPath
+            )
 
         case .shell:
             KumaFormSection(icon: "terminal.fill", title: "Shell Command") {

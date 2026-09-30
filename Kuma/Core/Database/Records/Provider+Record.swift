@@ -25,7 +25,9 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
         let usePattern: Bool? = row["usePattern"]
 
         let yamlConfig: String? = row["yamlConfig"]
+        let composeFilePath: String? = row["composeFilePath"]
         let initialScript: String? = row["initialScript"]
+        let initialScriptPath: String? = row["initialScriptPath"]
 
         let runCommand: String? = row["runCommand"]
         let workingDirectory: String? = row["workingDirectory"]
@@ -75,7 +77,9 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
             kubeTargetType: kubeTargetType,
             usePattern: usePattern,
             yamlConfig: yamlConfig,
+            composeFilePath: composeFilePath,
             initialScript: initialScript,
+            initialScriptPath: initialScriptPath,
             runCommand: runCommand,
             workingDirectory: workingDirectory,
             sshHost: sshHost,
@@ -108,7 +112,9 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
         container["kubeTargetType"] = kubeTargetType
         container["usePattern"] = usePattern
         container["yamlConfig"] = yamlConfig
+        container["composeFilePath"] = composeFilePath
         container["initialScript"] = initialScript
+        container["initialScriptPath"] = initialScriptPath
         container["runCommand"] = runCommand
         container["workingDirectory"] = workingDirectory
         container["sshHost"] = sshHost

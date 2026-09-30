@@ -8,7 +8,6 @@ public struct InspectorStatusHeader: View {
     public let runtime: ServiceRuntimeState
     public var isViewingLogs: Bool = false
     public let onToggle: () -> Void
-    public let onToggleStar: () -> Void
     public var onBack: () -> Void = {}
 
     public init(
@@ -17,7 +16,6 @@ public struct InspectorStatusHeader: View {
         runtime: ServiceRuntimeState,
         isViewingLogs: Bool = false,
         onToggle: @escaping () -> Void,
-        onToggleStar: @escaping () -> Void = {},
         onBack: @escaping () -> Void = {}
     ) {
         self.service = service
@@ -25,7 +23,6 @@ public struct InspectorStatusHeader: View {
         self.runtime = runtime
         self.isViewingLogs = isViewingLogs
         self.onToggle = onToggle
-        self.onToggleStar = onToggleStar
         self.onBack = onBack
     }
 
@@ -57,6 +54,7 @@ public struct InspectorStatusHeader: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Back to configuration")
                     .help("Back to Configuration")
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {
@@ -122,4 +120,13 @@ public struct InspectorStatusHeader: View {
     }
 }
 
+#Preview {
+    InspectorStatusHeader(
+        service: Service(name: "Preview Service", workspaceID: UUID()),
+        provider: nil,
+        runtime: .idle,
+        onToggle: {}
+    )
+    .frame(width: 400)
+}
 

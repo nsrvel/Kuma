@@ -19,12 +19,17 @@ public actor ServiceLogPipeline {
         self.serviceName = serviceName
     }
 
+    private var capturesOutput: Bool {
+        ServiceExecutionLoggingPolicy.capturesRunnerOutput
+    }
+
     /// Primary entry point for stdout/stderr raw chunks from subprocesses.
     public func ingestRawChunk(_ chunk: String, level: String = "INFO") {
         ingestRawChunkImpl(chunk, level: level)
     }
 
     private func ingestRawChunkImpl(_ chunk: String, level: String = "INFO") {
+        guard capturesOutput else { return }
         let completeLines = chunker.ingest(chunk)
         guard !completeLines.isEmpty else { return }
 
@@ -54,6 +59,8 @@ public actor ServiceLogPipeline {
 
     /// Emits a single structured log line directly (e.g. from HealthCheckRunner, TunnelRunner, or system notices).
     public func emit(level: String = "INFO", message: String) {
+        let isHighSignal = level == "ERROR" || level == "WARN"
+        guard capturesOutput || isHighSignal else { return }
         let sanitized = ANSISanitizer.sanitize(message)
         guard !sanitized.isEmpty else { return }
 
@@ -86,7 +93,10 @@ public actor ServiceLogPipeline {
 
     private func flushBatch() {
         flushTask = nil
-        guard !pendingBatch.isEmpty else { return }
+        guard capturesOutput, !pendingBatch.isEmpty else {
+            pendingBatch.removeAll(keepingCapacity: true)
+            return
+        }
 
         let batch = pendingBatch
         pendingBatch.removeAll(keepingCapacity: true)
@@ -143,6 +153,9 @@ public actor ServiceLogPipeline {
 
     /// Creates a thread-safe `@Sendable` closure wrapping chunk ingestion.
     public nonisolated func makeOutputHandler() -> @Sendable (String) -> Void {
+        if !ServiceExecutionLoggingPolicy.capturesRunnerOutput {
+            return { _ in }
+        }
         return { [weak self] text in
             Task { [weak self] in
                 await self?.enqueueRawChunk(text)

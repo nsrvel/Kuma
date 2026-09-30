@@ -126,7 +126,9 @@ extension DataPortService {
         public let kubeTargetType: String?
         public let usePattern: Bool?
         public let yamlConfig: String?
+        public let composeFilePath: String?
         public let initialScript: String?
+        public let initialScriptPath: String?
         public let runCommand: String?
         public let workingDirectory: String?
         public let sshHost: String?
@@ -149,6 +151,7 @@ extension DataPortService {
             label: String? = nil,
             runCommand: String? = nil,
             yamlConfig: String? = nil,
+            composeFilePath: String? = nil,
             kubeContext: String? = nil,
             kubeNamespace: String? = nil,
             targetName: String? = nil,
@@ -157,6 +160,7 @@ extension DataPortService {
             kubeTargetType: String? = nil,
             usePattern: Bool? = nil,
             initialScript: String? = nil,
+            initialScriptPath: String? = nil,
             workingDirectory: String? = nil,
             sshHost: String? = nil,
             sshUser: String? = nil,
@@ -177,6 +181,7 @@ extension DataPortService {
             self.label = label
             self.runCommand = runCommand
             self.yamlConfig = yamlConfig
+            self.composeFilePath = composeFilePath
             self.kubeContext = kubeContext
             self.kubeNamespace = kubeNamespace
             self.targetName = targetName
@@ -185,6 +190,7 @@ extension DataPortService {
             self.kubeTargetType = kubeTargetType
             self.usePattern = usePattern
             self.initialScript = initialScript
+            self.initialScriptPath = initialScriptPath
             self.workingDirectory = workingDirectory
             self.sshHost = sshHost
             self.sshUser = sshUser

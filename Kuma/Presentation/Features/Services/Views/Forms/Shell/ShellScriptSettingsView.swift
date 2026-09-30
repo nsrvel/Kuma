@@ -17,7 +17,7 @@ public struct ShellScriptSettingsView: View {
             KumaFilePickerField(
                 label: "Working Directory",
                 path: $workingDirectory,
-                placeholder: "~/Projects/my-app",
+                placeholder: "~/path/to/project",
                 chooseFiles: false,
                 chooseDirectories: true
             )

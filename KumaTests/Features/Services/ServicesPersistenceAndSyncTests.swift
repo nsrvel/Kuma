@@ -27,7 +27,7 @@ struct ServicesPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C02] Granular Single Snapshot Fetch
-    @Test("TC-C02: fetchSnapshot fetches single service card snapshot accurately")
+    @Test("TC-C02: fetchDeckItem fetches single deck row accurately")
     func testGranularSingleSnapshotFetch() async throws {
         let harness = ServicesTestHarness()
         let (service, _) = try await harness.seedServiceWithProvider(
@@ -36,11 +36,13 @@ struct ServicesPersistenceAndSyncTests {
             ports: [(3000, 3000)]
         )
 
-        let snapshot = try await harness.serviceRepository.fetchSnapshot(serviceID: service.id)
-        #expect(snapshot != nil)
-        #expect(snapshot?.id == service.id)
-        #expect(snapshot?.name == "API Server")
-        #expect(snapshot?.providerCategory == .shell)
+        let item = try await harness.serviceRepository.fetchDeckItem(serviceID: service.id)
+        #expect(item != nil)
+        #expect(item?.id == service.id)
+        #expect(item?.name == "API Server")
+        #expect(item?.activeProviderCategory == .shell)
+        #expect(item?.localPorts == [3000])
+        let snapshot = item.map { ServiceCardSnapshot(deckItem: $0) }
         #expect(snapshot?.portDisplays == [3000])
     }
 
@@ -188,8 +190,48 @@ struct ServicesPersistenceAndSyncTests {
         let k8sActivePorts = try await harness.serviceRepository.fetchPortMappings(forService: service.id)
         #expect(k8sActivePorts.map(\.localPort) == [8080])
 
-        let snapshot = try await harness.serviceRepository.fetchSnapshot(serviceID: service.id)
-        #expect(snapshot?.portDisplays == [8080])
-        #expect(snapshot?.providerCategory == .kubernetes)
+        let item = try await harness.serviceRepository.fetchDeckItem(serviceID: service.id)
+        #expect(item?.localPorts == [8080])
+        #expect(item?.activeProviderCategory == .kubernetes)
+    }
+
+    // MARK: - [TC-C11] Duplicate uses single-snapshot refresh
+    @Test("TC-C11: duplicateService refreshes only the new card snapshot")
+    func testDuplicateServiceUsesSingleSnapshotRefresh() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "Source Service",
+            providerType: .docker
+        )
+
+        let deckVM = ServicesDeckViewModel(serviceRepository: harness.serviceRepository)
+        await deckVM.loadWorkspaceAsync(workspaceID: harness.defaultWorkspaceID)
+        let countBefore = deckVM.snapshots.count
+
+        deckVM.duplicateService(id: service.id, workspaceID: harness.defaultWorkspaceID)
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(deckVM.snapshots.count == countBefore + 1)
+        #expect(deckVM.snapshots.contains(where: { $0.name == "Source Service (Copy)" }))
+    }
+
+    @Test("TC-C12: Inspector clears in-memory state after external deletion")
+    func testInspectorClearsAfterExternalDeletion() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(name: "Gone", providerType: .shell)
+
+        let inspectorVM = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await inspectorVM.loadService(id: service.id)
+        #expect(inspectorVM.service != nil)
+
+        inspectorVM.clearAfterExternalDeletion()
+
+        #expect(inspectorVM.service == nil)
+        #expect(inspectorVM.providers.isEmpty)
     }
 }

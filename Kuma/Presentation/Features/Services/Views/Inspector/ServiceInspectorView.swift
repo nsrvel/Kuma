@@ -25,13 +25,15 @@ public struct ServiceInspectorView: View {
     public var body: some View {
         VStack(spacing: 0) {
             if let service = inspectorVM.service {
+                let isSynced = service.id == serviceID
+                let showStaleShell = !isSynced && inspectorVM.isLoadingServiceDetail
+                if isSynced || showStaleShell {
                 let executionState = serviceStateStore.state(for: serviceID)
                 let isRunning = executionState.isOperational
                 let isLocked = service.isDisabled || isRunning || executionState == .starting
 
                 let isViewingLogs = inspectorVM.isViewingLogs
 
-                // Zone 1: Native macOS Status Header (Icon turns into Back button when viewing logs)
                 InspectorStatusHeader(
                     service: service,
                     provider: inspectorVM.activeProvider,
@@ -40,24 +42,21 @@ public struct ServiceInspectorView: View {
                     onToggle: {
                         inspectorVM.toggleRunning()
                     },
-                    onToggleStar: {
-                        inspectorVM.toggleStarred()
-                    },
                     onBack: {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                             inspectorVM.isViewingLogs = false
                         }
                     }
                 )
+                .allowsHitTesting(isSynced)
 
                 Divider()
                     .padding(.horizontal, KumaSpacing.lg)
 
                 Group {
                     if isViewingLogs {
-                        // Dedicated Full-Height Seamless Live Terminal Viewport
                         InspectorLiveConsoleView(
-                            serviceID: service.id,
+                            serviceID: serviceID,
                             serviceName: service.name,
                             isRunning: isRunning
                         )
@@ -76,14 +75,31 @@ public struct ServiceInspectorView: View {
                         )
                     }
                 }
+                .opacity(isSynced ? 1 : 0.88)
+                .allowsHitTesting(isSynced)
                 .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isViewingLogs)
-                .animation(.easeInOut(duration: 0.18), value: isRunning)
+                }
+            } else if inspectorVM.isLoadingServiceDetail {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading service…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
                     title: "No Selection",
                     description: "Select a service to view configuration details."
                 )
+            }
+        }
+        .onChange(of: serviceID) { _, newID in
+            if inspectorVM.service?.id != newID {
+                inspectorVM.isLoadingServiceDetail = true
+                inspectorVM.isViewingLogs = false
             }
         }
         .task(id: serviceID) {
@@ -97,7 +113,7 @@ public struct ServiceInspectorView: View {
                       from: notif.userInfo,
                       existing: serviceStateStore.state(for: serviceID)
                   ) else { return }
-            serviceStateStore.setExecutionState(execState, for: serviceID)
+            serviceStateStore.setExecutionState(execState, for: serviceID, publish: false)
         }
         .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
             if (notif.userInfo?[KumaServiceNotification.sourceKey] as? String) == KumaServiceNotification.sourceInspector {
@@ -109,10 +125,12 @@ public struct ServiceInspectorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .kumaGroupsUpdated)) { _ in
             Task { await inspectorVM.loadService(id: serviceID) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceDeleted)) { notif in
+            guard let deletedID = notif.object as? UUID, deletedID == serviceID else { return }
+            inspectorVM.clearAfterExternalDeletion()
+        }
         .onDisappear {
-            Task {
-                await inspectorVM.flushPendingAutoSave()
-            }
+            Task { await inspectorVM.flushPendingAutoSave() }
         }
         .confirmationDialog(
             "Delete Service?",

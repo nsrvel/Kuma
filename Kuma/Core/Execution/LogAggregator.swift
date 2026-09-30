@@ -35,6 +35,7 @@ public final class LogAggregator {
 
     /// Chronological buffer for Live Logs (global view).
     public private(set) var entries: [LiveLogEntry] = []
+    private var chronologicalBuffer = LogChronologicalBuffer(capacity: 2_000)
     public private(set) var availableServiceNames: [String] = []
     /// Bumps on every append, trim, or clear — cheap signal for UI filter caches.
     public private(set) var changeToken: UInt64 = 0
@@ -62,7 +63,7 @@ public final class LogAggregator {
     public func refreshRetentionFromSettings() {
         applyRetentionSettings()
         trimAllServices()
-        trimGlobalChronological()
+        entries = chronologicalBuffer.chronologicalEntries()
         rebuildAvailableServiceNames()
         bumpChangeToken()
     }
@@ -96,11 +97,15 @@ public final class LogAggregator {
 
     public func clear(serviceID: UUID? = nil) {
         if let serviceID {
-            entries.removeAll { $0.serviceID == serviceID }
+            let removedIDs = chronologicalBuffer.removeAll { $0.serviceID == serviceID }
+            if !removedIDs.isEmpty {
+                entries = chronologicalBuffer.chronologicalEntries()
+            }
             entriesByService.removeValue(forKey: serviceID)
             serviceNameByID.removeValue(forKey: serviceID)
         } else {
-            entries.removeAll()
+            chronologicalBuffer.removeAll()
+            entries = []
             entriesByService.removeAll()
             serviceNameByID.removeAll()
         }
@@ -117,12 +122,15 @@ public final class LogAggregator {
             let dropCount = serviceLines.count - maxEntriesPerService
             let droppedIDs = Set(serviceLines.prefix(dropCount).map(\.id))
             serviceLines.removeFirst(dropCount)
-            entries.removeAll { droppedIDs.contains($0.id) }
+            chronologicalBuffer.removeEntries(withIDs: droppedIDs)
+            entries = chronologicalBuffer.chronologicalEntries()
         }
         entriesByService[entry.serviceID] = serviceLines
 
-        entries.append(entry)
-        trimGlobalChronological()
+        if let evicted = chronologicalBuffer.append(entry) {
+            removeEntryFromServiceIndex(evicted)
+        }
+        entries = chronologicalBuffer.chronologicalEntries()
         if bumpToken { bumpChangeToken() }
     }
 
@@ -130,6 +138,10 @@ public final class LogAggregator {
         let limit = LogRetentionLimit.current()
         maxEntriesPerService = limit.maxLinesPerService
         maxTotalEntries = limit.maxTotalLines
+        if chronologicalBuffer.capacity != maxTotalEntries {
+            chronologicalBuffer.reconfigureCapacity(maxTotalEntries)
+            entries = chronologicalBuffer.chronologicalEntries()
+        }
     }
 
     private func registerServiceName(serviceID: UUID, serviceName: String) {
@@ -145,25 +157,19 @@ public final class LogAggregator {
         availableServiceNames = Array(namesInEntries).sorted()
     }
 
-    private func trimGlobalChronological() {
-        applyRetentionSettings()
-        guard maxTotalEntries < Int.max else { return }
-        while entries.count > maxTotalEntries {
-            let dropped = entries.removeFirst()
-            removeEntryFromServiceIndex(dropped)
-        }
-        rebuildAvailableServiceNames()
-    }
-
     private func trimAllServices() {
         guard maxEntriesPerService < Int.max else { return }
+        var droppedIDs = Set<UUID>()
         for serviceID in Array(entriesByService.keys) {
             guard var list = entriesByService[serviceID], list.count > maxEntriesPerService else { continue }
             let dropCount = list.count - maxEntriesPerService
-            let droppedIDs = Set(list.prefix(dropCount).map(\.id))
+            droppedIDs.formUnion(list.prefix(dropCount).map(\.id))
             list.removeFirst(dropCount)
             entriesByService[serviceID] = list
-            entries.removeAll { droppedIDs.contains($0.id) }
+        }
+        if !droppedIDs.isEmpty {
+            chronologicalBuffer.removeEntries(withIDs: droppedIDs)
+            entries = chronologicalBuffer.chronologicalEntries()
         }
     }
 

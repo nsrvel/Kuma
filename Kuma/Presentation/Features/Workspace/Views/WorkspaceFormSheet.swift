@@ -72,9 +72,10 @@ public struct WorkspaceFormSheet: View {
                         .padding(.top, -8)
                 }
 
-                // Danger Zone / Delete Button (only if editing and >1 workspace)
                 if case .edit(let ws) = mode, store.workspaces.count > 1 {
-                    WorkspaceDangerZoneSection(workspace: ws) {
+                    Divider().opacity(0.3)
+
+                    WorkspaceFormDeleteRow {
                         isPresented = false
                         AlertService.shared.confirmDelete(
                             title: "Delete Workspace?",
@@ -115,7 +116,7 @@ public struct WorkspaceFormSheet: View {
             .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
         .frame(width: KumaTheme.Workspace.formSheetWidth)
-        .frame(minHeight: (mode == .create || store.workspaces.count <= 1) ? KumaTheme.Workspace.formSheetMinHeightCompact : KumaTheme.Workspace.formSheetMinHeightExpanded)
+        .frame(minHeight: KumaTheme.Workspace.formSheetMinHeightCompact)
     }
 
     private func saveChanges() {

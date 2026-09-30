@@ -5,17 +5,17 @@ import os
 public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SSHTunnelRunner")
 
-    private let processRegistry: ProcessRegistry
+    private let processLauncher: any ProcessLaunching
     private let serviceRepository: any ServiceRepositoryProtocol
 
     private let stateLock = NSLock()
     private var activeAskpassScripts: [UUID: String] = [:]
 
     public nonisolated init(
-        processRegistry: ProcessRegistry = .shared,
+        processLauncher: any ProcessLaunching,
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
     ) {
-        self.processRegistry = processRegistry
+        self.processLauncher = processLauncher
         self.serviceRepository = serviceRepository
     }
 
@@ -104,23 +104,24 @@ public final class SSHTunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
         await pipeline.emit(level: "INFO", message: "Connecting SSH tunnel to \(user)@\(host):\(port)...")
 
-        _ = try await processRegistry.launch(
+        _ = try await processLauncher.launch(
             serviceID: service.id,
             serviceName: service.name,
             executable: "/usr/bin/ssh",
             arguments: args,
+            workingDirectory: nil,
             environment: env,
             onOutput: pipeline.makeOutputHandler()
         )
     }
 
     public func stop(serviceID: UUID) async {
-        await processRegistry.stop(serviceID: serviceID)
+        await processLauncher.stop(serviceID: serviceID)
         cleanupAskpass(for: serviceID)
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
-        await processRegistry.isRunning(serviceID: serviceID)
+        await processLauncher.isRunning(serviceID: serviceID)
     }
 
     private func createAskpassScript(password: String, serviceID: UUID) throws -> String {

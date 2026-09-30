@@ -17,7 +17,7 @@ public struct KumaCodeEditor: View {
     public var maxHeight: CGFloat?
     public var isReadOnly: Bool
 
-    @FocusState private var isFocused: Bool
+    @State private var isFocused: Bool = false
     @State private var copiedRecently: Bool = false
 
     public init(
@@ -83,11 +83,11 @@ public struct KumaCodeEditor: View {
                 }
             }
             .padding(2)
-            .background(KumaColors.inputBackground.opacity(0.8), in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+            .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                     .stroke(
-                        isFocused ? Color.accentColor : KumaColors.inputBorder,
+                        isFocused ? Color.accentColor : KumaColors.inputFieldStroke,
                         lineWidth: isFocused ? 1.5 : 0.5
                     )
             )
@@ -111,7 +111,7 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
     let minHeight: CGFloat
     let maxHeight: CGFloat?
     let isReadOnly: Bool
-    @FocusState.Binding var isFocused: Bool
+    @Binding var isFocused: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -123,6 +123,9 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
 
         let contentSize = scrollView.contentSize
         let textView = CodeNSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.onFocusChange = { [weak coordinator = context.coordinator] focused in
+            coordinator?.setFocused(focused)
+        }
         textView.minSize = NSSize(width: 0.0, height: minHeight)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.isVerticallyResizable = true
@@ -155,6 +158,8 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
+        context.coordinator.parent = self
+        guard !context.coordinator.isDismantled else { return }
         guard let textView = nsView.documentView as? NSTextView else { return }
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
@@ -164,28 +169,40 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
         textView.isEditable = !isReadOnly
     }
 
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        coordinator.isDismantled = true
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if nsView.window?.firstResponder === textView {
+            nsView.window?.makeFirstResponder(nil)
+        }
+        textView.delegate = nil
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
 
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: KumaNativeCodeTextView
+        var isDismantled = false
 
         init(_ parent: KumaNativeCodeTextView) {
             self.parent = parent
         }
 
         func textDidChange(_ notification: Notification) {
+            guard !isDismantled else { return }
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
         }
 
-        func textDidBeginEditing(_ notification: Notification) {
-            parent.isFocused = true
-        }
-
-        func textDidEndEditing(_ notification: Notification) {
-            parent.isFocused = false
+        func setFocused(_ focused: Bool) {
+            guard !isDismantled else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, !self.isDismantled else { return }
+                guard self.parent.isFocused != focused else { return }
+                self.parent.isFocused = focused
+            }
         }
     }
 }
@@ -193,6 +210,20 @@ private struct KumaNativeCodeTextView: NSViewRepresentable {
 // MARK: - CodeNSTextView (Custom Key Events for Tab Indentation)
 
 private final class CodeNSTextView: NSTextView {
+    var onFocusChange: ((Bool) -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { onFocusChange?(true) }
+        return became
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned { onFocusChange?(false) }
+        return resigned
+    }
+
     override func keyDown(with event: NSEvent) {
         // Tab key: Insert 2 spaces instead of shifting UI focus
         if event.keyCode == 48 { // KeyCode 48 is Tab

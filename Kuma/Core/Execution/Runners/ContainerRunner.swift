@@ -1,17 +1,21 @@
 import Foundation
 import os
 
-/// Runner responsible for container orchestration with Docker or Podman Compose.
+/// Docker/Podman Compose: detached `up -d` with a stable Compose project name (`-p kuma-<service>`).
 public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ContainerRunner")
 
-    private let processRegistry: ProcessRegistry
+    private let processLauncher: any ProcessLaunching
+    private let composeCLI: any ComposeCLIExecuting
     private let stateLock = NSLock()
-    private var activeComposeFiles: [UUID: String] = [:]
-    private var activeBinaryPaths: [UUID: String] = [:]
+    private var activeStacks: [UUID: ComposeStackContext] = [:]
 
-    public nonisolated init(processRegistry: ProcessRegistry = .shared) {
-        self.processRegistry = processRegistry
+    public nonisolated init(
+        processLauncher: any ProcessLaunching,
+        composeCLI: any ComposeCLIExecuting
+    ) {
+        self.processLauncher = processLauncher
+        self.composeCLI = composeCLI
     }
 
     public func start(
@@ -30,119 +34,196 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
             throw ServiceExecutionError.binaryNotFound(binaryName)
         }
 
-        var workingDir: String? = nil
-        if let rawDir = provider.workingDirectory?.trimmingCharacters(in: .whitespacesAndNewlines), !rawDir.isEmpty {
-            let expanded = NSString(string: rawDir).expandingTildeInPath
-            var isDir: ObjCBool = false
-            if FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), isDir.boolValue {
-                workingDir = expanded
-            }
-        }
+        let context = try ComposeStackResolver.makeContext(service: service, provider: provider, binaryPath: binaryPath)
 
-        var composeArgs = ["compose"]
-        var composeFilePath: String? = nil
+        try await runInitialScript(provider: provider, workingDir: context.workingDirectory, pipeline: pipeline)
 
-        // If inline yamlConfig is provided, persist it to disk with service isolation
-        if let yamlConfig = provider.yamlConfig?.trimmingCharacters(in: .whitespacesAndNewlines), !yamlConfig.isEmpty {
-            let targetDir: String
-            if let workingDir {
-                targetDir = workingDir
-            } else {
-                let tempFolder = (NSTemporaryDirectory() as NSString).appendingPathComponent("kuma-compose-\(service.id.uuidString)")
-                try? FileManager.default.createDirectory(atPath: tempFolder, withIntermediateDirectories: true)
-                targetDir = tempFolder
-                workingDir = tempFolder
-            }
-
-            let filePath = (targetDir as NSString).appendingPathComponent("docker-compose.kuma.yml")
-            do {
-                try yamlConfig.write(toFile: filePath, atomically: true, encoding: .utf8)
-                composeFilePath = filePath
-                composeArgs.append(contentsOf: ["-f", filePath])
-            } catch {
-                throw ServiceExecutionError.processFailed("Failed to write compose YAML: \(error.localizedDescription)")
-            }
-        }
-
-        registerActive(serviceID: service.id, binary: binaryPath, composeFile: composeFilePath)
-
-        // Execute initial setup script if configured
-        if let initialScript = provider.initialScript?.trimmingCharacters(in: .whitespacesAndNewlines), !initialScript.isEmpty {
-            await pipeline.emit(level: "INFO", message: "Running pre-start initialization script...")
-            await executeScript(initialScript, workingDir: workingDir, pipeline: pipeline)
-        }
-
-        composeArgs.append("up")
-        await pipeline.emit(level: "INFO", message: "Starting \(binaryName) compose up...")
-
-        _ = try await processRegistry.launch(
-            serviceID: service.id,
-            serviceName: service.name,
-            executable: binaryPath,
-            arguments: composeArgs,
-            workingDirectory: workingDir,
-            onOutput: pipeline.makeOutputHandler()
+        await pipeline.emit(level: "INFO", message: "Starting \(binaryName) compose up (detached)...")
+        let up = try await composeUpResult(
+            context: context,
+            pipeline: pipeline
         )
+        guard up.exitCode == 0 else {
+            throw ServiceExecutionError.processFailed(
+                composeFailureMessage(binaryName: binaryName, context: context, exitCode: up.exitCode, output: up.output)
+            )
+        }
+
+        guard await composeHasRunningContainers(context: context) else {
+            throw ServiceExecutionError.processFailed(
+                "Compose up succeeded for project “\(context.projectName)” but no running containers were found. "
+                    + "If you already started this stack in Terminal (without `-p \(context.projectName)`), stop it there first or fix port conflicts, then start again from Kuma."
+            )
+        }
+
+        registerStack(context)
+        await pipeline.emit(level: "INFO", message: "Compose stack “\(context.projectName)” is running.")
     }
 
     public func stop(serviceID: UUID) async {
-        // 1. Stop attached client process
-        await processRegistry.stop(serviceID: serviceID)
+        await stop(serviceID: serviceID, provider: nil)
+    }
 
-        // 2. Run background `compose down` to tear down containers cleanly
-        let active = unregisterActive(serviceID: serviceID)
+    func stop(serviceID: UUID, provider: Provider?) async {
+        await processLauncher.stop(serviceID: serviceID)
 
-        if let binary = active.binary {
-            var downArgs = ["compose"]
-            if let composeFile = active.composeFile {
-                downArgs.append(contentsOf: ["-f", composeFile])
-            }
-            downArgs.append("down")
+        let context = await resolveContextForStop(serviceID: serviceID, provider: provider)
+        unregisterStack(serviceID: serviceID)
 
-            let proc = Process()
-            proc.executableURL = URL(fileURLWithPath: binary)
-            proc.arguments = downArgs
-            try? proc.run()
-            proc.waitUntilExit()
+        if let context {
+            await teardownStack(context)
+        } else {
+            Self.logger.warning("No compose context for stop on service \(serviceID)")
+        }
+    }
 
-            // Cleanup ephemeral temp compose directory if applicable
-            if let composeFile = active.composeFile, composeFile.contains("kuma-compose-\(serviceID.uuidString)") {
-                let folder = (composeFile as NSString).deletingLastPathComponent
-                try? FileManager.default.removeItem(atPath: folder)
-            }
+    /// Drops in-memory stack tracking without waiting for compose (used after stop timeout).
+    func forceUnregister(serviceID: UUID) {
+        unregisterStack(serviceID: serviceID)
+    }
+
+    /// Short compose down after global stop timeout (best effort).
+    func forceComposeTeardown(serviceID: UUID, provider: Provider) async {
+        guard let context = await resolveContextForStop(serviceID: serviceID, provider: provider) else { return }
+        unregisterStack(serviceID: serviceID)
+        await runComposeTeardown(context: context, arguments: context.downArguments, timeout: 15)
+        if composeCLI is LiveComposeCLI {
+            await teardownDefaultComposeProjectIfNeeded(context)
         }
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
-        await processRegistry.isRunning(serviceID: serviceID)
+        if activeStack(for: serviceID) != nil { return true }
+        return await processLauncher.isRunning(serviceID: serviceID)
     }
 
-    private func registerActive(serviceID: UUID, binary: String, composeFile: String?) {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        activeBinaryPaths[serviceID] = binary
-        if let composeFile {
-            activeComposeFiles[serviceID] = composeFile
+    // MARK: - Teardown
+
+    private func teardownStack(_ context: ComposeStackContext) async {
+        await runComposeTeardown(context: context, arguments: context.downArguments, timeout: KumaExecutionTimeouts.composeDown)
+
+        if composeCLI is LiveComposeCLI {
+            await teardownDefaultComposeProjectIfNeeded(context)
+        }
+
+        if context.isEphemeralComposeFile {
+            let folder = (context.composeFilePath as NSString).deletingLastPathComponent
+            try? FileManager.default.removeItem(atPath: folder)
         }
     }
 
-    private func unregisterActive(serviceID: UUID) -> (binary: String?, composeFile: String?) {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        let binary = activeBinaryPaths.removeValue(forKey: serviceID)
-        let compose = activeComposeFiles.removeValue(forKey: serviceID)
-        return (binary, compose)
+    private func runComposeTeardown(
+        context: ComposeStackContext,
+        arguments: [String],
+        timeout: TimeInterval
+    ) async {
+        if composeCLI is LiveComposeCLI {
+            _ = try? await ComposeCLI.runDetailed(
+                context: context,
+                arguments: arguments,
+                pipeline: nil,
+                timeout: timeout
+            )
+        } else {
+            _ = try? await composeCLI.run(
+                context: context,
+                arguments: arguments,
+                pipeline: nil,
+                timeout: timeout
+            )
+        }
     }
 
-    private func executeScript(_ script: String, workingDir: String?, pipeline: ServiceLogPipeline) async {
+    /// Scripts/Terminal often run `compose up` without Kuma's `-p kuma-…` — tear that down too.
+    private func teardownDefaultComposeProjectIfNeeded(_ context: ComposeStackContext) async {
+        let listArgs = ["compose", "-f", context.composeFilePath, "ps", "-q", "--status", "running"]
+        let ps = try? await EphemeralCLI.run(
+            executablePath: context.binaryPath,
+            arguments: listArgs,
+            workingDirectory: context.workingDirectory,
+            timeout: 15,
+            stdio: .captureSeparated
+        )
+        let stillRunning = ps?.stdout
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .contains(where: { !$0.isEmpty }) ?? false
+        guard stillRunning else { return }
+
+        let downArgs = ["compose", "-f", context.composeFilePath, "down", "--timeout", "5", "--remove-orphans"]
+        _ = try? await EphemeralCLI.run(
+            executablePath: context.binaryPath,
+            arguments: downArgs,
+            workingDirectory: context.workingDirectory,
+            timeout: KumaExecutionTimeouts.composeDown,
+            stdio: .discard
+        )
+    }
+
+    private func resolveContextForStop(serviceID: UUID, provider: Provider?) async -> ComposeStackContext? {
+        if let cached = activeStack(for: serviceID) {
+            return cached
+        }
+        guard let provider else { return nil }
+        let binaryPath: String?
+        if provider.type == .docker {
+            binaryPath = await KumaSettingsExecutableResolver.docker()
+        } else if provider.type == .podman {
+            binaryPath = await KumaSettingsExecutableResolver.podman()
+        } else {
+            return nil
+        }
+        guard let binaryPath else { return nil }
+        let stub = Service(id: serviceID, name: "stop")
+        return try? ComposeStackResolver.makeContext(service: stub, provider: provider, binaryPath: binaryPath)
+    }
+
+    // MARK: - Initial script
+
+    private func runInitialScript(
+        provider: Provider,
+        workingDir: String,
+        pipeline: ServiceLogPipeline
+    ) async throws {
+        if let rawPath = provider.initialScriptPath?.trimmingCharacters(in: .whitespacesAndNewlines), !rawPath.isEmpty {
+            let expanded = NSString(string: rawPath).expandingTildeInPath
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: expanded, isDirectory: &isDir), !isDir.boolValue else {
+                throw ServiceExecutionError.invalidConfiguration("Startup script file not found: \(rawPath)")
+            }
+            await pipeline.emit(level: "INFO", message: "Running pre-start initialization script...")
+            await executeScriptFile(at: expanded, workingDir: workingDir, pipeline: pipeline)
+            return
+        }
+
+        if let initialScript = provider.initialScript?.trimmingCharacters(in: .whitespacesAndNewlines), !initialScript.isEmpty {
+            await pipeline.emit(level: "INFO", message: "Running pre-start initialization script...")
+            await executeInlineScript(initialScript, workingDir: workingDir, pipeline: pipeline)
+        }
+    }
+
+    private func executeInlineScript(_ script: String, workingDir: String, pipeline: ServiceLogPipeline) async {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
         let bootstrap = "[ -f ~/.zprofile ] && source ~/.zprofile 2>/dev/null; [ -f ~/.zshrc ] && source ~/.zshrc 2>/dev/null; [ -f ~/.bash_profile ] && source ~/.bash_profile 2>/dev/null; eval \"$1\""
         proc.arguments = ["-c", bootstrap, "--", script]
-        if let workingDir {
-            proc.currentDirectoryURL = URL(fileURLWithPath: workingDir)
-        }
+        proc.currentDirectoryURL = URL(fileURLWithPath: workingDir)
+        await runScriptProcess(proc, pipeline: pipeline, timeout: KumaExecutionTimeouts.initialScript)
+    }
 
+    private func executeScriptFile(at path: String, workingDir: String, pipeline: ServiceLogPipeline) async {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = [path]
+        proc.currentDirectoryURL = URL(fileURLWithPath: workingDir)
+        await runScriptProcess(proc, pipeline: pipeline, timeout: KumaExecutionTimeouts.initialScript)
+    }
+
+    private func runScriptProcess(
+        _ proc: Process,
+        pipeline: ServiceLogPipeline,
+        timeout: TimeInterval? = nil
+    ) async {
         let pipe = Pipe()
         defer { try? pipe.fileHandleForReading.close() }
         proc.standardOutput = pipe
@@ -150,7 +231,14 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
         do {
             try proc.run()
-            processRegistryWait(proc)
+            let completed = await SubprocessWait.waitForExit(of: proc, timeout: timeout)
+            if let timeout, !completed {
+                await pipeline.emit(
+                    level: "WARN",
+                    message: "Initial script timed out after \(Int(timeout))s; continuing with compose."
+                )
+                return
+            }
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
                 await pipeline.emit(level: "INFO", message: output)
@@ -160,7 +248,98 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
         }
     }
 
-    private func processRegistryWait(_ proc: Process) {
-        proc.waitUntilExit()
+    // MARK: - Compose health
+
+    private func composeUpResult(
+        context: ComposeStackContext,
+        pipeline: ServiceLogPipeline
+    ) async throws -> ComposeCLI.RunResult {
+        if composeCLI is LiveComposeCLI {
+            return try await ComposeCLI.runDetailed(
+                context: context,
+                arguments: context.upArguments,
+                pipeline: pipeline,
+                timeout: 120
+            )
+        }
+        let exitCode = try await composeCLI.run(
+            context: context,
+            arguments: context.upArguments,
+            pipeline: pipeline,
+            timeout: 120
+        )
+        return ComposeCLI.RunResult(exitCode: exitCode, output: "")
+    }
+
+    private func composeHasRunningContainers(context: ComposeStackContext) async -> Bool {
+        guard composeCLI is LiveComposeCLI else { return true }
+        for attempt in 0..<4 {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+            }
+            let ps = try? await EphemeralCLI.run(
+                executablePath: context.binaryPath,
+                arguments: context.psQuietArguments,
+                workingDirectory: context.workingDirectory,
+                timeout: 20,
+                stdio: .captureSeparated
+            )
+            if ps?.terminationStatus == 0 {
+                let ids = ps?.stdout
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty } ?? []
+                if !ids.isEmpty { return true }
+            }
+        }
+        return false
+    }
+
+    private func composeFailureMessage(
+        binaryName: String,
+        context: ComposeStackContext,
+        exitCode: Int32,
+        output: String
+    ) -> String {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        if lower.contains("port is already allocated") || lower.contains("bind for") && lower.contains("failed") {
+            return "Port conflict: another process (often an existing `\(binaryName) compose` from Terminal) is already using a host port. Stop that stack or change local ports. \(trimmed)"
+        }
+        if !trimmed.isEmpty {
+            return "\(binaryName) compose up exited with code \(exitCode): \(trimmed)"
+        }
+        return "\(binaryName) compose up exited with code \(exitCode) (project \(context.projectName))."
+    }
+
+    // MARK: - Active stack registry
+
+    private func registerStack(_ context: ComposeStackContext) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        activeStacks[context.serviceID] = context
+    }
+
+    private func unregisterStack(serviceID: UUID) {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        activeStacks.removeValue(forKey: serviceID)
+    }
+
+    private func activeStack(for serviceID: UUID) -> ComposeStackContext? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return activeStacks[serviceID]
+    }
+}
+
+// MARK: - Tests
+
+extension ContainerRunner {
+    nonisolated static func expectedUpArguments(composeFile: String, projectName: String) -> [String] {
+        [
+            "compose", "-p", projectName, "-f", composeFile,
+            "up", "-d", "--remove-orphans",
+        ]
     }
 }

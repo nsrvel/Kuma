@@ -13,7 +13,7 @@ public final class LocalPortConflictResolver: Sendable {
         self.processRegistry = processRegistry
     }
 
-    public func occupyingPIDs(port: Int) -> [Int32] {
+    public func occupyingPIDs(port: Int) async -> [Int32] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
         process.arguments = ["-ti", ":\(port)"]
@@ -23,7 +23,7 @@ public final class LocalPortConflictResolver: Sendable {
 
         do {
             try process.run()
-            process.waitUntilExit()
+            await SubprocessWait.waitForExit(of: process)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             guard let output = String(data: data, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -51,7 +51,7 @@ public final class LocalPortConflictResolver: Sendable {
             ?? PortConflictPolicy.warnAndBlock.rawValue
         let policy = PortConflictPolicy(rawValue: rawPolicy) ?? .warnAndBlock
 
-        let pids = occupyingPIDs(port: port)
+        let pids = await occupyingPIDs(port: port)
         guard !pids.isEmpty else { return }
 
         switch policy {

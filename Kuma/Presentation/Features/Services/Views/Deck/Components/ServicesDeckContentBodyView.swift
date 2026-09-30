@@ -59,10 +59,7 @@ public struct ServicesDeckContentBodyView: View {
     @ViewBuilder
     private var cardsGrid: some View {
         ScrollView {
-            LazyVGrid(
-                 columns: [GridItem(.adaptive(minimum: 280, maximum: .infinity), spacing: 16)],
-                 spacing: 16
-            ) {
+            LazyVGrid(columns: deckGridColumns, spacing: KumaTheme.Deck.gutter) {
                 ForEach(viewModel.filteredSnapshots) { snapshot in
                     ServiceCardRow(
                         snapshot: snapshot,
@@ -70,8 +67,33 @@ public struct ServicesDeckContentBodyView: View {
                     )
                 }
             }
-            .animation(.spring(response: 0.24, dampingFraction: 0.88), value: viewModel.filterVersion)
-            .padding(16)
+            .animation(nil, value: viewModel.filterVersion)
+            .padding(KumaTheme.Deck.gridPadding)
         }
     }
+
+    private var deckGridColumns: [GridItem] {
+        [
+            GridItem(
+                .adaptive(
+                    minimum: KumaTheme.Deck.cardMinWidth,
+                    maximum: KumaTheme.Deck.cardMaxWidth
+                ),
+                spacing: KumaTheme.Deck.gutter
+            ),
+        ]
+    }
+}
+
+#Preview {
+    let vm = ServicesDeckViewModel(userDefaults: UserDefaults(suiteName: "deck-preview")!)
+    vm.snapshots = [
+        ServiceCardSnapshot(id: UUID(), name: "Preview", providerCategory: .shell),
+    ]
+    vm.hasInitialLoaded = true
+    let actions = vm.makeDeckActions(workspaceID: UUID())
+    return ServicesDeckContentBodyView(viewModel: vm, isStarredOnly: false, deckActions: actions)
+        .environment(\.serviceDeckActions, actions)
+        .environment(ServiceStateStore())
+        .frame(width: 600, height: 400)
 }

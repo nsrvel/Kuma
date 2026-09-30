@@ -204,6 +204,7 @@ public actor ProcessRegistry {
 
         let state: ServiceState = (exitCode == 0 || wasIntentionalStop) ? .stopped : .crashed
         let pid = managed.process.processIdentifier
+
         Task { @MainActor in
             if state == .crashed {
                 ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: exitCode)

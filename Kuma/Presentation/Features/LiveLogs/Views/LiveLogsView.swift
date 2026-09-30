@@ -7,7 +7,6 @@ public struct LiveLogsView: View {
     @State private var filterQuery: String = ""
     @State private var debouncedQuery: String = ""
     @State private var selectedServiceFilter: String = "All"
-    @State private var isAutoScroll: Bool = true
     @State private var debounceTask: Task<Void, Never>? = nil
     @State private var displayedLogs: [LiveLogEntry] = []
 
@@ -37,10 +36,6 @@ public struct LiveLogsView: View {
 
                 Spacer()
 
-                Toggle("Auto-scroll", isOn: $isAutoScroll)
-                    .toggleStyle(.checkbox)
-                    .font(KumaFont.caption)
-
                 Button {
                     logAggregator.clear()
                 } label: {
@@ -61,7 +56,6 @@ public struct LiveLogsView: View {
 
                 KumaLogConsoleView(
                     entries: displayedLogs,
-                    isAutoScroll: isAutoScroll,
                     emptyPlaceholder: "No live logs yet.\nStart a service to stream real-time logs here."
                 )
             }

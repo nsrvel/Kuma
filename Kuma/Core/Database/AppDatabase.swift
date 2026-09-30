@@ -273,6 +273,13 @@ public nonisolated final class AppDatabase: Sendable {
             try db.create(index: "idx_port_provider", on: "portMapping", columns: ["providerID"])
         }
 
+        migrator.registerMigration("v6_provider_compose_and_script_paths") { db in
+            try db.alter(table: "provider") { t in
+                t.add(column: "composeFilePath", .text)
+                t.add(column: "initialScriptPath", .text)
+            }
+        }
+
         return migrator
     }
 }

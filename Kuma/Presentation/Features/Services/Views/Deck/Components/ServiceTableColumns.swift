@@ -59,13 +59,14 @@ public struct ServiceTableStatusCell: View {
     public let isDisabled: Bool
     public let onSelect: (UUID) -> Void
 
-    @Environment(ServiceStateStore.self) private var serviceStateStore
+    @State private var runtime: ServiceRuntimeState = .idle
 
     public var body: some View {
         ServiceStatusObserver(
-            state: serviceStateStore.runtime(for: serviceID),
+            state: runtime,
             isDisabled: isDisabled
         )
+        .syncingServiceRuntime(serviceID: serviceID, runtime: $runtime)
         .contentShape(Rectangle())
         .onTapGesture { onSelect(serviceID) }
     }
@@ -77,7 +78,7 @@ public struct ServiceTableActionsCell: View {
     public let groupsProvider: () -> [ServiceGroup]
     public let handlers: ServiceTableActionHandlers
 
-    @Environment(ServiceStateStore.self) private var serviceStateStore
+    @State private var runtime: ServiceRuntimeState = .idle
 
     public init(
         snapshot: ServiceCardSnapshot,
@@ -90,7 +91,6 @@ public struct ServiceTableActionsCell: View {
     }
 
     public var body: some View {
-        let runtime = serviceStateStore.runtime(for: snapshot.id)
         Menu {
             ServiceActionContextMenu(
                 snapshot: snapshot,
@@ -117,7 +117,9 @@ public struct ServiceTableActionsCell: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 24)
+        .accessibilityLabel("Service actions")
         .help("Service actions")
+        .syncingServiceRuntime(serviceID: snapshot.id, runtime: $runtime)
     }
 }
 
@@ -129,7 +131,9 @@ public struct ServiceTablePortsCell: View {
     public var body: some View {
         Group {
             if snapshot.portDisplays.isEmpty {
-                ServiceNonPortBadge(category: snapshot.providerCategory)
+                Text("—")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
             } else {
                 PortChipsView(ports: snapshot.portDisplays)
             }

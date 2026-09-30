@@ -29,6 +29,24 @@ struct AppThemeAndNotificationTests {
         #expect(smSpacing == 8)
         #expect(mdSpacing == 12)
         #expect(lgSpacing == 16)
+
+        let fieldFill = KumaColors.inputFieldFill
+        let fieldStroke = KumaColors.inputFieldStroke
+        #expect(fieldFill == KumaColors.inputBackground)
+        #expect(fieldStroke == KumaColors.inputBorder.opacity(0.6))
+    }
+
+    @Test("TC-H03: KumaStatus maps all ServiceState cases; transitional states share one hue")
+    func testKumaStatusServiceStateColors() {
+        for state in ServiceState.allCases {
+            #expect(KumaStatus.indicatorColor(for: state) != nil)
+            #expect(KumaStatus.labelColor(for: state) != nil)
+        }
+        #expect(
+            KumaStatus.indicatorColor(for: ServiceState.starting)
+                == KumaStatus.indicatorColor(for: ServiceState.stopping)
+        )
+        #expect(KumaStatus.indicatorColor(for: ServiceState.starting) == KumaStatus.transitionalIndicator)
     }
 
     // MARK: - [TC-H02] Foreground Notification Presentation

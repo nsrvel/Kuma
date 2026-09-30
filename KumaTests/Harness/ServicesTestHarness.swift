@@ -134,6 +134,13 @@ public final class ServicesTestHarness {
             }
         }
 
+        migrator.registerMigration("v6_provider_compose_and_script_paths") { db in
+            try db.alter(table: "provider") { t in
+                t.add(column: "composeFilePath", .text)
+                t.add(column: "initialScriptPath", .text)
+            }
+        }
+
         try! migrator.migrate(queue)
 
         // Seed default workspace
@@ -154,6 +161,8 @@ public final class ServicesTestHarness {
         name: String = "Test Service",
         providerType: ProviderCategory = .docker,
         sshPassword: String? = nil,
+        sshKeyPath: String? = nil,
+        yamlConfig: String? = nil,
         ngrokAuthToken: String? = nil,
         customKubeConfigPath: String? = nil,
         kubeConfigID: UUID? = nil,
@@ -177,6 +186,8 @@ public final class ServicesTestHarness {
             kubeConfigID: kubeConfigID,
             customKubeConfigPath: customKubeConfigPath,
             targetName: targetName,
+            yamlConfig: yamlConfig,
+            sshKeyPath: sshKeyPath,
             sshPassword: sshPassword,
             ngrokAuthToken: ngrokAuthToken
         )

@@ -41,11 +41,20 @@ public struct ServiceKubernetesDraft: Equatable, Sendable {
 
 public struct ServiceComposeDraft: Equatable, Sendable {
     public var yamlConfig: String
+    public var composeFilePath: String
     public var initialScript: String
+    public var initialScriptPath: String
 
-    public init(yamlConfig: String = "", initialScript: String = "") {
+    public init(
+        yamlConfig: String = "",
+        composeFilePath: String = "",
+        initialScript: String = "",
+        initialScriptPath: String = ""
+    ) {
         self.yamlConfig = yamlConfig
+        self.composeFilePath = composeFilePath
         self.initialScript = initialScript
+        self.initialScriptPath = initialScriptPath
     }
 }
 

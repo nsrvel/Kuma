@@ -50,11 +50,11 @@ public struct KumaPortMappingRow: View {
                     .focused($isLocalFocused)
                     .multilineTextAlignment(.center)
                     .padding(KumaSpacing.sm)
-                    .background(KumaColors.inputBackground, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+                    .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                             .stroke(
-                                !isLocalValid ? Color.red.opacity(0.8) : (isLocalFocused ? Color.accentColor : KumaColors.inputBorder),
+                                !isLocalValid ? Color.red.opacity(0.8) : (isLocalFocused ? Color.accentColor : KumaColors.inputFieldStroke),
                                 lineWidth: isLocalFocused || !isLocalValid ? 1.5 : 0.5
                             )
                     )
@@ -73,11 +73,11 @@ public struct KumaPortMappingRow: View {
                     .focused($isRemoteFocused)
                     .multilineTextAlignment(.center)
                     .padding(KumaSpacing.sm)
-                    .background(KumaColors.inputBackground, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+                    .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                             .stroke(
-                                !isRemoteValid ? Color.red.opacity(0.8) : (isRemoteFocused ? Color.accentColor : KumaColors.inputBorder),
+                                !isRemoteValid ? Color.red.opacity(0.8) : (isRemoteFocused ? Color.accentColor : KumaColors.inputFieldStroke),
                                 lineWidth: isRemoteFocused || !isRemoteValid ? 1.5 : 0.5
                             )
                     )
@@ -99,9 +99,6 @@ public struct KumaPortMappingRow: View {
 public struct KumaPortMappingEditor: View {
     public let label: String
     @Binding public var items: [KumaPortMappingItem]
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var isAddHovered: Bool = false
-
     public init(label: String = "", items: Binding<[KumaPortMappingItem]>) {
         self.label = label
         self._items = items
@@ -136,19 +133,13 @@ public struct KumaPortMappingEditor: View {
             }
 
             HStack {
-                Button {
-                    items.append(KumaPortMappingItem())
-                } label: {
-                    Text("Add port mapping")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isAddHovered && isEnabled ? Color.primary : Color.secondary)
-                }
-                .buttonStyle(.plain)
-                .opacity(isEnabled ? 1.0 : 0.45)
-                .onHover { hovering in
-                    isAddHovered = hovering
-                }
-                .help(isEnabled ? "Add port mapping" : "Stop service to edit ports")
+                KumaFormAddActionButton(
+                    style: .textLink,
+                    title: "Add port mapping",
+                    helpWhenEnabled: "Add port mapping",
+                    helpWhenDisabled: "Stop service to edit ports",
+                    action: { items.append(KumaPortMappingItem()) }
+                )
 
                 Spacer()
             }

@@ -35,11 +35,11 @@ public struct KumaSecureField: View {
                 .textFieldStyle(.plain)
                 .focused($isFocused)
                 .padding(KumaSpacing.sm)
-                .background(KumaColors.inputBackground, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+                .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
                         .stroke(
-                            isFocused ? Color.accentColor : KumaColors.inputBorder,
+                            isFocused ? Color.accentColor : KumaColors.inputFieldStroke,
                             lineWidth: isFocused ? 1.5 : 0.5
                         )
                 )

@@ -3,6 +3,7 @@ import SwiftUI
 public struct InspectorFormSections: View {
     @Binding public var provider: Provider
     @Binding public var ports: [KumaPortMappingItem]
+    @Binding public var sshAuthType: SSHAuthType
     public var kubeConfigVM: KubeConfigViewModel?
     public let isLocked: Bool
     public let onFieldChanged: () -> Void
@@ -10,12 +11,14 @@ public struct InspectorFormSections: View {
     public init(
         provider: Binding<Provider>,
         ports: Binding<[KumaPortMappingItem]>,
+        sshAuthType: Binding<SSHAuthType>,
         kubeConfigVM: KubeConfigViewModel? = nil,
         isLocked: Bool = false,
         onFieldChanged: @escaping () -> Void = {}
     ) {
         self._provider = provider
         self._ports = ports
+        self._sshAuthType = sshAuthType
         self.kubeConfigVM = kubeConfigVM
         self.isLocked = isLocked
         self.onFieldChanged = onFieldChanged
@@ -51,6 +54,7 @@ public struct InspectorFormSections: View {
             case .shell, .ssh, .httpCheck, .tunnel, .processMonitor:
                 InspectorRemoteAndNetworkFormSections(
                     provider: $provider,
+                    sshAuthType: $sshAuthType,
                     isLocked: isLocked,
                     onFieldChanged: onFieldChanged
                 )

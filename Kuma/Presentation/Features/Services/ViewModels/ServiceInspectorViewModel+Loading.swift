@@ -5,6 +5,8 @@ extension ServiceInspectorViewModel {
     public func loadService(id: UUID) async {
         cancelAutoSave()
         self.serviceID = id
+        isLoadingServiceDetail = true
+        defer { isLoadingServiceDetail = false }
         do {
             guard let detail = try await serviceRepository.fetchServiceDetail(id: id) else { return }
             guard self.serviceID == id else { return }
@@ -30,6 +32,11 @@ extension ServiceInspectorViewModel {
             }
 
             await syncKubeConfigSelectionFromActiveProvider()
+            if let active = activeProvider, active.type == .ssh {
+                sshAuthType = ProviderSSHAuth.inferredAuthType(for: active)
+            }
+            pendingSaveRevision = 0
+            lastCommittedRevision = 0
         } catch {
             Self.logger.error("Failed to load service details for \(id): \(error.localizedDescription)")
         }

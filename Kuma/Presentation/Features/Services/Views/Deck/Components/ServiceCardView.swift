@@ -129,6 +129,16 @@ public struct ServiceCardView: View, Equatable {
     }
 }
 
+#Preview {
+    ServiceCardView(
+        snapshot: ServiceCardSnapshot(id: UUID(), name: "Preview API", providerCategory: .kubernetes, portDisplays: [8080]),
+        runtime: ServiceRuntimeState(status: .running, isLoading: false),
+        isSelected: false
+    )
+    .frame(width: KumaTheme.Deck.cardIdealWidth)
+    .padding()
+}
+
 extension ServiceCardView {
     nonisolated public static func == (lhs: ServiceCardView, rhs: ServiceCardView) -> Bool {
         lhs.snapshot == rhs.snapshot &&

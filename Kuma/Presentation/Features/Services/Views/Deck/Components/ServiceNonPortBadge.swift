@@ -23,27 +23,6 @@ public struct ServiceNonPortBadge: View {
         .padding(.vertical, 3)
         .fixedSize()
     }
-
-    private var metadata: (icon: String, label: String) {
-        switch category {
-        case .httpCheck:
-            return ("waveform.path.ecg", "Health Check")
-        case .shell:
-            return ("terminal", "Shell")
-        case .processMonitor:
-            return ("cpu", "Process Monitor")
-        case .docker:
-            return ("shippingbox.fill", "Docker")
-        case .podman:
-            return ("cylinder.split.1x2.fill", "Podman")
-        case .ssh:
-            return ("server.rack", "SSH")
-        case .tunnel:
-            return ("cloud", "Tunnel")
-        case .kubernetes:
-            return ("network", "Kubernetes")
-        }
-    }
 }
 
 #Preview {

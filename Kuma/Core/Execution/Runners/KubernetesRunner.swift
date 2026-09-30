@@ -2,17 +2,18 @@ import Foundation
 import os
 
 /// Runner responsible for Kubernetes port-forwarding processes using `kubectl`.
+/// Ephemeral `kubectl get` / list helpers use `EphemeralCLI`; port-forward is a **managed** process via `ProcessLaunching`.
 public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "KubernetesRunner")
 
-    private let processRegistry: ProcessRegistry
+    private let processLauncher: any ProcessLaunching
     private let serviceRepository: any ServiceRepositoryProtocol
 
     public nonisolated init(
-        processRegistry: ProcessRegistry = .shared,
+        processLauncher: any ProcessLaunching = ProcessRegistryLauncher(),
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
     ) {
-        self.processRegistry = processRegistry
+        self.processLauncher = processLauncher
         self.serviceRepository = serviceRepository
     }
 
@@ -99,21 +100,23 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
         await pipeline.emit(level: "INFO", message: "Starting port-forward to \(resolvedTarget)...")
 
-        _ = try await processRegistry.launch(
+        _ = try await processLauncher.launch(
             serviceID: service.id,
             serviceName: service.name,
             executable: kubectl,
             arguments: args,
+            workingDirectory: nil,
+            environment: nil,
             onOutput: pipeline.makeOutputHandler()
         )
     }
 
     public func stop(serviceID: UUID) async {
-        await processRegistry.stop(serviceID: serviceID)
+        await processLauncher.stop(serviceID: serviceID)
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
-        await processRegistry.isRunning(serviceID: serviceID)
+        await processLauncher.isRunning(serviceID: serviceID)
     }
 
     // MARK: - Dynamic resource discovery (pod / service / deployment)
@@ -152,55 +155,26 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             listArgs.append(context)
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: kubectlPath)
-        process.arguments = listArgs
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
+        let result = try await EphemeralCLI.run(
+            executablePath: kubectlPath,
+            arguments: listArgs,
+            timeout: KumaExecutionTimeouts.kubectlSubcommand,
+            stdio: .captureSeparated
+        )
 
-        do {
-            try process.run()
-        } catch {
-            throw ServiceExecutionError.processFailed("Failed to list \(targetType.listResource): \(error.localizedDescription)")
-        }
-
-        async let stdoutData = Task.detached {
-            stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        }.value
-        async let stderrData = Task.detached {
-            stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        }.value
-
-        await withTaskCancellationHandler {
-            process.waitUntilExit()
-        } onCancel: {
-            if process.isRunning {
-                process.terminate()
-            }
-        }
-
-        let data = await stdoutData
-        try? stdoutPipe.fileHandleForReading.close()
-        let output = String(data: data, encoding: .utf8) ?? ""
+        let output = result.stdout
         let resourceNames = output
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
         if resourceNames.isEmpty {
-            let errBytes = await stderrData
-            try? stderrPipe.fileHandleForReading.close()
-            let errMsg = String(data: errBytes, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let errMsg, !errMsg.isEmpty {
+            let errMsg = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !errMsg.isEmpty {
                 throw ServiceExecutionError.processFailed("Kubectl \(targetType.listResource) discovery error: \(errMsg)")
             }
             let emptyHint = targetType == .pod ? "No running pods found" : "No \(targetType.listResource) found"
             throw ServiceExecutionError.processFailed("\(emptyHint) in namespace '\(namespace ?? "default")'.")
-        } else {
-            _ = await stderrData
-            try? stderrPipe.fileHandleForReading.close()
         }
 
         guard let matched = KubeTargetNameMatcher.firstMatch(pattern: targetPattern, in: resourceNames) else {
@@ -232,28 +206,20 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             getArgs.append(contentsOf: ["--context", context])
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: kubectlPath)
-        process.arguments = getArgs
-        let stderrPipe = Pipe()
-        process.standardError = stderrPipe
+        let result = try await EphemeralCLI.run(
+            executablePath: kubectlPath,
+            arguments: getArgs,
+            timeout: KumaExecutionTimeouts.kubectlSubcommand,
+            stdio: .captureSeparated
+        )
 
-        do {
-            try process.run()
-        } catch {
-            throw ServiceExecutionError.processFailed("Preflight failed to run kubectl: \(error.localizedDescription)")
-        }
-
-        process.waitUntilExit()
-        if process.terminationStatus == 0 {
+        if result.terminationStatus == 0 {
             await pipeline.emit(level: "INFO", message: "Preflight OK: \(target) exists in cluster.")
             return
         }
 
-        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        try? stderrPipe.fileHandleForReading.close()
-        let errMsg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let detail = (errMsg?.isEmpty == false) ? errMsg! : "exit code \(process.terminationStatus)"
+        let errMsg = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = errMsg.isEmpty ? "exit code \(result.terminationStatus)" : errMsg
         throw ServiceExecutionError.processFailed("Preflight failed for \(target): \(detail)")
     }
 

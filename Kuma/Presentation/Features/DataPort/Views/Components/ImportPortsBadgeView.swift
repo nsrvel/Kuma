@@ -15,46 +15,33 @@ public struct ImportPortsBadgeView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
         } else {
-            HStack(spacing: 4) {
-                ForEach(portMappings.prefix(maxVisible), id: \.id) { port in
-                    Text(portText(for: port))
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(Color.primary.opacity(0.85))
-                        .padding(.horizontal, 4.5)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Color.secondary.opacity(0.12))
-                        )
-                        .help("Host :\(port.localPort) ➔ Container :\(port.remotePort)")
-                }
-
-                if portMappings.count > maxVisible {
-                    Text("+\(portMappings.count - maxVisible)")
-                        .font(.system(size: 9.5, weight: .bold, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1.5)
-                        .background(
-                            Capsule()
-                                .fill(Color.secondary.opacity(0.1))
-                        )
-                        .help(remainingPortsTooltip)
-                }
-            }
+            Text(summaryText)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .help(fullSummaryText)
         }
     }
 
-    private func portText(for port: DataPortService.ExportPortMapping) -> String {
-        if port.localPort == port.remotePort {
-            return ":\(port.localPort)"
-        }
-        return "\(port.localPort):\(port.remotePort)"
+    private var summaryText: String {
+        Self.summary(portMappings: portMappings, maxVisible: maxVisible)
     }
 
-    private var remainingPortsTooltip: String {
-        portMappings.dropFirst(maxVisible)
-            .map { portText(for: $0) }
-            .joined(separator: ", ")
+    private var fullSummaryText: String {
+        Self.summary(portMappings: portMappings, maxVisible: portMappings.count)
+    }
+
+    /// ponytail: comma-joined host (local) ports only; `+N` when truncated.
+    static func summary(
+        portMappings: [DataPortService.ExportPortMapping],
+        maxVisible: Int
+    ) -> String {
+        guard !portMappings.isEmpty else { return "—" }
+        let visible = portMappings.prefix(max(0, maxVisible))
+        var parts = visible.map { KumaPortFormatting.plain($0.localPort) }
+        if portMappings.count > maxVisible {
+            parts.append("+\(portMappings.count - maxVisible)")
+        }
+        return parts.joined(separator: ", ")
     }
 }

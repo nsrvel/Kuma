@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Ultra-lightweight micro-observer sub-view for live service status and toggle buttons.
-/// Sub-views isolate live updates so only this small footprint re-renders upon state change.
+/// Micro-view for live service status on deck cards and table rows.
 public struct ServiceStatusObserver: View {
     public let state: ServiceRuntimeState
     public var isDisabled: Bool
@@ -12,23 +11,6 @@ public struct ServiceStatusObserver: View {
     }
 
     public var body: some View {
-        if isDisabled {
-            StatusPillView(
-                text: "Disabled",
-                color: Color.secondary.opacity(0.8),
-                showDot: true,
-                isGlowing: false,
-                isLoading: false
-            )
-        } else {
-            StatusPillView(
-                text: state.status.title,
-                color: state.status.color,
-                showDot: true,
-                isGlowing: state.status == .running,
-                isLoading: state.isLoading || state.status == .starting || state.status == .stopping
-            )
-        }
+        StatusPillView(runtime: state, isDisabled: isDisabled)
     }
-
 }

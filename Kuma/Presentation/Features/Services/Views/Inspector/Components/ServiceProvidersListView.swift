@@ -10,8 +10,6 @@ public struct ServiceProvidersListView: View {
     public let onDelete: (Provider) -> Void
     public let onOpenAddForm: () -> Void
 
-    @State private var isAddHovered: Bool = false
-
     public init(
         providers: [Provider],
         activeProviderID: UUID?,
@@ -52,16 +50,15 @@ public struct ServiceProvidersListView: View {
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
         )
         .overlay(alignment: .bottomLeading) {
-            Button { onOpenAddForm() } label: {
-                Text("Add new provider")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(isAddHovered && !isLocked ? Color.primary : Color.secondary)
-            }
-            .buttonStyle(.plain)
+            KumaFormAddActionButton(
+                style: .textLink,
+                title: "Add new provider",
+                helpWhenEnabled: "Add new provider",
+                helpWhenDisabled: "Stop service to add providers",
+                accessibilityIdentifier: KumaUIID.inspectorAddProviderButton,
+                action: onOpenAddForm
+            )
             .disabled(isLocked)
-            .opacity(isLocked ? 0.45 : 1.0)
-            .onHover { isAddHovered = $0 }
-            .help(isLocked ? "Stop service to add providers" : "Add new provider")
             .offset(y: 24)
             .padding(.horizontal, 4)
         }

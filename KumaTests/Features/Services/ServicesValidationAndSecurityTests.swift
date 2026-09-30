@@ -234,6 +234,77 @@ struct ServicesValidationAndSecurityTests {
         #expect(updated?.name == "Name Edited Right Before Close")
     }
 
+    @Test("TC-E01b: Flush commits after debounce completed if user edits again before dismiss")
+    func testInspectorFlushAfterDebounceCompleted() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "Rev Name",
+            providerType: .shell
+        )
+
+        let vm = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await vm.loadService(id: service.id)
+
+        vm.service?.name = "First Pass"
+        vm.scheduleAutoSave()
+        await vm.flushPendingAutoSave()
+
+        vm.service?.name = "Second Pass Before Close"
+        vm.scheduleAutoSave()
+        await vm.flushPendingAutoSave()
+
+        let updated = try await harness.serviceRepository.fetchService(id: service.id)
+        #expect(updated?.name == "Second Pass Before Close")
+    }
+
+    // MARK: - [TC-RUN04] SSH auth type binding persists key vs password
+    @Test("TC-RUN04: Inspector SSH auth type clears opposing credential on commit")
+    func testInspectorSSHAuthTypeBinding() async throws {
+        let harness = ServicesTestHarness()
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("kuma-auth-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let keyURL = tempDir.appendingPathComponent("id_ed25519")
+        try "key".write(to: keyURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let (service, provider) = try await harness.seedServiceWithProvider(
+            name: "SSH Auth",
+            providerType: .ssh,
+            sshKeyPath: keyURL.path,
+            ports: [(2222, 22)]
+        )
+
+        let vm = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await vm.loadService(id: service.id)
+        #expect(vm.sshAuthType == .key)
+
+        vm.sshAuthType = .password
+        ProviderSSHAuth.applyAuthTypeChange(.password, to: &vm.providers[0])
+        vm.providers[0].sshPassword = "secret"
+        await vm.commitChanges()
+
+        let afterPassword = try await harness.serviceRepository.fetchProviders(forService: service.id).first
+        #expect(afterPassword?.sshKeyPath == nil)
+        #expect(afterPassword?.sshPassword == "secret")
+
+        vm.sshAuthType = .key
+        ProviderSSHAuth.applyAuthTypeChange(.key, to: &vm.providers[0])
+        vm.providers[0].sshKeyPath = keyURL.path
+        await vm.commitChanges()
+
+        let afterKey = try await harness.serviceRepository.fetchProviders(forService: service.id).first
+        #expect(afterKey?.sshPassword == nil)
+        #expect(afterKey?.sshKeyPath == keyURL.path)
+    }
+
     // MARK: - [TC-E02] Clear Logs Scoped To Service ID
     @Test("TC-E02: LogAggregator.clear(serviceID:) removes only target service logs")
     func testClearLogsScopedToServiceID() async {

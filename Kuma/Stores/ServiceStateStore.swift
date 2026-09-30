@@ -24,9 +24,20 @@ public final class ServiceStateStore {
         executionStates[serviceID] ?? .idle
     }
 
+    /// If stop was requested but the UI task never reached `.idle`, unwind a stuck `.stopping` pill.
+    public func clearStoppingIfStillPending(for serviceID: UUID) {
+        guard state(for: serviceID) == .stopping else { return }
+        setExecutionState(.idle, for: serviceID)
+    }
+
     /// Fast O(1) runtime wrapper for backwards compatibility with subviews
     public func runtime(for serviceID: UUID) -> ServiceRuntimeState {
         ServiceRuntimeState(executionState: state(for: serviceID))
+    }
+
+    /// True when any service is starting/stopping (deck still needs runtime notifications).
+    public var hasTransientExecutionStates: Bool {
+        executionStates.values.contains { $0 == .starting || $0 == .stopping }
     }
 
     /// IDs of services currently in an operational state (running or starting)
@@ -36,10 +47,33 @@ public final class ServiceStateStore {
         }
     }
 
-    /// Updates execution state for a specific service directly (e.g. from notifications or user actions)
-    public func setExecutionState(_ state: ServiceExecutionState, for serviceID: UUID) {
-        if executionStates[serviceID] != state {
-            executionStates[serviceID] = state
+    /// Updates execution state; publishes `.kumaServiceStateChanged` by default so deck rows using `SyncedServiceRuntime` stay in sync.
+    public func setExecutionState(
+        _ state: ServiceExecutionState,
+        for serviceID: UUID,
+        publish: Bool = true
+    ) {
+        guard executionStates[serviceID] != state else { return }
+        executionStates[serviceID] = state
+        if publish {
+            publishNotification(for: state, serviceID: serviceID)
+        }
+    }
+
+    private func publishNotification(for state: ServiceExecutionState, serviceID: UUID) {
+        switch state {
+        case .idle:
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
+        case .starting:
+            ServiceStateNotification.post(serviceID: serviceID, state: .starting)
+        case .running(let pid):
+            ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
+        case .stopping:
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopping)
+        case .crashed(let exitCode):
+            ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: exitCode)
+        case .failed:
+            ServiceStateNotification.post(serviceID: serviceID, state: .crashed, exitCode: 1)
         }
     }
 
@@ -56,18 +90,22 @@ public final class ServiceStateStore {
             if existing == .starting && state == .idle {
                 continue
             }
-            if existing == .stopping && state.isOperational {
+            if existing == .stopping {
+                // User requested stop — never promote back to running while compose teardown is in flight.
+                if state == .idle && !runningWithoutProcess.contains(id) {
+                    setExecutionState(.idle, for: id, publish: true)
+                }
                 continue
             }
             if state == .idle {
                 if runningWithoutProcess.contains(id) {
                     if !existing.isOperational {
-                        executionStates[id] = .running(pid: 0)
+                        setExecutionState(.running(pid: 0), for: id, publish: true)
                     }
                     continue
                 }
             }
-            executionStates[id] = state
+            setExecutionState(state, for: id, publish: true)
         }
     }
 
