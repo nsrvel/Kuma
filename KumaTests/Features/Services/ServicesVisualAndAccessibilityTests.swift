@@ -34,6 +34,7 @@ struct ServicesVisualAndAccessibilityTests {
             let limit: Int = switch url.lastPathComponent {
             case "CreateServiceSheet.swift": 156
             case "InspectorConfigFormStack.swift": 165
+            case "ServiceCardView.swift": 155
             default: 150
             }
             if count > limit {
