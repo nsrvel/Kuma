@@ -10,11 +10,11 @@ enum EphemeralCLI {
     }
 
     enum StdioMode: Sendable {
-        /// Single merged stream (compose stdout+stderr); optional pipeline ingest when logging is enabled.
-        case merged(pipeline: ServiceLogPipeline?)
+        /// Single merged stream (compose stdout+stderr) captured to memory.
+        case merged
         /// Read stdout and stderr to memory (kubectl helpers).
         case captureSeparated
-        /// Drain pipes without retaining output (logging off, no pipeline).
+        /// Drain pipes without retaining output.
         case discard
     }
 
@@ -34,16 +34,13 @@ enum EphemeralCLI {
         }
 
         switch stdio {
-        case .merged(let pipeline):
+        case .merged:
             let pipe = Pipe()
             process.standardOutput = pipe
             process.standardError = pipe
-            let loggingEnabled = ServiceExecutionLoggingPolicy.capturesRunnerOutput
             let captured = OSAllocatedUnfairLock(initialState: "")
             let ingest: @Sendable (String) -> Void = { chunk in
                 captured.withLock { $0 += chunk }
-                guard loggingEnabled, let pipeline else { return }
-                Task { await pipeline.ingestRawChunk(chunk) }
             }
             attachDrain(pipe: pipe, onChunk: ingest)
             try process.run()
@@ -72,7 +69,7 @@ enum EphemeralCLI {
             async let stderrData = Task.detached {
                 stderrPipe.fileHandleForReading.readDataToEndOfFile()
             }.value
-            await withTaskCancellationHandler {
+            _ = await withTaskCancellationHandler {
                 await SubprocessWait.waitForExit(of: process, timeout: timeout)
             } onCancel: {
                 if process.isRunning {

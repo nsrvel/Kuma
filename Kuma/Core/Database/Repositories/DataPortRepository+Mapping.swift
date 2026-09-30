@@ -9,24 +9,29 @@ extension DataPortRepository {
     nonisolated static func importKubeConfigs(_ configs: [DataPortService.ExportKubeConfig], db: Database) throws {
         for exportKube in configs {
             guard exportKube.id != KubeConfig.defaultID else { continue }
-            guard let cipher = exportKube.encryptedConfigContent?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !cipher.isEmpty else { continue }
+            let cipher = exportKube.encryptedConfigContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let path = exportKube.path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !cipher.isEmpty || !path.isEmpty else { continue }
 
             let createdAt = exportKube.createdAt ?? Date()
             let updatedAt = exportKube.updatedAt ?? Date()
+            let storedCipher = cipher.isEmpty ? "" : cipher
+            let storedPath: String? = path.isEmpty ? nil : path
             try db.execute(
                 sql: """
-                INSERT INTO kube_config (id, name, configContent, createdAt, updatedAt)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO kube_config (id, name, configContent, sourceFilePath, createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     configContent = excluded.configContent,
+                    sourceFilePath = excluded.sourceFilePath,
                     updatedAt = excluded.updatedAt
                 """,
                 arguments: [
                     exportKube.id.uuidString,
                     exportKube.name ?? "Imported",
-                    cipher,
+                    storedCipher,
+                    storedPath,
                     createdAt,
                     updatedAt
                 ]

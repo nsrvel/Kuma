@@ -63,7 +63,7 @@ extension ServicesDeckViewModel {
         Task {
             do {
                 if isCurrentlyRunning {
-                    stateStore?.setExecutionState(.stopping, for: serviceID, publish: false)
+                    stateStore?.setExecutionState(.stopping, for: serviceID)
                     await ServiceStopSupport.stopOffMainActor(serviceID: serviceID, stateStore: stateStore)
                 }
 

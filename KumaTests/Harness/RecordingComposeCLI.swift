@@ -20,7 +20,6 @@ public final class RecordingComposeCLI: ComposeCLIExecuting, @unchecked Sendable
     public nonisolated func run(
         context: ComposeStackContext,
         arguments: [String],
-        pipeline: ServiceLogPipeline?,
         timeout: TimeInterval?
     ) async throws -> Int32 {
         state.withLock { $0 = Invocation(context: context, arguments: arguments) }

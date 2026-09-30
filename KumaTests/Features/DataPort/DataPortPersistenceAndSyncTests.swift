@@ -7,7 +7,7 @@ import Testing
 struct DataPortPersistenceAndSyncTests {
 
     // MARK: - [TC-C01] Export All Populates Full Relational Hierarchy
-    @Test("TC-C01: exportData(scope: .all) mengekspor seluruh hierarki relasional SQLite")
+    @Test("DataPort.C01: exportData(scope: .all) exports full SQLite relational hierarchy")
     func testExportAllPopulatesFullRelationalHierarchy() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -32,7 +32,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C02] Export Workspace Scopes to WorkspaceID
-    @Test("TC-C02: exportData(scope: .workspace) mengisolasi data hanya milik workspace terkait")
+    @Test("DataPort.C02: exportData(scope: .workspace) scopes to one workspace")
     func testExportWorkspaceScopesToWorkspaceID() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -54,7 +54,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C03] Export Single Service Scopes to ServiceID
-    @Test("TC-C03: exportData(scope: .service) hanya mengekspor 1 service spesifik")
+    @Test("DataPort.C03: exportData(scope: .service) exports a single service")
     func testExportSingleServiceScopesToServiceID() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -73,7 +73,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C04] Import All Restores Complete Graph
-    @Test("TC-C04: importData(strategy: .preserveOrMerge) memulihkan entitas ke dalam SQLite")
+    @Test("DataPort.C04: importData(strategy: .preserveOrMerge) restores entities into SQLite")
     func testImportAllRestoresCompleteGraph() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -107,7 +107,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C05] Import Into Workspace Re-IDs All Entities
-    @Test("TC-C05: importData(strategy: .reassignIDs) menghasilkan UUID baru untuk menghindari tabrakan ID")
+    @Test("DataPort.C05: import reassignIDs generates new UUIDs to avoid ID collisions")
     func testImportIntoWorkspaceReIDsAllEntities() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -136,11 +136,11 @@ struct DataPortPersistenceAndSyncTests {
 
         try await harness.repository.importData(backup: backup, strategy: .reassignIDs(targetWorkspaceID: targetWS))
 
-        // Verifikasi service tersimpan di database
+        // Service row persisted
         let svcCount = try harness.fetchCount(table: "service")
         #expect(svcCount == 1)
 
-        // Verifikasi ID baru dihasilkan dan tidak sama dengan originalServiceID
+        // Imported service gets a new ID
         let exported = try await harness.repository.exportData(scope: .workspace(targetWS))
         let importedSvc = exported.services.first
         #expect(importedSvc != nil)
@@ -149,7 +149,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C06] Import Selective Imports Only Chosen Workspaces And Services
-    @Test("TC-C06: importSelective hanya memasukkan workspace dan service yang dipilih user")
+    @Test("DataPort.C06: importSelective imports only selected workspaces and services")
     func testImportSelectiveImportsOnlyChosenWorkspacesAndServices() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -164,7 +164,7 @@ struct DataPortPersistenceAndSyncTests {
             services: [svc1, svc2]
         )
 
-        // Hanya import WS 1 dan Svc 1
+        // Import only WS 1 and Svc 1
         try await harness.repository.importSelective(
             from: backup,
             selectedWorkspaceIDs: [ws1.id],
@@ -179,7 +179,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C07] Atomic File Write On Export
-    @Test("TC-C07: Penulisan file backup dengan options: .atomic berhasil dan tidak rusak")
+    @Test("DataPort.C07: atomic backup file write round-trips decode")
     func testAtomicFileWriteOnExport() throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -197,12 +197,12 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C08] Import Rollback On Database Failure
-    @Test("TC-C08: Transaksi SQLite menjamin atomisitas (all-or-nothing rollback)")
+    @Test("DataPort.C08: SQLite import transaction commits valid backup")
     func testImportRollbackOnDatabaseFailure() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
 
-        // Buat backup yang valid
+        // Valid backup import
         let backup = DataPortService.KumaBackup(
             workspaces: [Workspace(name: "Safe WS")]
         )
@@ -213,7 +213,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C09] Equivalence Across All 4 Entry Points (Export & Ingestion)
-    @Test("TC-C09: Memverifikasi kesetaraan struktur data di ke-4 entry point (Settings, DnD, Toolbar, Copy Config)")
+    @Test("DataPort.C09: export payloads match across Settings, DnD, toolbar, and Copy Config entry points")
     func testEquivalenceAcrossAllEntryPoints() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -239,7 +239,7 @@ struct DataPortPersistenceAndSyncTests {
         let serviceJSONString = try await harness.repository.exportSingleServiceJSON(serviceID: svcID)
         let clipboardIngested = try DataPortService.parseAnyBackup(from: serviceJSONString.data(using: .utf8)!, targetWorkspaceID: wsID)
 
-        // Verifikasi kesetaraan data service di seluruh entry point
+        // Service fields match across entry points
         let svcGlobal = globalBackup.services.first(where: { $0.id == svcID })!
         let svcWorkspace = workspaceBackup.services.first(where: { $0.id == svcID })!
         let svcDnD = dndIngested.services.first(where: { $0.id == svcID })!
@@ -251,7 +251,7 @@ struct DataPortPersistenceAndSyncTests {
         #expect(svcGlobal.name == svcToolbar.name)
         #expect(svcGlobal.name == svcClipboard.name)
 
-        // Verifikasi kesetaraan provider
+        // Provider fields match
         let provGlobal = globalBackup.providers.first(where: { $0.serviceID == svcID })!
         let provWorkspace = workspaceBackup.providers.first(where: { $0.serviceID == svcID })!
         let provClipboard = clipboardIngested.providers.first!
@@ -261,7 +261,7 @@ struct DataPortPersistenceAndSyncTests {
         #expect(provGlobal.resolvedTarget == provWorkspace.resolvedTarget)
         #expect(provGlobal.resolvedTarget == provClipboard.resolvedTarget)
 
-        // Verifikasi kesetaraan port mappings
+        // Port mappings match
         let portGlobal = globalBackup.portMappings.first!
         let portWorkspace = workspaceBackup.portMappings.first!
         let portClipboard = clipboardIngested.portMappings.first!
@@ -273,7 +273,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C10] Cross-Entry Point Roundtrip & Import Consistency
-    @Test("TC-C10: Import payload hasil Copy Config ke workspace menghasilkan record SQLite yang identik dengan hasil Full Restore")
+    @Test("DataPort.C10: Copy Config import into workspace matches full restore records")
     func testCrossEntryPointRoundtrip() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -288,14 +288,14 @@ struct DataPortPersistenceAndSyncTests {
         try harness.seedProvider(id: provID, serviceID: svcID, type: "docker", yamlConfig: "image: postgres:15")
         try harness.seedPortMapping(serviceID: svcID, providerID: provID, localPort: 5432, remotePort: 5432)
 
-        // Copy config dari Service di wsA
+        // Copy config from service in wsA
         let copiedJSON = try await harness.repository.exportSingleServiceJSON(serviceID: svcID)
 
-        // Ingest dan import ke wsB via reassignIDs
+        // Import into wsB via reassignIDs
         let parsedBackup = try DataPortService.parseAnyBackup(from: copiedJSON.data(using: .utf8)!, targetWorkspaceID: wsB)
         try await harness.repository.importData(backup: parsedBackup, strategy: .reassignIDs(targetWorkspaceID: wsB))
 
-        // Verifikasi di wsB
+        // Records in wsB
         let exportedB = try await harness.repository.exportData(scope: .workspace(wsB))
         #expect(exportedB.services.count == 1)
         let importedSvc = exportedB.services.first!
@@ -306,7 +306,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C20] Export includes referenced kube_config rows
-    @Test("TC-C20: exportData(scope: .service) includes encrypted kube_config referenced by provider")
+    @Test("DataPort.C20: exportData(scope: .service) includes encrypted kube_config referenced by provider")
     func testExportIncludesReferencedKubeConfigs() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -331,7 +331,7 @@ struct DataPortPersistenceAndSyncTests {
     }
 
     // MARK: - [TC-C21] Import restores kube_config rows
-    @Test("TC-C21: importData restores kube_config so provider kubeConfigID resolves")
+    @Test("DataPort.C21: importData restores kube_config so provider kubeConfigID resolves")
     func testImportRestoresKubeConfigs() async throws {
         let harnessA = DataPortTestHarness()
         defer { harnessA.cleanup() }
@@ -356,5 +356,31 @@ struct DataPortPersistenceAndSyncTests {
         let row = try await kubeRepo.fetch(id: kubeID)
         #expect(row != nil)
         #expect(row?.name == "Remote")
+    }
+
+    @Test("DataPort.C21b: importData restores kube_config sourceFilePath")
+    func testImportRestoresKubeConfigSourcePath() async throws {
+        let harness = DataPortTestHarness()
+        defer { harness.cleanup() }
+
+        let kubeID = UUID()
+        let backup = DataPortService.KumaBackup(
+            services: [],
+            providers: [],
+            portMappings: [],
+            kubeConfigs: [
+                DataPortService.ExportKubeConfig(
+                    id: kubeID,
+                    name: "OnDisk",
+                    path: "/tmp/kubeconfig.yaml",
+                    encryptedConfigContent: ""
+                )
+            ]
+        )
+        try await harness.repository.importData(backup: backup, strategy: .preserveOrMerge)
+
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        let row = try await kubeRepo.fetch(id: kubeID)
+        #expect(row?.sourceFilePath == "/tmp/kubeconfig.yaml")
     }
 }

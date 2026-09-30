@@ -55,12 +55,6 @@ extension SidebarViewModel {
                 icon: .system("star"),
                 children: nil
             )),
-            .item(SidebarNode(
-                id: .stable("live-logs"),
-                title: "Live Logs",
-                icon: .system("terminal"),
-                children: nil
-            )),
             .item(groupsHeader)
         ]
     }

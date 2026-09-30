@@ -19,8 +19,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         guard let kubectl = await KumaSettingsExecutableResolver.kubectl() else {
             throw ServiceExecutionError.binaryNotFound("kubectl")
@@ -31,83 +30,53 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             throw ServiceExecutionError.invalidConfiguration("At least one port mapping (Local:Remote) is required for Kubernetes port-forwarding.")
         }
 
-        guard let targetName = provider.targetName?.trimmingCharacters(in: .whitespacesAndNewlines), !targetName.isEmpty else {
-            throw ServiceExecutionError.invalidConfiguration("Target resource name is required (e.g. my-app-service or pod pattern).")
-        }
-
-        let kubeTarget = KubeTargetType(rawValue: provider.kubeTargetType ?? "") ?? .pod
-        let namespace = provider.kubeNamespace?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let usePattern = provider.usePattern ?? true
         let execConfig = try await KubeConfigExecutionResolver.resolve(for: provider)
-        let kubeconfigPath = execConfig.kubeconfigPath
+        let namespace = provider.kubeNamespace?.trimmingCharacters(in: .whitespacesAndNewlines)
         let context = execConfig.context?.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        let resolvedName: String
-        if usePattern {
-            resolvedName = try await resolveDynamicResourceName(
-                kubectlPath: kubectl,
-                targetType: kubeTarget,
-                targetPattern: targetName,
-                namespace: namespace,
-                context: context,
-                kubeconfigPath: kubeconfigPath,
-                pipeline: pipeline
-            )
-        } else {
-            resolvedName = targetName
-        }
-
-        let resolvedTarget = "\(kubeTarget.portForwardKind)/\(resolvedName)"
-
-        try await preflightTargetExists(
+        let resolved = try await KubeTargetResolver.resolve(
+            provider: provider,
             kubectlPath: kubectl,
-            target: resolvedTarget,
+            exec: execConfig
+        )
+        try await persistResolvedTargetIfNeeded(service: service, provider: provider, resolved: resolved)
+
+        let plan = KubePortForwardPlan.build(
+            resolved: resolved,
+            exec: execConfig,
+            portMappings: portMappings,
             namespace: namespace,
-            context: context,
-            kubeconfigPath: kubeconfigPath,
-            pipeline: pipeline
+            context: context
         )
 
-        var args = ["port-forward", resolvedTarget]
-
-        if let kubeconfigPath, !kubeconfigPath.isEmpty {
-            args.append("--kubeconfig")
-            args.append(kubeconfigPath)
-        }
-
-        for mapping in portMappings {
-            args.append("\(mapping.localPort):\(mapping.remotePort)")
-        }
-
-        if let namespace, !namespace.isEmpty {
-            args.append("-n")
-            args.append(namespace)
-        }
-
-        if let context, !context.isEmpty {
-            args.append("--context")
-            args.append(context)
+        if let adoptedPID = await KubePortForwardAdoption.findAdoptablePID(plan: plan) {
+            Self.logger.info(
+                "Using existing kubectl port-forward (PID \(adoptedPID, privacy: .public)) for service \(service.id.uuidString, privacy: .public)"
+            )
+            await processLauncher.adoptExternalProcess(
+                serviceID: service.id,
+                serviceName: service.name,
+                pid: adoptedPID
+            )
+            return
         }
 
         for mapping in portMappings {
             try await LocalPortConflictResolver.shared.ensurePortAvailable(
                 port: mapping.localPort,
                 startingServiceID: service.id,
-                startingServiceName: service.name,
-                pipeline: pipeline
+                startingServiceName: service.name
             )
         }
-
-        await pipeline.emit(level: "INFO", message: "Starting port-forward to \(resolvedTarget)...")
 
         _ = try await processLauncher.launch(
             serviceID: service.id,
             serviceName: service.name,
             executable: kubectl,
-            arguments: args,
+            arguments: plan.arguments,
             workingDirectory: nil,
             environment: nil,
-            onOutput: pipeline.makeOutputHandler()
+            onOutput: nil
         )
     }
 
@@ -119,108 +88,25 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
         await processLauncher.isRunning(serviceID: serviceID)
     }
 
-    // MARK: - Dynamic resource discovery (pod / service / deployment)
+    private func persistResolvedTargetIfNeeded(
+        service: Service,
+        provider: Provider,
+        resolved: KubeResolvedTarget
+    ) async throws {
+        guard let updated = KubeResolvedTargetPersistence.providerApplyingResolvedName(
+            provider: provider,
+            resolved: resolved
+        ) else { return }
 
-    private func resolveDynamicResourceName(
-        kubectlPath: String,
-        targetType: KubeTargetType,
-        targetPattern: String,
-        namespace: String?,
-        context: String?,
-        kubeconfigPath: String?,
-        pipeline: ServiceLogPipeline
-    ) async throws -> String {
-        await pipeline.emit(
-            level: "INFO",
-            message: "Discovering \(targetType.displayLabel) resources matching pattern '\(targetPattern)'..."
+        try await serviceRepository.updateProvider(updated)
+        Self.logger.info(
+            "Persisted resolved Kubernetes target \(resolved.kubectlReference, privacy: .public) for service \(service.name, privacy: .public)"
         )
-
-        var listArgs = [
-            "get", targetType.listResource,
-            "-o", "jsonpath=\(targetType.listNameJSONPath)",
-        ]
-
-        if let kubeconfigPath, !kubeconfigPath.isEmpty {
-            listArgs.append("--kubeconfig")
-            listArgs.append(kubeconfigPath)
-        }
-
-        if let namespace, !namespace.isEmpty {
-            listArgs.append("-n")
-            listArgs.append(namespace)
-        }
-
-        if let context, !context.isEmpty {
-            listArgs.append("--context")
-            listArgs.append(context)
-        }
-
-        let result = try await EphemeralCLI.run(
-            executablePath: kubectlPath,
-            arguments: listArgs,
-            timeout: KumaExecutionTimeouts.kubectlSubcommand,
-            stdio: .captureSeparated
-        )
-
-        let output = result.stdout
-        let resourceNames = output
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        if resourceNames.isEmpty {
-            let errMsg = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !errMsg.isEmpty {
-                throw ServiceExecutionError.processFailed("Kubectl \(targetType.listResource) discovery error: \(errMsg)")
-            }
-            let emptyHint = targetType == .pod ? "No running pods found" : "No \(targetType.listResource) found"
-            throw ServiceExecutionError.processFailed("\(emptyHint) in namespace '\(namespace ?? "default")'.")
-        }
-
-        guard let matched = KubeTargetNameMatcher.firstMatch(pattern: targetPattern, in: resourceNames) else {
-            throw ServiceExecutionError.processFailed(
-                "Found \(resourceNames.count) \(targetType.listResource), but none matched pattern '\(targetPattern)'. Available: \(resourceNames.prefix(3).joined(separator: ", "))"
+        await MainActor.run {
+            KumaServiceNotification.postServiceUpdated(
+                serviceID: service.id,
+                source: KumaServiceNotification.sourceExecution
             )
         }
-
-        await pipeline.emit(level: "INFO", message: "Matched \(targetType.displayLabel): '\(matched)'.")
-        return matched
     }
-
-    private func preflightTargetExists(
-        kubectlPath: String,
-        target: String,
-        namespace: String?,
-        context: String?,
-        kubeconfigPath: String?,
-        pipeline: ServiceLogPipeline
-    ) async throws {
-        var getArgs = ["get", target, "-o", "name"]
-        if let kubeconfigPath, !kubeconfigPath.isEmpty {
-            getArgs.append(contentsOf: ["--kubeconfig", kubeconfigPath])
-        }
-        if let namespace, !namespace.isEmpty {
-            getArgs.append(contentsOf: ["-n", namespace])
-        }
-        if let context, !context.isEmpty {
-            getArgs.append(contentsOf: ["--context", context])
-        }
-
-        let result = try await EphemeralCLI.run(
-            executablePath: kubectlPath,
-            arguments: getArgs,
-            timeout: KumaExecutionTimeouts.kubectlSubcommand,
-            stdio: .captureSeparated
-        )
-
-        if result.terminationStatus == 0 {
-            await pipeline.emit(level: "INFO", message: "Preflight OK: \(target) exists in cluster.")
-            return
-        }
-
-        let errMsg = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-        let detail = errMsg.isEmpty ? "exit code \(result.terminationStatus)" : errMsg
-        throw ServiceExecutionError.processFailed("Preflight failed for \(target): \(detail)")
-    }
-
 }

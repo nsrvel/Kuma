@@ -4,29 +4,31 @@ public struct DockerComposeSettingsView: View {
     @Binding public var yamlConfig: String
     @Binding public var composeFilePath: String
     public var isLocked: Bool
+    public var bindingIdentity: UUID?
     public var onSave: () -> Void
 
     public init(
         yamlConfig: Binding<String>,
         composeFilePath: Binding<String>,
         isLocked: Bool = false,
+        bindingIdentity: UUID? = nil,
         onSave: @escaping () -> Void = {}
     ) {
         self._yamlConfig = yamlConfig
         self._composeFilePath = composeFilePath
         self.isLocked = isLocked
+        self.bindingIdentity = bindingIdentity
         self.onSave = onSave
     }
 
     public var body: some View {
         ComposeSettingsView(
-            engineTitle: "Docker Compose",
-            emptySummary: "No docker-compose.yml configured.",
+            filePrompt: "~/path/to/docker-compose.yml",
             editorPlaceholder: "version: '3.8'\nservices:\n  web:\n    image: nginx:alpine\n    ports:\n      - \"80:80\"",
-            composeFilePlaceholder: "~/path/to/docker-compose.yml",
             yamlConfig: $yamlConfig,
             composeFilePath: $composeFilePath,
             isLocked: isLocked,
+            bindingIdentity: bindingIdentity,
             onSave: onSave
         )
     }

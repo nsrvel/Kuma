@@ -13,7 +13,7 @@
 > - `KumaSoundManager.swift`  
 > - `KumaTheme.swift`  
 > - `ProcessRegistry.swift`  
-> - `LogFileWriter.swift`  
+> - `RunSpool.swift`  
 > **Test Suite Target:** `KumaTests/Features/App/` (`SingleInstanceGuardTests.swift`, `AppCoordinatorTests.swift`, `CryptoVaultTests.swift`, `AlertServiceTests.swift`, `KumaSoundManagerTests.swift`, `LifecycleTeardownTests.swift`, `KumaCommandsTests.swift`, `AppThemeAndNotificationTests.swift`)
 
 ---
@@ -67,8 +67,7 @@ stateDiagram-v2
     state TerminatingState {
         [*] --> AppWillTerminate : AppDelegate.applicationWillTerminate
         AppWillTerminate --> TerminateSubprocesses : ProcessRegistry.shared.terminateAll() (SIGINT -> SIGTERM -> SIGKILL)
-        TerminateSubprocesses --> FlushLogs : LogFileWriter.shared.flushAll()
-        FlushLogs --> SafeExit : Process cleanly exited
+        TerminateSubprocesses --> SafeExit : Process cleanly exited
     }
 
     SafeExit --> [*]
@@ -96,7 +95,7 @@ stateDiagram-v2
 | **Runtime Any** | Appearance mode changed | **Theme Updated** | Apply color tokens dynamically across scenes without view hierarchy reconstructs. | `[INV-APP-08]` |
 | **Runtime Any** | App quit requested (`NSApplication.terminate` / ⌘Q) | **Terminating** | `applicationWillTerminate` invoked. Triggers asynchronous cleanup task. | `[INV-APP-03]` |
 | **Terminating** | Subprocess cleanup | **Subprocesses Killed** | Call `ProcessRegistry.shared.terminateAll()`. Escalate `SIGINT` $\to$ `SIGTERM` $\to$ `SIGKILL` to prevent orphan daemons. | `[INV-APP-03]` |
-| **Terminating** | Log buffer cleanup | **Exited Cleanly** | Call `LogFileWriter.shared.flushAll()`. Close open file handles. Terminate host process. | `[INV-APP-03]` |
+| **Terminating** | Clean exit | **Exited Cleanly** | Subprocess cleanup complete; host process exits. Per-run spool files removed via execution supervisor / `RunSpool` as runs end. | `[INV-APP-03]` |
 
 ---
 
@@ -104,7 +103,7 @@ stateDiagram-v2
 
 1. **`[INV-APP-01]` Strict Single-Instance Execution & Graceful Multi-Launch Guard**: Kuma tidak boleh berjalan lebih dari satu instance di satu user session macOS. Jika instance kedua diluncurkan (misal double click bersamaan), instance aktif harus di-bring to front (`activate()`) dan instance kedua keluar (`terminate`) seketika di `applicationWillFinishLaunching` sebelum UI scene dan database terbuka. Pemeriksaan ini **wajib dilewati (bypass)** jika berjalan di bawah environment unit test (`XCTestConfigurationFilePath != nil` / `NSClassFromString("XCTestCase") != nil` / `SWIFT_TESTING != nil`).
 2. **`[INV-APP-02]` Deterministic Phase Transitions & Storage Integrity**: Transisi `AppCoordinator` antara `.onboarding` dan `.mainWorkspace` wajib sinkron secara atomik dengan `KumaSettingsKey.hasCompletedOnboarding`. Tidak boleh ada ambiguitas fase ketika storage kosong atau rusak (wajib fallback ke `.onboarding`).
-3. **`[INV-APP-03]` Zero-Orphan Subprocess Termination**: Saat aplikasi ditutup (`applicationWillTerminate`), Kuma wajib mematikan seluruh subproses yang terdaftar di `ProcessRegistry` menggunakan eskalasi sinyal POSIX (`SIGINT` $\to$ `SIGTERM` $\to$ `SIGKILL`) serta mem-flush semua buffer log di `LogFileWriter`. Tidak boleh ada child process yang tertinggal sebagai zombie/orphan.
+3. **`[INV-APP-03]` Zero-Orphan Subprocess Termination**: Saat aplikasi ditutup (`applicationWillTerminate`), Kuma wajib mematikan seluruh subproses yang terdaftar di `ProcessRegistry` menggunakan eskalasi sinyal POSIX (`SIGINT` $\to$ `SIGTERM` $\to$ `SIGKILL`). Tidak boleh ada child process yang tertinggal sebagai zombie/orphan.
 4. **`[INV-APP-04]` Thread-Safe Global Alert Bus**: `AlertService` wajib terisolasi ke `@MainActor` dan reactive via Swift Observation (`@Observable`). Alert aktif hanya boleh ada satu pada satu waktu (`single-slot modal`), dan dismiss wajib me-reset `activeAlert` kembali ke `nil`.
 5. **`[INV-APP-05]` Master Key Security & POSIX Permission Lockdown**: `CryptoVault` wajib mengamankan file kunci simetris AES-256 (`master.key`) dengan atribut permission POSIX `0600` (hanya owner read/write) dan direktori penampungnya dengan `0700`. Enkripsi wajib menggunakan format terotentikasi `nonce:tag:ciphertext`.
 6. **`[INV-APP-06]` Idempotent Audio Asset Synchronization**: Pengecekan file audio sistem `kuma-alert.caf` ke `~/Library/Sounds/` wajib bersifat idempoten: jika file sudah ada di folder tujuan, sistem tidak boleh melakukan operasi penulisan disk ulang saat app startup. Volume playback dibatasi aman pada ~45%.

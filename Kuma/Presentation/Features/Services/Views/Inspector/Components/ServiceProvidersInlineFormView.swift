@@ -12,7 +12,6 @@ public struct ServiceProvidersInlineFormView: View {
             headerTitle: isEditing ? "Edit Provider" : "New Provider",
             headerIcon: "square.stack.3d.down.right.fill",
             closeAccessibilityLabel: "Cancel add provider",
-            showsCancelInFooter: false,
             onCancel: onCancel,
             onPrimary: onSave
         ) {
@@ -28,7 +27,7 @@ public struct ServiceProvidersInlineFormView: View {
                     titleResolver: { (ProviderCategory(rawValue: $0) ?? .docker).sidebarLabel }
                 )
 
-                Divider().opacity(0.4)
+                Divider().opacity(0.3)
 
                 KumaTextField(
                     label: "Custom Label (Optional)",
@@ -36,6 +35,8 @@ public struct ServiceProvidersInlineFormView: View {
                     placeholder: "Staging"
                 )
             }
+            .padding(.top, KumaSpacing.xs)
+            .padding(.bottom, KumaSpacing.xs)
         }
     }
 }

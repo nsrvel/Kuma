@@ -280,6 +280,12 @@ public nonisolated final class AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v7_kube_config_source_path") { db in
+            try db.alter(table: "kube_config") { t in
+                t.add(column: "sourceFilePath", .text)
+            }
+        }
+
         return migrator
     }
 }

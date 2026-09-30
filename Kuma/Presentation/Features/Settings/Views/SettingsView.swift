@@ -20,7 +20,6 @@ public struct SettingsView: View {
                 SettingsCLIToolsSection(viewModel: viewModel)
                 SettingsTunnelingToolsSection(viewModel: viewModel)
                 SettingsPortsConnectionsSection(viewModel: viewModel)
-                SettingsLogsSection(viewModel: viewModel)
 
                 // Data
                 SettingsDataSection(viewModel: viewModel, workspaceStore: workspaceStore)

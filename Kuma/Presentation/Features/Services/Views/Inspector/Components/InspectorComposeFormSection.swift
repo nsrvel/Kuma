@@ -8,12 +8,13 @@ public struct InspectorComposeFormSection: View {
 
     public var body: some View {
         KumaFormSection(icon: "shippingbox.fill", title: "Configuration") {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: KumaSpacing.md) {
                 if isPodman {
                     PodmanComposeSettingsView(
                         yamlConfig: optionalStringBinding(\.yamlConfig),
                         composeFilePath: optionalStringBinding(\.composeFilePath),
                         isLocked: isLocked,
+                        bindingIdentity: provider.id,
                         onSave: onFieldChanged
                     )
                 } else {
@@ -21,11 +22,10 @@ public struct InspectorComposeFormSection: View {
                         yamlConfig: optionalStringBinding(\.yamlConfig),
                         composeFilePath: optionalStringBinding(\.composeFilePath),
                         isLocked: isLocked,
+                        bindingIdentity: provider.id,
                         onSave: onFieldChanged
                     )
                 }
-
-                KumaDivider(opacity: 0.06, verticalPadding: 2)
 
                 InitialScriptSettingsView(
                     initialScript: optionalStringBinding(\.initialScript),

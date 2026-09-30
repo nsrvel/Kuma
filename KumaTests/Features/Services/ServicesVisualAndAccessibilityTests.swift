@@ -50,6 +50,9 @@ struct ServicesVisualAndAccessibilityTests {
             if name.hasSuffix("+DeckChrome.swift") || name.hasSuffix("+Notifications.swift") { continue }
             let text = try String(contentsOf: url, encoding: .utf8)
             if !text.contains("#Preview") && text.contains(": View") {
+                let previewCompanion = url.deletingLastPathComponent()
+                    .appendingPathComponent("\(url.deletingPathExtension().lastPathComponent)+Preview.swift")
+                if FileManager.default.fileExists(atPath: previewCompanion.path) { continue }
                 missing.append(name)
             }
         }

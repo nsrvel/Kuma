@@ -1,82 +1,65 @@
 import SwiftUI
 
-/// Dedicated full-height live terminal log viewport for Service Inspector.
+/// Minimal live log lines for Service Inspector (reset baseline — no chrome).
 public struct InspectorLiveConsoleView: View {
-    private static let awaitingOutputPlaceholderID = UUID(uuidString: "E7A1C4B2-9F3D-4A1E-8C0B-000000000001")!
-
     public let serviceID: UUID
-    public let serviceName: String
+    public let service: Service
+    public let provider: Provider
     public let isRunning: Bool
 
-    @State private var logAggregator = LogAggregator.shared
-    @State private var isAutoScroll: Bool = true
+    @Bindable private var session = LiveLogSession.shared
 
-    private static func awaitingOutputEntry(serviceID: UUID, serviceName: String) -> LiveLogEntry {
-        LiveLogEntry(
-            id: awaitingOutputPlaceholderID,
-            serviceID: serviceID,
-            serviceName: serviceName,
-            timestamp: "—",
-            level: "INFO",
-            message: "Process runner initialized (Awaiting output)"
-        )
-    }
-
-    private var serviceLogs: [LiveLogEntry] {
-        let list = logAggregator.logs(for: serviceID)
-        if list.isEmpty && isRunning {
-            return [Self.awaitingOutputEntry(serviceID: serviceID, serviceName: serviceName)]
-        }
-        return list
-    }
-
-    public init(serviceID: UUID, serviceName: String, isRunning: Bool) {
+    public init(
+        serviceID: UUID,
+        service: Service,
+        provider: Provider,
+        isRunning: Bool
+    ) {
         self.serviceID = serviceID
-        self.serviceName = serviceName
+        self.service = service
+        self.provider = provider
         self.isRunning = isRunning
     }
 
-    public var body: some View {
-        let logs = serviceLogs
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Toggle("Auto-scroll", isOn: $isAutoScroll)
-                    .toggleStyle(.checkbox)
-                    .font(KumaFont.caption)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+    private var lines: [LiveLogSession.LiveLogLine] {
+        guard session.bufferedServiceID == serviceID else { return [] }
+        return session.lines
+    }
 
-            ZStack {
-                if logs.isEmpty && !isRunning {
-                    VStack(spacing: 8) {
-                        Image(systemName: "terminal")
-                            .font(.system(size: 24))
-                            .foregroundStyle(.secondary.opacity(0.4))
-                        Text("No logs available")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Text("Start the service to observe real-time terminal output.")
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.tertiary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(KumaSpacing.lg)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    KumaLogConsoleView(
-                        entries: logs,
-                        isAutoScroll: isAutoScroll,
-                        emptyPlaceholder: "Awaiting service logs..."
-                    )
+    public var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(lines) { line in
+                    Text(line.text)
+                        .font(.system(size: 11, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .padding(.horizontal, KumaSpacing.lg)
+            .padding(.vertical, KumaSpacing.sm)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task {
-            logAggregator.retainUISubscriber()
-            defer { logAggregator.releaseUISubscriber() }
+        .task(id: LiveLogStreamKey(serviceID: serviceID, isRunning: isRunning)) {
+            guard isRunning else {
+                session.stop()
+                return
+            }
+            session.start(serviceID: serviceID, service: service, provider: provider)
+            defer {
+                session.stop()
+                if session.bufferedServiceID == serviceID {
+                    session.clear()
+                }
+            }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+            }
         }
     }
+}
+
+private struct LiveLogStreamKey: Hashable {
+    let serviceID: UUID
+    let isRunning: Bool
 }

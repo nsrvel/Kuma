@@ -18,6 +18,8 @@ struct KumaApp: App {
                 .kumaMainWorkspaceChrome()
                 .onAppear {
                     appDelegate.serviceStateStore = serviceStateStore
+                    RunSpool.purgeAll()
+                    serviceStateStore.bindExecutionSupervisor()
                 }
         }
         .defaultSize(width: 1100, height: 750)

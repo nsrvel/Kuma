@@ -74,21 +74,6 @@ struct SettingsInitialStateTests {
         #expect(viewModel.notifyOnServiceFailure == true)
     }
 
-    // MARK: - [TC-A06] Clean Install Default Log Retention
-    @Test("TC-A06: Fresh install defaults to medium log buffer limit and false clearLogsOnSwitch")
-    func testDefaultLogRetention() {
-        let harness = SettingsTestHarness()
-        defer { harness.cleanup() }
-
-        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
-
-        #expect(viewModel.logRetentionLimit == .fiftyMB)
-        #expect(viewModel.logRetentionLimit.title == "500")
-        #expect(viewModel.logRetentionLimit.maxTotalLines == 2_000)
-        #expect(viewModel.logRetentionLimit.maxDiskMegabytes == 50)
-        #expect(viewModel.clearLogsOnSwitch == false)
-    }
-
     // MARK: - [TC-A07] Clean Install Default Port Conflict Policy
     @Test("TC-A07: Fresh install defaults to warnAndBlock port conflict policy")
     func testDefaultPortConflictPolicy() {

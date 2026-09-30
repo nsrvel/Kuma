@@ -25,14 +25,13 @@ public enum ServiceExecutionError: LocalizedError, Sendable {
     }
 }
 
-/// Central orchestrator coordinating modular runners and log pipelines for services.
+/// Central orchestrator coordinating modular runners for services.
 public final class ServiceExecutionEngine: Sendable {
     public static let shared = ServiceExecutionEngine()
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ServiceExecutionEngine")
 
     private let serviceRepository: any ServiceRepositoryProtocol
-    private let activePipelinesLock = NSLock()
-    nonisolated(unsafe) private var activePipelines: [UUID: ServiceLogPipeline] = [:]
+    private let processRegistry: ProcessRegistry
 
     private let kubernetesRunner: KubernetesRunner
     private let shellRunner: ShellRunner
@@ -41,8 +40,6 @@ public final class ServiceExecutionEngine: Sendable {
     private let healthCheckRunner: HealthCheckRunner
     private let tunnelRunner: TunnelRunner
     private let processMonitorRunner: ProcessMonitorRunner
-    private let processRegistry: ProcessRegistry
-    private let stopGate = ServiceStopGate()
 
     public init(
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
@@ -60,9 +57,7 @@ public final class ServiceExecutionEngine: Sendable {
         self.processMonitorRunner = ProcessMonitorRunner()
     }
 
-    /// Starts a service using its configured active provider.
     public func start(serviceID: UUID) async throws {
-        // Idempotency check: Skip if already actively running
         if await isServiceRunning(serviceID: serviceID) {
             Self.logger.info("Service '\(serviceID)' is already actively running. Skipping rerun.")
             return
@@ -79,49 +74,14 @@ public final class ServiceExecutionEngine: Sendable {
 
         Self.logger.info("Starting service '\(service.name)' with provider '\(provider.type.rawValue)'")
 
-        if KumaSettingsKey.bool(forKey: KumaSettingsKey.clearLogsOnSwitch, defaultValue: false) {
-            await MainActor.run { LogAggregator.shared.clear(serviceID: serviceID) }
-        }
-
-        let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
-        setPipeline(pipeline, for: serviceID)
-
         let runner = runner(for: provider.type)
-        do {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
-        } catch {
-            await pipeline.emit(level: "ERROR", message: "Failed to start: \(error.localizedDescription)")
-            await pipeline.finish()
-            _ = removePipeline(for: serviceID)
-            throw error
-        }
+        try await runner.start(service: service, provider: provider)
     }
 
-    /// Stops a running service using its active provider runner (bounded subprocess waits per runner).
     public func stop(serviceID: UUID) async {
-        await stopGate.runOnce(serviceID: serviceID) {
-            await self.performStop(serviceID: serviceID)
-        }
-    }
-
-    /// Best-effort release when `stop` hits the global wall timeout (UI must not stay `.stopping`).
-    func forceReleaseService(serviceID: UUID) async {
-        if let provider = await resolveActiveProvider(for: serviceID),
-           provider.type == .docker || provider.type == .podman {
-            await containerRunner.forceComposeTeardown(serviceID: serviceID, provider: provider)
-        }
-        await containerRunner.forceUnregister(serviceID: serviceID)
-        await processRegistry.stop(serviceID: serviceID)
-        if let pipeline = removePipeline(for: serviceID) {
-            await pipeline.finish()
-        }
-    }
-
-    private func performStop(serviceID: UUID) async {
-        Self.logger.info("Stopping service \(serviceID)...")
+        await ExecutionSupervisor.shared.stop(serviceID: serviceID)
 
         let provider = await resolveActiveProvider(for: serviceID)
-
         if let provider {
             switch provider.type {
             case .docker, .podman:
@@ -136,10 +96,16 @@ public final class ServiceExecutionEngine: Sendable {
         if await processRegistry.isRunning(serviceID: serviceID) {
             await processRegistry.stop(serviceID: serviceID)
         }
+    }
 
-        if let pipeline = removePipeline(for: serviceID) {
-            await pipeline.finish()
+    func forceReleaseService(serviceID: UUID) async {
+        if let provider = await resolveActiveProvider(for: serviceID),
+           provider.type == .docker || provider.type == .podman {
+            await containerRunner.forceComposeTeardown(serviceID: serviceID, provider: provider)
         }
+        containerRunner.forceUnregister(serviceID: serviceID)
+        await processRegistry.stop(serviceID: serviceID)
+        await ExecutionSupervisor.shared.unregister(serviceID: serviceID)
     }
 
     private func resolveActiveProvider(for serviceID: UUID) async -> Provider? {
@@ -158,53 +124,12 @@ public final class ServiceExecutionEngine: Sendable {
         await processMonitorRunner.stop(serviceID: serviceID)
     }
 
-    /// Checks if a service is actively running under any runner.
     public func isServiceRunning(serviceID: UUID) async -> Bool {
-        if await kubernetesRunner.isRunning(serviceID: serviceID) { return true }
-        if await shellRunner.isRunning(serviceID: serviceID) { return true }
-        if await containerRunner.isRunning(serviceID: serviceID) { return true }
-        if await sshRunner.isRunning(serviceID: serviceID) { return true }
-        if await healthCheckRunner.isRunning(serviceID: serviceID) { return true }
-        if await tunnelRunner.isRunning(serviceID: serviceID) { return true }
-        if await processMonitorRunner.isRunning(serviceID: serviceID) { return true }
-        return false
+        await ExecutionSupervisor.shared.isOperational(serviceID: serviceID)
     }
 
-    /// Services among `candidates` that are active on non-process runners (health/monitor) or other runners.
     public func runningServiceIDs(among candidates: Set<UUID>) async -> Set<UUID> {
-        guard !candidates.isEmpty else { return [] }
-        var running = healthCheckRunner.activeServiceIDs().intersection(candidates)
-        running.formUnion(processMonitorRunner.activeServiceIDs().intersection(candidates))
-        var remaining = candidates.subtracting(running)
-
-        let processActive = Set(await ProcessRegistry.shared.activeRunningServiceIDs()).intersection(remaining)
-        running.formUnion(processActive)
-        remaining.subtract(processActive)
-        guard !remaining.isEmpty else { return running }
-
-        await withTaskGroup(of: UUID?.self) { group in
-            for id in remaining {
-                group.addTask {
-                    await self.isServiceRunning(serviceID: id) ? id : nil
-                }
-            }
-            for await id in group {
-                if let id { running.insert(id) }
-            }
-        }
-        return running
-    }
-
-    private func setPipeline(_ pipeline: ServiceLogPipeline, for serviceID: UUID) {
-        activePipelinesLock.lock()
-        defer { activePipelinesLock.unlock() }
-        activePipelines[serviceID] = pipeline
-    }
-
-    private func removePipeline(for serviceID: UUID) -> ServiceLogPipeline? {
-        activePipelinesLock.lock()
-        defer { activePipelinesLock.unlock() }
-        return activePipelines.removeValue(forKey: serviceID)
+        await ExecutionSupervisor.shared.runningServiceIDs(among: candidates)
     }
 
     private func runner(for category: ProviderCategory) -> any ServiceRunnerProtocol {

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import os
 
@@ -46,6 +47,13 @@ public actor ProcessRegistry {
         }
     }
 
+    private struct AdoptedProcess: Sendable {
+        let serviceID: UUID
+        let serviceName: String
+        let pid: pid_t
+        let startTime: Date
+    }
+
     private final class ManagedProcess {
         let serviceID: UUID
         let serviceName: String
@@ -53,20 +61,13 @@ public actor ProcessRegistry {
         let pgid: pid_t
         let signalTarget: SignalTarget
         let startTime: Date
-        let onOutput: (@Sendable (String) -> Void)?
-        var stdoutPipe: Pipe?
-        var stderrPipe: Pipe?
-
         init(
             serviceID: UUID,
             serviceName: String,
             process: Process,
             pgid: pid_t,
             signalTarget: SignalTarget,
-            startTime: Date,
-            stdoutPipe: Pipe?,
-            stderrPipe: Pipe?,
-            onOutput: (@Sendable (String) -> Void)?
+            startTime: Date
         ) {
             self.serviceID = serviceID
             self.serviceName = serviceName
@@ -74,38 +75,12 @@ public actor ProcessRegistry {
             self.pgid = pgid
             self.signalTarget = signalTarget
             self.startTime = startTime
-            self.stdoutPipe = stdoutPipe
-            self.stderrPipe = stderrPipe
-            self.onOutput = onOutput
-        }
-
-        func cleanupPipes(drainRemaining: Bool = false) {
-            if let stdout = stdoutPipe {
-                stdout.fileHandleForReading.readabilityHandler = nil
-                if drainRemaining {
-                    let remaining = stdout.fileHandleForReading.readDataToEndOfFile()
-                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
-                        onOutput?(text)
-                    }
-                }
-                try? stdout.fileHandleForReading.close()
-            }
-            if let stderr = stderrPipe {
-                stderr.fileHandleForReading.readabilityHandler = nil
-                if drainRemaining {
-                    let remaining = stderr.fileHandleForReading.readDataToEndOfFile()
-                    if !remaining.isEmpty, let text = String(data: remaining, encoding: .utf8) {
-                        onOutput?(text)
-                    }
-                }
-                try? stderr.fileHandleForReading.close()
-            }
-            stdoutPipe = nil
-            stderrPipe = nil
         }
     }
 
     private var activeProcesses: [UUID: ManagedProcess] = [:]
+    private var adoptedProcesses: [UUID: AdoptedProcess] = [:]
+    private var adoptedMonitorTasks: [UUID: Task<Void, Never>] = [:]
     /// Services we are stopping via `stop()` — termination should not be treated as a user-visible crash.
     private var intentionallyStopping: Set<UUID> = []
 
@@ -121,6 +96,7 @@ public actor ProcessRegistry {
         environment: [String: String]? = nil,
         onOutput: (@Sendable (String) -> Void)? = nil
     ) async throws -> pid_t {
+        _ = onOutput
         // Stop any existing process for this service first
         if activeProcesses[serviceID] != nil {
             await stop(serviceID: serviceID)
@@ -142,17 +118,19 @@ public actor ProcessRegistry {
             process.environment = currentEnv
         }
 
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
         process.qualityOfService = .userInitiated
-
-        // Setup pipe readability handlers BEFORE run() so early output is never missed
-        setupPipeHandler(pipe: stdoutPipe, serviceID: serviceID, onOutput: onOutput)
-        setupPipeHandler(pipe: stderrPipe, serviceID: serviceID, onOutput: onOutput)
+        let spoolFD = try RunSpool.openAppendFD(for: serviceID)
+        let stdoutHandle = FileHandle(fileDescriptor: spoolFD, closeOnDealloc: false)
+        let stderrFD = dup(spoolFD)
+        process.standardOutput = stdoutHandle
+        if stderrFD >= 0 {
+            process.standardError = FileHandle(fileDescriptor: stderrFD, closeOnDealloc: true)
+        } else {
+            process.standardError = stdoutHandle
+        }
 
         try process.run()
+        try? stdoutHandle.close()
 
         let pid = process.processIdentifier
         let signalTarget: SignalTarget
@@ -166,21 +144,23 @@ public actor ProcessRegistry {
             signalTarget = .singleProcess(pid: pid)
         }
 
+        let startedAt = Date()
         let managed = ManagedProcess(
             serviceID: serviceID,
             serviceName: serviceName,
             process: process,
             pgid: pid,
             signalTarget: signalTarget,
-            startTime: Date(),
-            stdoutPipe: stdoutPipe,
-            stderrPipe: stderrPipe,
-            onOutput: onOutput
+            startTime: startedAt
         )
         activeProcesses[serviceID] = managed
-        Self.syncActiveIDs(Array(activeProcesses.keys))
+        Self.syncActiveIDs(Array(Set(activeProcesses.keys).union(adoptedProcesses.keys)))
 
         Self.logger.info("Launched process for service \(serviceName) (\(serviceID)) (PID: \(pid), PGID: \(pid))")
+
+        await ExecutionSupervisor.shared.register(
+            .managedProcess(serviceID: serviceID, serviceName: serviceName, pid: pid, startedAt: startedAt)
+        )
 
         // Setup clean termination observer
         process.terminationHandler = { [weak self] proc in
@@ -196,64 +176,142 @@ public actor ProcessRegistry {
         return pid
     }
 
+    /// Tracks an external PID (not started by Kuma) until it exits or `stop` is called.
+    public func adoptExternalProcess(serviceID: UUID, serviceName: String, pid: pid_t) async {
+        if activeProcesses[serviceID] != nil {
+            await stop(serviceID: serviceID)
+        }
+        adoptedMonitorTasks[serviceID]?.cancel()
+        adoptedProcesses.removeValue(forKey: serviceID)
+
+        guard pid > 0, isPIDAlive(pid) else { return }
+
+        let startedAt = Date()
+        adoptedProcesses[serviceID] = AdoptedProcess(
+            serviceID: serviceID,
+            serviceName: serviceName,
+            pid: pid,
+            startTime: startedAt
+        )
+        Self.syncActiveIDs(Array(Set(activeProcesses.keys).union(adoptedProcesses.keys)))
+
+        Self.logger.info(
+            "Adopted external process for service \(serviceName) (\(serviceID)) (PID: \(pid))"
+        )
+
+        await ExecutionSupervisor.shared.register(
+            .managedProcess(serviceID: serviceID, serviceName: serviceName, pid: pid, startedAt: startedAt)
+        )
+
+        adoptedMonitorTasks[serviceID] = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self else { return }
+                let alive = await self.isPIDAliveOnActor(pid)
+                if !alive {
+                    await self.handleAdoptedProcessExit(serviceID: serviceID, exitCode: 0)
+                    return
+                }
+            }
+        }
+    }
+
+    private func isPIDAliveOnActor(_ pid: pid_t) -> Bool {
+        isPIDAlive(pid)
+    }
+
+    private nonisolated func isPIDAlive(_ pid: pid_t) -> Bool {
+        kill(pid, 0) == 0
+    }
+
+    private func handleAdoptedProcessExit(serviceID: UUID, exitCode: Int32) async {
+        adoptedMonitorTasks[serviceID]?.cancel()
+        adoptedMonitorTasks.removeValue(forKey: serviceID)
+        let wasIntentionalStop = intentionallyStopping.remove(serviceID) != nil
+        guard let adopted = adoptedProcesses.removeValue(forKey: serviceID) else { return }
+        Self.syncActiveIDs(Array(Set(activeProcesses.keys).union(adoptedProcesses.keys)))
+        await ExecutionSupervisor.shared.handleManagedProcessExit(
+            serviceID: serviceID,
+            serviceName: adopted.serviceName,
+            exitCode: exitCode,
+            intentionalStop: wasIntentionalStop
+        )
+    }
+
     private func handleProcessTerminated(serviceID: UUID, exitCode: Int32) async {
         let wasIntentionalStop = intentionallyStopping.remove(serviceID) != nil
         guard let managed = activeProcesses.removeValue(forKey: serviceID) else { return }
-        Self.syncActiveIDs(Array(activeProcesses.keys))
-        managed.cleanupPipes(drainRemaining: true)
-
-        let state: ServiceState = (exitCode == 0 || wasIntentionalStop) ? .stopped : .crashed
-        let pid = managed.process.processIdentifier
-
-        Task { @MainActor in
-            if state == .crashed {
-                ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: exitCode)
-            } else {
-                ServiceStateNotification.post(serviceID: serviceID, state: state, pid: pid)
-            }
-        }
-
-        if exitCode != 0 && !wasIntentionalStop && KumaSettingsKey.bool(
-            forKey: KumaSettingsKey.notifyOnServiceFailure,
-            defaultValue: true,
-            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
-        ) {
-            await SystemNotificationCenter.shared.send(
-                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)")
-            )
-        }
+        Self.syncActiveIDs(Array(Set(activeProcesses.keys).union(adoptedProcesses.keys)))
+        await ExecutionSupervisor.shared.handleManagedProcessExit(
+            serviceID: serviceID,
+            serviceName: managed.serviceName,
+            exitCode: exitCode,
+            intentionalStop: wasIntentionalStop
+        )
     }
 
     /// Stops a running service process with progressive signal escalation.
     /// Sends SIGINT first, waits up to 1.5s, escalates to SIGTERM, waits 1.0s, and finally SIGKILL.
     /// Pipes are kept open during shutdown to capture any final exit logs before being closed.
     public func stop(serviceID: UUID) async {
+        if let adopted = adoptedProcesses[serviceID] {
+            intentionallyStopping.insert(serviceID)
+            adoptedMonitorTasks[serviceID]?.cancel()
+            adoptedMonitorTasks.removeValue(forKey: serviceID)
+            let subtree = ProcessTreeTerminator.subtreePIDs(root: adopted.pid)
+            ProcessTreeTerminator.sendSignal(SIGINT, toSubtree: subtree, root: adopted.pid)
+            for _ in 0..<15 {
+                if !isPIDAlive(adopted.pid) && !ProcessTreeTerminator.anyAlive(in: subtree) { break }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            if isPIDAlive(adopted.pid) || ProcessTreeTerminator.anyAlive(in: subtree) {
+                ProcessTreeTerminator.sendSignal(SIGTERM, toSubtree: subtree, root: adopted.pid)
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+            if isPIDAlive(adopted.pid) || ProcessTreeTerminator.anyAlive(in: subtree) {
+                ProcessTreeTerminator.sendSignal(SIGKILL, toSubtree: subtree, root: adopted.pid)
+            }
+            await handleAdoptedProcessExit(serviceID: serviceID, exitCode: SIGTERM)
+            return
+        }
+
         guard let managed = activeProcesses[serviceID] else { return }
         intentionallyStopping.insert(serviceID)
         let process = managed.process
+        let rootPID = process.processIdentifier
+        let subtree = ProcessTreeTerminator.subtreePIDs(root: rootPID)
 
-        Self.logger.info("Stopping process for service \(serviceID) (PID: \(process.processIdentifier))...")
+        Self.logger.info("Stopping process for service \(serviceID) (PID: \(rootPID), subtree: \(subtree.count) PIDs)...")
 
-        managed.signalTarget.send(SIGINT)
+        func signalEscalation(_ signal: Int32) {
+            managed.signalTarget.send(signal)
+            ProcessTreeTerminator.sendSignal(signal, toSubtree: subtree, root: rootPID)
+        }
+
+        func subtreeSettled() -> Bool {
+            !process.isRunning && !ProcessTreeTerminator.anyAlive(in: subtree)
+        }
+
+        signalEscalation(SIGINT)
 
         for _ in 0..<15 {
-            if !process.isRunning { break }
+            if subtreeSettled() { break }
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        if process.isRunning {
-            Self.logger.warning("Process \(process.processIdentifier) still running after SIGINT. Escalating to SIGTERM.")
-            managed.signalTarget.send(SIGTERM)
+        if !subtreeSettled() {
+            Self.logger.warning("Subtree for PID \(rootPID) still alive after SIGINT. Escalating to SIGTERM.")
+            signalEscalation(SIGTERM)
 
             for _ in 0..<10 {
-                if !process.isRunning { break }
+                if subtreeSettled() { break }
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }
 
-        if process.isRunning {
-            Self.logger.error("Process \(process.processIdentifier) still running after SIGTERM. Sending SIGKILL.")
-            managed.signalTarget.send(SIGKILL)
+        if !subtreeSettled() {
+            Self.logger.error("Subtree for PID \(rootPID) still alive after SIGTERM. Sending SIGKILL.")
+            signalEscalation(SIGKILL)
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
@@ -265,12 +323,23 @@ public actor ProcessRegistry {
 
     /// Checks if a service process is currently active and running.
     public func isRunning(serviceID: UUID) -> Bool {
+        if let adopted = adoptedProcesses[serviceID] {
+            return isPIDAlive(adopted.pid)
+        }
         guard let managed = activeProcesses[serviceID] else { return false }
         return managed.process.isRunning
     }
 
     /// Returns process snapshot for a running service.
     public func getSnapshot(serviceID: UUID) -> ProcessSnapshot? {
+        if let adopted = adoptedProcesses[serviceID], isPIDAlive(adopted.pid) {
+            return ProcessSnapshot(
+                serviceID: serviceID,
+                pid: adopted.pid,
+                pgid: adopted.pid,
+                startTime: adopted.startTime
+            )
+        }
         guard let managed = activeProcesses[serviceID], managed.process.isRunning else { return nil }
         return ProcessSnapshot(
             serviceID: serviceID,
@@ -281,6 +350,9 @@ public actor ProcessRegistry {
     }
 
     public func serviceName(forPID pid: pid_t) -> String? {
+        for adopted in adoptedProcesses.values where adopted.pid == pid && isPIDAlive(pid) {
+            return adopted.serviceName
+        }
         for managed in activeProcesses.values where managed.process.isRunning && managed.process.processIdentifier == pid {
             return managed.serviceName
         }
@@ -288,6 +360,9 @@ public actor ProcessRegistry {
     }
 
     public func serviceID(forPID pid: pid_t) -> UUID? {
+        for adopted in adoptedProcesses.values where adopted.pid == pid && isPIDAlive(pid) {
+            return adopted.serviceID
+        }
         for managed in activeProcesses.values where managed.process.isRunning && managed.process.processIdentifier == pid {
             return managed.serviceID
         }
@@ -300,7 +375,9 @@ public actor ProcessRegistry {
         result.reserveCapacity(serviceIDs.count)
 
         for id in serviceIDs {
-            if let managed = activeProcesses[id], managed.process.isRunning {
+            if let adopted = adoptedProcesses[id], isPIDAlive(adopted.pid) {
+                result[id] = .running(pid: adopted.pid)
+            } else if let managed = activeProcesses[id], managed.process.isRunning {
                 result[id] = .running(pid: managed.process.processIdentifier)
             } else {
                 result[id] = .idle
@@ -311,9 +388,13 @@ public actor ProcessRegistry {
 
     /// Returns list of all service IDs currently running active child processes.
     public func activeRunningServiceIDs() -> [UUID] {
-        activeProcesses.values
+        let launched = activeProcesses.values
             .filter { $0.process.isRunning }
             .map { $0.serviceID }
+        let adopted = adoptedProcesses.values
+            .filter { isPIDAlive($0.pid) }
+            .map { $0.serviceID }
+        return Array(Set(launched + adopted))
     }
 
     /// Gracefully escalates termination for all tracked child processes (SIGTERM -> SIGKILL) and cleans up pipes without blocking.
@@ -335,22 +416,20 @@ public actor ProcessRegistry {
             if managed.process.isRunning {
                 managed.signalTarget.send(SIGKILL)
             }
-            managed.cleanupPipes(drainRemaining: false)
         }
+        for id in adoptedMonitorTasks.keys {
+            adoptedMonitorTasks[id]?.cancel()
+        }
+        adoptedMonitorTasks.removeAll()
+        for adopted in adoptedProcesses.values {
+            kill(adopted.pid, SIGTERM)
+        }
+        adoptedProcesses.removeAll()
         activeProcesses.removeAll()
         Self.syncActiveIDs([])
     }
 
-    private func setupPipeHandler(
-        pipe: Pipe,
-        serviceID: UUID,
-        onOutput: (@Sendable (String) -> Void)?
-    ) {
-        let handle = pipe.fileHandleForReading
-        handle.readabilityHandler = { fileHandle in
-            let data = fileHandle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
-            onOutput?(text)
-        }
+    public func terminateAllAsync() async {
+        terminateAll()
     }
 }

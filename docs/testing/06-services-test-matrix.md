@@ -87,9 +87,12 @@
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result |
 | :--- | :--- | :--- | :--- |
 | **TC-E01** | `testInspectorAutoSaveFlushedOnDisappear` | Edit field di Inspector lalu segera trigger `onDisappear` (<300ms) | Perubahan langsung di-flush dan ter-commit ke database, tidak hilang |
-| **TC-E02** | `testInspectorClearLogsScopedToServiceID` | Klik tombol trash logs di Inspector | Hanya log milik service aktif yang dihapus, log service lain tetap utuh |
+| **TC-E02** | *(superseded)* | Clear display di log toolbar | `LiveLogSession.clear()` hanya buffer inspector aktif (in-memory) |
+| **TC-L11** | `testCanAppendTailWithStableIDs` | Entry IDs stabil saat count naik | Incremental NSTextView append, bukan full rebuild |
+| **TC-L12** | `testLiveLogSessionCoalescesFlush` | Rapid `testing_ingest` | Flush coalesce menghasilkan baris terpisah |
+| **TC-L14** | `testPanelTeardownClearsBuffer` | Simulasi tutup panel (stop + clear) | Buffer kosong, tidak nyampah di shared session |
 | **TC-E03** | `testRapidLogStreamDoesNotHitchMainActor` | Stream ~1,000 log lines (batched pipeline) | Log di-coalesce/batch ke MainActor tanpa task flooding atau UI freeze |
-| **TC-E04** | `testLogAggregatorRingBufferBoundedMemory` | Stream log melebihi `maxEntries` (2,000 baris) | Memory bounded, operasi pembuangan log lama efisien ($O(1)$) tanpa array shift overhead |
+| **TC-L10** | `testLiveLogSessionRingBufferCapsAt1000Lines` | Ingest > 1,000 baris ke `LiveLogSession` | Buffer tetap 1,000 baris terakhir; trim notice di UI |
 | **TC-E05** | `testZeroEffortWhenIdle` | App dalam kondisi idle tanpa service running | Gate `shouldHandleExecutionStateNotifications`; **TC-E05b** filter recompute skip |
 | **TC-E06b** | `testSubprocessWaitTimeout` | `sleep` subprocess dengan timeout 0.25s | Proses di-terminate; `waitForExit` returns `false` (PROC-05) |
 | **TC-E06** | `testNonBlockingProcessWaitInAsyncEngine` | `SubprocessWait.waitForExit` pada child process | `waitUntilExit` tidak pada cooperative MainActor thread |

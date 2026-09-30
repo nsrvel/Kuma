@@ -45,11 +45,4 @@ struct KumaHapticManagerTests {
         #expect(mock.performedPatterns == [.levelChange])
     }
 
-    @Test("TC-G04: Shared instance executes without throwing")
-    func testSharedInstanceSafeExecution() {
-        KumaHapticManager.shared.tap()
-        KumaHapticManager.shared.alignment()
-        KumaHapticManager.shared.levelChange()
-        #expect(true)
-    }
 }

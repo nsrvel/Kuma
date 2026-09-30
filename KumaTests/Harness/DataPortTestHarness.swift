@@ -139,6 +139,19 @@ public final class DataPortTestHarness {
             }
         }
 
+        migrator.registerMigration("v6_provider_compose_and_script_paths") { db in
+            try db.alter(table: "provider") { t in
+                t.add(column: "composeFilePath", .text)
+                t.add(column: "initialScriptPath", .text)
+            }
+        }
+
+        migrator.registerMigration("v7_kube_config_source_path") { db in
+            try db.alter(table: "kube_config") { t in
+                t.add(column: "sourceFilePath", .text)
+            }
+        }
+
         try! migrator.migrate(queue)
 
         // Seed default workspace
@@ -230,12 +243,16 @@ public final class DataPortTestHarness {
     public func seedKubeConfig(
         id: UUID = UUID(),
         name: String,
-        encryptedContent: String
+        encryptedContent: String,
+        sourceFilePath: String? = nil
     ) throws {
         try databaseQueue.write { db in
             try db.execute(
-                sql: "INSERT OR REPLACE INTO kube_config (id, name, configContent, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
-                arguments: [id.uuidString, name, encryptedContent, Date(), Date()]
+                sql: """
+                INSERT OR REPLACE INTO kube_config (id, name, configContent, sourceFilePath, createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [id.uuidString, name, encryptedContent, sourceFilePath, Date(), Date()]
             )
         }
     }

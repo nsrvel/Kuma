@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 public struct KubeConfigInlineEditorView: View {
@@ -6,9 +5,12 @@ public struct KubeConfigInlineEditorView: View {
     let onDismiss: () -> Void
     let onSaveSuccess: () -> Void
 
+    @State private var sourceMode: KumaDualSourceMode = .chooseFile
+    @State private var draftPath: String = ""
+    @State private var draftYAML: String = ""
+
     private var saveDisabled: Bool {
-        viewModel.newKubeConfigName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || viewModel.newKubeConfigContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        viewModel.isSaveDisabled(sourceMode: sourceMode, draftPath: draftPath, draftYAML: draftYAML)
     }
 
     public init(
@@ -26,61 +28,62 @@ public struct KubeConfigInlineEditorView: View {
             headerTitle: viewModel.editingKubeConfigID == nil ? "New Kube Config" : "Edit Kube Config",
             headerIcon: "doc.text.fill",
             closeAccessibilityLabel: "Close kube config editor",
+            primaryTitle: sourceMode == .pasteYAML ? "Save" : "Save",
             primaryDisabled: saveDisabled,
+            showsCommitFooter: sourceMode == .pasteYAML || !draftPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            showsCancelInFooter: sourceMode == .pasteYAML,
             onCancel: {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     onDismiss()
                 }
             },
             onPrimary: {
+                commitDraftsToViewModel()
                 Task {
-                    await viewModel.saveConfig()
+                    await viewModel.saveConfig(sourceMode: sourceMode)
                     onSaveSuccess()
                 }
             }
         ) {
             VStack(alignment: .leading, spacing: KumaSpacing.md) {
-                KumaTextField(label: "Config Name", value: $viewModel.newKubeConfigName, placeholder: "Staging Cluster")
+                KumaTextField(label: "Name", value: $viewModel.newKubeConfigName, placeholder: "Staging Cluster")
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Kubeconfig Content (YAML)")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button { importKubeConfigFile() } label: {
-                            Label("Import File", systemImage: "doc.badge.plus")
-                                .font(.system(size: 11))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.accentColor)
-                    }
+                Divider().opacity(0.3)
 
-                    KumaCodeEditor(
-                        code: $viewModel.newKubeConfigContent,
-                        placeholder: "Paste kubeconfig YAML…",
-                        minHeight: 120,
-                        maxHeight: 120
-                    )
-                }
+                KubeConfigEditorExpandedContent(
+                    sourceMode: $sourceMode,
+                    draftPath: $draftPath,
+                    draftYAML: $draftYAML
+                )
+            }
+            .padding(.top, KumaSpacing.xs)
+            .padding(.bottom, KumaSpacing.xs)
+        }
+        .onAppear { syncDraftsFromViewModel() }
+        .onChange(of: draftPath) { _, newPath in
+            guard sourceMode == .chooseFile else { return }
+            let trimmed = newPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            if viewModel.newKubeConfigName.isEmpty {
+                viewModel.newKubeConfigName = (trimmed as NSString).lastPathComponent
             }
         }
     }
 
-    private func importKubeConfigFile() {
-        let panel = NSOpenPanel()
-        panel.title = "Select Kubeconfig File"
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.showsHiddenFiles = true
-        if panel.runModal() == .OK, let url = panel.url {
-            if let content = try? String(contentsOf: url, encoding: .utf8) {
-                viewModel.newKubeConfigContent = content
-                if viewModel.newKubeConfigName.isEmpty {
-                    viewModel.newKubeConfigName = url.deletingPathExtension().lastPathComponent
-                }
-            }
+    private func syncDraftsFromViewModel() {
+        draftPath = viewModel.newKubeConfigSourcePath
+        draftYAML = viewModel.newKubeConfigContent
+        sourceMode = viewModel.inferredSourceMode(path: draftPath, yaml: draftYAML)
+    }
+
+    private func commitDraftsToViewModel() {
+        switch sourceMode {
+        case .chooseFile:
+            viewModel.newKubeConfigSourcePath = draftPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            viewModel.newKubeConfigContent = ""
+        case .pasteYAML:
+            viewModel.newKubeConfigContent = draftYAML
+            viewModel.newKubeConfigSourcePath = ""
         }
     }
 }

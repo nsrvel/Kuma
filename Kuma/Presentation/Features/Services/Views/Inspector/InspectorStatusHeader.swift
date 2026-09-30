@@ -7,6 +7,7 @@ public struct InspectorStatusHeader: View {
     public let provider: Provider?
     public let runtime: ServiceRuntimeState
     public var isViewingLogs: Bool = false
+    public var isStartDisabled: Bool = false
     public let onToggle: () -> Void
     public var onBack: () -> Void = {}
 
@@ -15,6 +16,7 @@ public struct InspectorStatusHeader: View {
         provider: Provider?,
         runtime: ServiceRuntimeState,
         isViewingLogs: Bool = false,
+        isStartDisabled: Bool = false,
         onToggle: @escaping () -> Void,
         onBack: @escaping () -> Void = {}
     ) {
@@ -22,6 +24,7 @@ public struct InspectorStatusHeader: View {
         self.provider = provider
         self.runtime = runtime
         self.isViewingLogs = isViewingLogs
+        self.isStartDisabled = isStartDisabled
         self.onToggle = onToggle
         self.onBack = onBack
     }
@@ -32,10 +35,8 @@ public struct InspectorStatusHeader: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // MARK: Identity Row
             HStack(spacing: 10) {
                 if isViewingLogs {
-                    // Back Button replacing provider icon (matching port chip tile styling)
                     Button {
                         onBack()
                     } label: {
@@ -50,7 +51,7 @@ public struct InspectorStatusHeader: View {
 
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 12.5, weight: .semibold))
-                                .foregroundStyle(Color.secondary)
+                                .foregroundStyle(.primary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -58,7 +59,6 @@ public struct InspectorStatusHeader: View {
                     .help("Back to Configuration")
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 } else {
-                    // Provider gradient icon with Star Overlay Badge
                     ZStack(alignment: .topTrailing) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -108,10 +108,12 @@ public struct InspectorStatusHeader: View {
                         .font(.system(size: 18))
                         .foregroundStyle(.tertiary)
                         .padding(.trailing, 8)
-                } else if isViewingLogs {
-                    InspectorHeaderLogControls(serviceID: service.id)
                 } else {
-                    InspectorHeaderActionButton(runtime: runtime, onToggle: onToggle)
+                    InspectorHeaderActionButton(
+                        runtime: runtime,
+                        isStartDisabled: isStartDisabled,
+                        onToggle: onToggle
+                    )
                 }
             }
         }
@@ -129,4 +131,3 @@ public struct InspectorStatusHeader: View {
     )
     .frame(width: 400)
 }
-

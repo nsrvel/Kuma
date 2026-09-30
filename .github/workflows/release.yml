@@ -21,7 +21,7 @@ jobs:
           xcode-version: '16'
 
       - name: Import code-signing certificate
-        if: ${{ secrets.BUILD_CERTIFICATE_BASE64 != '' }}
+        if: ${{ vars.ENABLE_RELEASE_CODESIGN == 'true' }}
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}

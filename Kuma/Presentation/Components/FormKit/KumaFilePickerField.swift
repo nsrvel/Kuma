@@ -4,6 +4,13 @@ import UniformTypeIdentifiers
 
 // MARK: - KumaFilePickerField
 
+public enum KumaFilePickerFieldStyle {
+    /// Standalone field (Settings, SSH, etc.): body font, inset fill, hairline border.
+    case standard
+    /// Inside `KumaSourceField` file tab: smaller type, flat (no inner box).
+    case embeddedInSourceField
+}
+
 public struct KumaFilePickerField: View {
     public let label: String
     @Binding public var path: String
@@ -11,8 +18,13 @@ public struct KumaFilePickerField: View {
     public var chooseFiles: Bool
     public var chooseDirectories: Bool
     public var allowedContentTypes: [UTType]?
+    /// When true, NSOpenPanel still lists extensionless files (e.g. `~/.kube/config`).
+    public var allowsOtherFileTypes: Bool
+    /// Overrides initial folder for Browse; receives the current path binding value.
+    public var browseDirectory: ((String) -> URL)?
     public var showsHiddenFiles: Bool
     public var error: String?
+    public var style: KumaFilePickerFieldStyle
 
     @FocusState private var isFocused: Bool
 
@@ -23,8 +35,11 @@ public struct KumaFilePickerField: View {
         chooseFiles: Bool = true,
         chooseDirectories: Bool = false,
         allowedContentTypes: [UTType]? = nil,
+        allowsOtherFileTypes: Bool = false,
+        browseDirectory: ((String) -> URL)? = nil,
         showsHiddenFiles: Bool = true,
-        error: String? = nil
+        error: String? = nil,
+        style: KumaFilePickerFieldStyle = .standard
     ) {
         self.label = label
         self._path = path
@@ -32,8 +47,25 @@ public struct KumaFilePickerField: View {
         self.chooseFiles = chooseFiles
         self.chooseDirectories = chooseDirectories
         self.allowedContentTypes = allowedContentTypes
+        self.allowsOtherFileTypes = allowsOtherFileTypes
+        self.browseDirectory = browseDirectory
         self.showsHiddenFiles = showsHiddenFiles
         self.error = error
+        self.style = style
+    }
+
+    private var pathFont: Font {
+        switch style {
+        case .standard: KumaFont.body
+        case .embeddedInSourceField: KumaCodeEditorStyle.swiftUIFont
+        }
+    }
+
+    private var pathPadding: CGFloat {
+        switch style {
+        case .standard: KumaSpacing.sm
+        case .embeddedInSourceField: KumaCodeEditorStyle.textInset
+        }
     }
 
     public var body: some View {
@@ -48,49 +80,30 @@ public struct KumaFilePickerField: View {
                 ZStack(alignment: .leading) {
                     if path.isEmpty {
                         Text(placeholder)
-                            .font(KumaFont.body)
+                            .font(pathFont)
                             .foregroundStyle(Color(nsColor: .placeholderTextColor))
                             .allowsHitTesting(false)
                     }
 
                     TextField("", text: $path)
+                        .font(pathFont)
                         .textFieldStyle(.plain)
                         .focused($isFocused)
                 }
-                    .padding(KumaSpacing.sm)
-                    .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
-                            .stroke(
-                                isFocused ? Color.accentColor : KumaColors.inputFieldStroke,
-                                lineWidth: isFocused ? 1.5 : 0.5
-                            )
-                    )
+                .padding(pathPadding)
+                .modifier(KumaFilePickerPathChrome(style: style, isFocused: isFocused))
 
                 Button("Browse") {
-                    let panel = NSOpenPanel()
-                    panel.allowsMultipleSelection = false
-                    panel.canChooseFiles = chooseFiles
-                    panel.canChooseDirectories = chooseDirectories
-                    panel.showsHiddenFiles = showsHiddenFiles
-                    panel.resolvesAliases = true
-
-                    if let allowedContentTypes {
-                        panel.allowedContentTypes = allowedContentTypes
-                    }
-
-                    // Smart initial directory: focus on current path or placeholder directory if exists
-                    let targetPath = path.isEmpty ? placeholder : path
-                    let expanded = NSString(string: targetPath).expandingTildeInPath
-                    let dirPath = (expanded as NSString).deletingLastPathComponent
-                    if FileManager.default.fileExists(atPath: dirPath) {
-                        panel.directoryURL = URL(fileURLWithPath: dirPath)
-                    }
-
-                    if panel.runModal() == .OK {
-                        if let selectedURL = panel.url {
-                            path = selectedURL.path(percentEncoded: false)
-                        }
+                    var config = KumaOpenPanel.Configuration()
+                    config.chooseFiles = chooseFiles
+                    config.chooseDirectories = chooseDirectories
+                    config.showsHiddenFiles = showsHiddenFiles
+                    config.allowedContentTypes = allowedContentTypes
+                    config.allowsOtherFileTypes = allowsOtherFileTypes
+                    config.browseDirectory = browseDirectory
+                    config.placeholder = placeholder
+                    if let picked = KumaOpenPanel.pickFile(currentPath: path, configuration: config) {
+                        path = picked
                     }
                 }
 
@@ -102,6 +115,36 @@ public struct KumaFilePickerField: View {
                     .font(KumaFont.caption)
                     .foregroundStyle(.red)
             }
+        }
+    }
+}
+
+private struct KumaFilePickerPathChrome: ViewModifier {
+    let style: KumaFilePickerFieldStyle
+    let isFocused: Bool
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .standard:
+            content
+                .background(KumaColors.inputFieldFill, in: RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
+                        .stroke(
+                            isFocused ? Color.accentColor : KumaColors.inputFieldStroke,
+                            lineWidth: isFocused ? 1.5 : 0.5
+                        )
+                )
+        case .embeddedInSourceField:
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(
+                    RoundedRectangle(cornerRadius: KumaRadius.sm, style: .continuous)
+                        .stroke(
+                            isFocused ? Color.accentColor : Color.clear,
+                            lineWidth: isFocused ? 1.5 : 0
+                        )
+                )
         }
     }
 }

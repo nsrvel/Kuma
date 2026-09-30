@@ -15,6 +15,9 @@ public protocol ProcessLaunching: Sendable {
     func stop(serviceID: UUID) async
 
     func isRunning(serviceID: UUID) async -> Bool
+
+    /// Attach an already-running process (e.g. Terminal `kubectl port-forward`) for stop/state tracking.
+    func adoptExternalProcess(serviceID: UUID, serviceName: String, pid: pid_t) async
 }
 
 /// Forwards to `ProcessRegistry` without making `ProcessLaunching` actor-isolated.
@@ -51,5 +54,9 @@ public struct ProcessRegistryLauncher: ProcessLaunching, Sendable {
 
     public nonisolated func isRunning(serviceID: UUID) async -> Bool {
         await registry.isRunning(serviceID: serviceID)
+    }
+
+    public nonisolated func adoptExternalProcess(serviceID: UUID, serviceName: String, pid: pid_t) async {
+        await registry.adoptExternalProcess(serviceID: serviceID, serviceName: serviceName, pid: pid)
     }
 }

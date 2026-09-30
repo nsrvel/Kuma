@@ -6,6 +6,7 @@ extension ServiceInspectorViewModel {
         cancelAutoSave()
         self.serviceID = id
         isLoadingServiceDetail = true
+        clearConfigurationValidationState()
         defer { isLoadingServiceDetail = false }
         do {
             guard let detail = try await serviceRepository.fetchServiceDetail(id: id) else { return }
@@ -16,7 +17,7 @@ extension ServiceInspectorViewModel {
             let portList = detail.portMappings
 
             self.service = srv
-            self.providers = provs
+            self.providers = provs.map { $0.withKubernetesDefaults() }
             self.activeProviderID = srv.activeProviderID ?? provs.first?.id
 
             if portList.isEmpty && (self.activeCategory == .kubernetes || self.activeCategory == .ssh) {
@@ -34,9 +35,12 @@ extension ServiceInspectorViewModel {
             await syncKubeConfigSelectionFromActiveProvider()
             if let active = activeProvider, active.type == .ssh {
                 sshAuthType = ProviderSSHAuth.inferredAuthType(for: active)
+            } else if let active = activeProvider, active.type == .kubernetes, let kubeConfigVM {
+                kubeConfigVM.testConnection(storedProviderContext: active.kubeContext)
             }
             pendingSaveRevision = 0
             lastCommittedRevision = 0
+            portsDraftDirty = false
         } catch {
             Self.logger.error("Failed to load service details for \(id): \(error.localizedDescription)")
         }
@@ -56,6 +60,7 @@ extension ServiceInspectorViewModel {
                     KumaPortMappingItem(id: $0.id, local: "\($0.localPort)", remote: "\($0.remotePort)")
                 }
             }
+            portsDraftDirty = false
         } catch {
             Self.logger.error("Failed to load port mappings for provider \(providerID): \(error.localizedDescription)")
         }

@@ -13,8 +13,7 @@ public final class ShellRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         guard let runCommand = provider.runCommand?.trimmingCharacters(in: .whitespacesAndNewlines), !runCommand.isEmpty else {
             throw ServiceExecutionError.invalidConfiguration("No shell command specified.")
@@ -34,11 +33,6 @@ public final class ShellRunner: ServiceRunnerProtocol, @unchecked Sendable {
         env["PATH"] = fullPath
 
         let launch = KumaShellLaunchConfiguration.launchSpec(runCommand: runCommand)
-        await pipeline.emit(level: "INFO", message: "Using shell: \(launch.executable)")
-        await pipeline.emit(level: "INFO", message: "Executing command: \(runCommand)")
-        if let resolvedDir {
-            await pipeline.emit(level: "INFO", message: "Working directory: \(resolvedDir)")
-        }
 
         _ = try await processRegistry.launch(
             serviceID: service.id,
@@ -47,7 +41,7 @@ public final class ShellRunner: ServiceRunnerProtocol, @unchecked Sendable {
             arguments: launch.arguments,
             workingDirectory: resolvedDir,
             environment: env,
-            onOutput: pipeline.makeOutputHandler()
+            onOutput: nil
         )
     }
 

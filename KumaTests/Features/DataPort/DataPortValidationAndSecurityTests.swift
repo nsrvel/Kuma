@@ -7,7 +7,7 @@ import Testing
 struct DataPortValidationAndSecurityTests {
 
     // MARK: - [TC-B01] Future Version Backup Rejection
-    @Test("TC-B01: decodeBackup menolak file backup dengan versi lebih tinggi dari currentVersion")
+    @Test("DataPort.B01: decodeBackup rejects backup version newer than currentVersion")
     func testFutureVersionBackupRejection() throws {
         let futureBackup = DataPortService.KumaBackup(
             version: 999,
@@ -22,7 +22,7 @@ struct DataPortValidationAndSecurityTests {
     }
 
     // MARK: - [TC-B02] Polymorphic Parser Detects Full Backup
-    @Test("TC-B02: parseAnyBackup mendeteksi dan mengembalikan full KumaBackup secara mulus")
+    @Test("DataPort.B02: parseAnyBackup detects and returns full KumaBackup")
     func testPolymorphicParserDetectsFullBackup() throws {
         let original = DataPortService.KumaBackup(
             version: 1,
@@ -37,7 +37,7 @@ struct DataPortValidationAndSecurityTests {
     }
 
     // MARK: - [TC-B03] Polymorphic Parser Detects Single Service
-    @Test("TC-B03: parseAnyBackup mendeteksi SingleServiceExport dan meng-auto-wrap menjadi KumaBackup")
+    @Test("DataPort.B03: parseAnyBackup detects SingleServiceExport and wraps as KumaBackup")
     func testPolymorphicParserDetectsSingleService() throws {
         let svc = DataPortService.ExportService(name: "Standalone Microservice")
         let singleExport = DataPortService.SingleServiceExport(
@@ -56,7 +56,7 @@ struct DataPortValidationAndSecurityTests {
     }
 
     // MARK: - [TC-B07] ExportKubeConfig encrypted field round-trip
-    @Test("TC-B07: ExportKubeConfig round-trips encryptedConfigContent in backup JSON")
+    @Test("DataPort.B07: ExportKubeConfig round-trips encryptedConfigContent in backup JSON")
     func testExportKubeConfigEncryptedFieldRoundTrip() throws {
         let kube = DataPortService.ExportKubeConfig(
             id: UUID(),
@@ -77,8 +77,27 @@ struct DataPortValidationAndSecurityTests {
         #expect(decoded.kubeConfigs[0].encryptedConfigContent == "nonce:tag:ciphertext")
     }
 
+    @Test("DataPort.B07b: ExportKubeConfig round-trips path field in backup JSON")
+    func testExportKubeConfigPathFieldRoundTrip() throws {
+        let kube = DataPortService.ExportKubeConfig(
+            id: UUID(),
+            name: "staging",
+            path: "/Users/me/.kube/config",
+            encryptedConfigContent: ""
+        )
+        let backup = DataPortService.KumaBackup(
+            services: [],
+            providers: [],
+            portMappings: [],
+            kubeConfigs: [kube]
+        )
+        let data = try DataPortService.encodeBackup(backup)
+        let decoded = try DataPortService.decodeBackup(from: data)
+        #expect(decoded.kubeConfigs[0].path == "/Users/me/.kube/config")
+    }
+
     // MARK: - [TC-B04] Corrupted JSON Decoding Failure
-    @Test("TC-B04: parseAnyBackup melempar error saat menerima data acak bukan format JSON")
+    @Test("DataPort.B04: parseAnyBackup throws on non-JSON input")
     func testCorruptedJSONDecodingFailure() {
         let invalidData = "This is definitely not a JSON file.".data(using: .utf8)!
 
@@ -88,7 +107,7 @@ struct DataPortValidationAndSecurityTests {
     }
 
     // MARK: - [TC-B05] Name Conflict Detection in Workspace Import
-    @Test("TC-B05: Konflik nama service terdeteksi dan di-override dengan suffix (Imported)")
+    @Test("DataPort.B05: service name conflict resolves with (Imported) suffix")
     func testNameConflictDetectionInWorkspaceImport() {
         let existingNames: Set<String> = ["frontend-app", "postgres"]
 
@@ -101,7 +120,7 @@ struct DataPortValidationAndSecurityTests {
     }
 
     // MARK: - [TC-B06] Case-Insensitive Name Conflict Detection
-    @Test("TC-B06: Deteksi konflik nama service bersifat case-insensitive")
+    @Test("DataPort.B06: service name conflict detection is case-insensitive")
     func testCaseInsensitiveNameConflictDetection() {
         let existingNames: Set<String> = ["api-gateway"]
 

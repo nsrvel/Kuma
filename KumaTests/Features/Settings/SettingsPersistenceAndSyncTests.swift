@@ -7,7 +7,7 @@ import Testing
 struct SettingsPersistenceAndSyncTests {
 
     // MARK: - [TC-C01] Property Mutation Persists To UserDefaults
-    @Test("TC-C01: Mutating property updates underlying UserDefaults immediately")
+    @Test("Settings.C01: Mutating property updates underlying UserDefaults immediately")
     func testPropertyMutationPersistsToUserDefaults() {
         let harness = SettingsTestHarness()
         defer { harness.cleanup() }
@@ -26,9 +26,8 @@ struct SettingsPersistenceAndSyncTests {
         viewModel.defaultShell = "/bin/bash"
         #expect(harness.userDefaults.string(forKey: KumaSettingsKey.defaultShell) == "/bin/bash")
 
-        // Mutate logRetentionLimit
-        viewModel.logRetentionLimit = .hundredMB
-        #expect(harness.userDefaults.integer(forKey: KumaSettingsKey.logRetentionLimit) == 100)
+        viewModel.autoResumeServices = true
+        #expect(harness.userDefaults.bool(forKey: KumaSettingsKey.autoResumeServices) == true)
     }
 
     // MARK: - [TC-C02] Legacy Kubectl Path Fallback
@@ -132,7 +131,7 @@ struct SettingsPersistenceAndSyncTests {
                 viewModel.notifyOnServiceFailure = false
             }
             group.addTask { @MainActor in
-                viewModel.clearLogsOnSwitch = true
+                viewModel.autoResumeServices = true
             }
             group.addTask { @MainActor in
                 viewModel.portConflictPolicy = .killExisting
@@ -140,7 +139,7 @@ struct SettingsPersistenceAndSyncTests {
         }
 
         #expect(viewModel.notifyOnServiceFailure == false)
-        #expect(viewModel.clearLogsOnSwitch == true)
+        #expect(viewModel.autoResumeServices == true)
         #expect(viewModel.portConflictPolicy == .killExisting)
     }
 

@@ -5,16 +5,19 @@ import Testing
 @Suite("Feature 05: Runners Execution Tests", .serialized)
 struct RunnersExecutionTests {
 
+    init() async {
+        await ProcessTestSupport.resetProcessWorld()
+    }
+
     @Test("TC-R01: ShellRunner executes command and captures output")
     func testShellRunnerExecution() async throws {
         let serviceID = UUID()
         let service = Service(id: serviceID, name: "Shell Test")
         let provider = Provider(serviceID: serviceID, type: .shell, runCommand: "echo 'Kuma Runner OK'")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ShellRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(await runner.isRunning(serviceID: serviceID) == true)
 
         // Wait for process to finish
@@ -29,11 +32,10 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Shell Empty")
         let provider = Provider(serviceID: serviceID, type: .shell, runCommand: "")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ShellRunner()
 
         await #expect(throws: ServiceExecutionError.self) {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
+            try await runner.start(service: service, provider: provider)
         }
     }
 
@@ -43,10 +45,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Health Test")
         let provider = Provider(serviceID: serviceID, type: .httpCheck, httpCheckUrl: "google.com", httpCheckInterval: 5)
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = HealthCheckRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(await runner.isRunning(serviceID: serviceID) == true)
 
         await runner.stop(serviceID: serviceID)
@@ -59,10 +60,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Monitor Test")
         let provider = Provider(serviceID: serviceID, type: .processMonitor, monitorProcessName: "launchd", monitorInterval: 3)
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ProcessMonitorRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(await runner.isRunning(serviceID: serviceID) == true)
 
         await runner.stop(serviceID: serviceID)
@@ -75,10 +75,9 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "Env Test")
         let provider = Provider(serviceID: serviceID, type: .shell, runCommand: "which zsh")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = ShellRunner()
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         try? await Task.sleep(nanoseconds: 200_000_000)
         await runner.stop(serviceID: serviceID)
         #expect(await runner.isRunning(serviceID: serviceID) == false)
@@ -90,11 +89,10 @@ struct RunnersExecutionTests {
         let service = Service(id: serviceID, name: "SSH Empty Host")
         let provider = Provider(serviceID: serviceID, type: .ssh, sshHost: "")
 
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
         let runner = SSHTunnelRunner(processLauncher: ProcessRegistryLauncher())
 
         await #expect(throws: ServiceExecutionError.self) {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
+            try await runner.start(service: service, provider: provider)
         }
     }
 
@@ -107,7 +105,7 @@ struct RunnersExecutionTests {
     }
 
     // MARK: - [TC-D05] Compose YAML written with -f flag (RUN-01)
-    @Test("TC-D05: ContainerRunner passes compose -f when yamlConfig is set")
+    @Test("Runner.D05: ContainerRunner passes compose -f when yamlConfig is set")
     func testContainerRunnerComposeYamlWrite() async throws {
         let dockerKey = KumaSettingsKey.customDockerPath
         let priorDocker = UserDefaults.standard.string(forKey: dockerKey)
@@ -127,9 +125,8 @@ struct RunnersExecutionTests {
 
         let composeCLI = RecordingComposeCLI()
         let runner = ContainerRunner(processLauncher: RecordingProcessLaunching(), composeCLI: composeCLI)
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
 
         let invocation = composeCLI.lastInvocation
         #expect(invocation != nil)
@@ -144,7 +141,7 @@ struct RunnersExecutionTests {
         #expect(await runner.isRunning(serviceID: serviceID) == false)
     }
 
-    @Test("TC-D05b: ContainerRunner uses on-disk composeFilePath for docker")
+    @Test("Runner.D05b: ContainerRunner uses on-disk composeFilePath for docker")
     func testContainerRunnerComposeOnDiskPathDocker() async throws {
         let dockerKey = KumaSettingsKey.customDockerPath
         let priorDocker = UserDefaults.standard.string(forKey: dockerKey)
@@ -174,9 +171,8 @@ struct RunnersExecutionTests {
 
         let composeCLI = RecordingComposeCLI()
         let runner = ContainerRunner(processLauncher: RecordingProcessLaunching(), composeCLI: composeCLI)
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
 
         let invocation = composeCLI.lastInvocation
         #expect(invocation?.context.composeFilePath == composeURL.path)
@@ -189,7 +185,7 @@ struct RunnersExecutionTests {
         #expect(FileManager.default.fileExists(atPath: composeURL.path))
     }
 
-    @Test("TC-D05c: ContainerRunner uses on-disk composeFilePath for podman")
+    @Test("Runner.D05c: ContainerRunner uses on-disk composeFilePath for podman")
     func testContainerRunnerComposeOnDiskPathPodman() async throws {
         let podmanKey = KumaSettingsKey.customPodmanPath
         let priorPodman = UserDefaults.standard.string(forKey: podmanKey)
@@ -214,9 +210,8 @@ struct RunnersExecutionTests {
 
         let composeCLI = RecordingComposeCLI()
         let runner = ContainerRunner(processLauncher: RecordingProcessLaunching(), composeCLI: composeCLI)
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
 
         let invocation = composeCLI.lastInvocation
         #expect(invocation?.context.binaryPath == "/usr/bin/true")
@@ -225,7 +220,7 @@ struct RunnersExecutionTests {
         await runner.stop(serviceID: serviceID)
     }
 
-    @Test("TC-D05d: ContainerRunner rejects missing compose file path")
+    @Test("Runner.D05d: ContainerRunner rejects missing compose file path")
     func testContainerRunnerMissingComposePath() async throws {
         let dockerKey = KumaSettingsKey.customDockerPath
         let priorDocker = UserDefaults.standard.string(forKey: dockerKey)
@@ -246,14 +241,13 @@ struct RunnersExecutionTests {
             processLauncher: RecordingProcessLaunching(),
             composeCLI: RecordingComposeCLI()
         )
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
         await #expect(throws: ServiceExecutionError.self) {
-            try await runner.start(service: service, provider: provider, pipeline: pipeline)
+            try await runner.start(service: service, provider: provider)
         }
     }
 
-    @Test("TC-D05f: compose stack uses stable -p project name and -f file path")
+    @Test("Runner.D05f: compose stack uses stable -p project name and -f file path")
     func testComposeStackContextArguments() {
         let serviceID = UUID()
         let path = "/tmp/deploy/prometheus.yml"
@@ -272,7 +266,27 @@ struct RunnersExecutionTests {
         #expect(ctx.upArguments.contains("-d"))
     }
 
-    @Test("TC-D05e: ContainerRunner runs startup script from initialScriptPath before compose")
+    @Test("Runner.D05g: implicit default compose project omits -p")
+    func testComposeStackImplicitDefaultArguments() {
+        let serviceID = UUID()
+        let path = "/tmp/deploy/docker-compose.yml"
+        let ctx = ComposeStackContext(
+            serviceID: serviceID,
+            binaryPath: "/usr/local/bin/docker",
+            composeFilePath: path,
+            workingDirectory: "/tmp/deploy",
+            projectName: ComposeStackContext.projectName(for: serviceID),
+            isEphemeralComposeFile: false,
+            projectBinding: .implicitDefault
+        )
+        #expect(ctx.downArguments == [
+            "compose", "-f", path,
+            "down", "--timeout", "5", "--remove-orphans",
+        ])
+        #expect(ctx.psQuietArgumentsImplicitDefault == ctx.psQuietArguments)
+    }
+
+    @Test("Runner.D05e: ContainerRunner runs startup script from initialScriptPath before compose")
     func testContainerRunnerInitialScriptPath() async throws {
         let dockerKey = KumaSettingsKey.customDockerPath
         let priorDocker = UserDefaults.standard.string(forKey: dockerKey)
@@ -307,16 +321,15 @@ struct RunnersExecutionTests {
             processLauncher: RecordingProcessLaunching(),
             composeCLI: RecordingComposeCLI()
         )
-        let pipeline = ServiceLogPipeline(serviceID: serviceID, serviceName: service.name)
 
-        try await runner.start(service: service, provider: provider, pipeline: pipeline)
+        try await runner.start(service: service, provider: provider)
         #expect(FileManager.default.fileExists(atPath: markerURL.path))
 
         await runner.stop(serviceID: serviceID)
     }
 
     // MARK: - [TC-D06] SSH key path passed as -i (RUN-02)
-    @Test("TC-D06: SSHTunnelRunner includes -i for sshKeyPath")
+    @Test("Runner.D06: SSHTunnelRunner includes -i for sshKeyPath")
     @MainActor
     func testSSHTunnelRunnerSSHKeyFlag() async throws {
         let harness = ServicesTestHarness()
@@ -343,9 +356,8 @@ struct RunnersExecutionTests {
             processLauncher: recorder,
             serviceRepository: harness.serviceRepository
         )
-        let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
 
-        try await runner.start(service: service, provider: sshProvider, pipeline: pipeline)
+        try await runner.start(service: service, provider: sshProvider)
 
         let launch = recorder.lastLaunch
         #expect(launch?.executable == "/usr/bin/ssh")
@@ -358,32 +370,14 @@ struct RunnersExecutionTests {
         await runner.stop(serviceID: service.id)
     }
 
-    @Test("TC-D08: KubernetesRunner launches port-forward with kubeconfig and namespace")
+    @Test("Runner.D08: KubernetesRunner launches port-forward with kubeconfig and namespace")
     @MainActor
     func testKubernetesRunnerPortForwardArgs() async throws {
-        let kubectlKey = KumaSettingsKey.customKubectlPath
-        let priorKubectl = UserDefaults.standard.string(forKey: kubectlKey)
-
-        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("kuma-kubectl-mock-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        let fakeKubectl = tempDir.appendingPathComponent("kubectl")
-        try "#!/bin/sh\nexit 0\n".write(to: fakeKubectl, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeKubectl.path)
-        defer {
-            try? FileManager.default.removeItem(at: tempDir)
-            if let priorKubectl {
-                UserDefaults.standard.set(priorKubectl, forKey: kubectlKey)
-            } else {
-                UserDefaults.standard.removeObject(forKey: kubectlKey)
-            }
-        }
-        UserDefaults.standard.set(fakeKubectl.path, forKey: kubectlKey)
+        let fixture = try KubectlTestFixture.install(script: KubectlTestScripts.runningPodList("my-app-pod"))
+        defer { fixture.cleanup() }
 
         let harness = ServicesTestHarness()
-        let kubeconfigDir = tempDir.appendingPathComponent("kube")
-        try FileManager.default.createDirectory(at: kubeconfigDir, withIntermediateDirectories: true)
-        let kubeconfigURL = kubeconfigDir.appendingPathComponent("config")
-        try "apiVersion: v1\nkind: Config\n".write(to: kubeconfigURL, atomically: true, encoding: .utf8)
+        let kubeconfigURL = fixture.kubeconfig
 
         let (service, provider) = try await harness.seedServiceWithProvider(
             name: "K8s Port Forward",
@@ -403,12 +397,11 @@ struct RunnersExecutionTests {
             processLauncher: recorder,
             serviceRepository: harness.serviceRepository
         )
-        let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
 
-        try await runner.start(service: service, provider: k8sProvider, pipeline: pipeline)
+        try await runner.start(service: service, provider: k8sProvider)
 
         let launch = recorder.lastLaunch
-        #expect(launch?.executable == fakeKubectl.path)
+        #expect(launch?.executable == fixture.kubectlPath)
         let args = launch?.arguments ?? []
         #expect(args.first == "port-forward")
         #expect(args.contains("pod/my-app-pod"))

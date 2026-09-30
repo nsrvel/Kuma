@@ -5,8 +5,12 @@ import Testing
 @Suite("Feature 00 - Category C: Lifecycle, Subprocess Kill & Buffer Teardown", .serialized)
 struct LifecycleTeardownTests {
 
+    init() async {
+        await ProcessTestSupport.resetProcessWorld()
+    }
+
     // MARK: - [TC-C01] Terminate All Spawns
-    @Test("TC-C01: ProcessRegistry terminateAll terminates tracked processes and removes them")
+    @Test("Lifecycle.C01: ProcessRegistry terminateAll terminates tracked processes and removes them")
     func testProcessRegistryTerminateAllSpawns() async throws {
         let registry = ProcessRegistry.shared
         let serviceID = UUID()
@@ -53,17 +57,15 @@ struct LifecycleTeardownTests {
         #expect(isRunning == false)
     }
 
-    // MARK: - [TC-C03] LogFileWriter Buffer Flush on Terminate
-    @Test("TC-C03: LogFileWriter flushAll writes queued logs immediately")
-    func testLogFileWriterFlushOnTerminate() async {
-        let writer = LogFileWriter.shared
-        let testServiceID = UUID()
-
-        await writer.append(serviceID: testServiceID, level: "INFO", message: "Lifecycle teardown verification log")
-        await writer.flushAll()
-
-        // Ensure subsequent buffer operations proceed smoothly
-        #expect(true)
+    // MARK: - [TC-C03] Run spool cleanup on terminate path
+    @Test("TC-C03: RunSpool remove clears per-service output file")
+    func testRunSpoolRemoveOnTeardown() throws {
+        let serviceID = UUID()
+        let url = RunSpool.url(for: serviceID)
+        try "teardown".write(to: url, atomically: true, encoding: .utf8)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        RunSpool.remove(for: serviceID)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
     }
 
     // MARK: - [TC-C04] Multiple Processes Concurrent Kill
@@ -90,12 +92,15 @@ struct LifecycleTeardownTests {
     }
 
     // MARK: - [TC-C05] Terminate All Idempotency
-    @Test("TC-C05: Calling terminateAll repeatedly is safe and idempotent")
-    func testProcessRegistryTerminateAllIdempotency() async {
+    @Test("Lifecycle.C05: Calling terminateAll repeatedly is safe and idempotent")
+    func testProcessRegistryTerminateAllIdempotency() async throws {
         let registry = ProcessRegistry.shared
+        let serviceID = UUID()
+        _ = try await registry.launch(serviceID: serviceID, executable: "/bin/echo", arguments: ["ok"])
+        try? await Task.sleep(nanoseconds: 100_000_000)
         await registry.terminateAll()
         await registry.terminateAll()
-        await registry.terminateAll()
-        #expect(true)
+        #expect(await registry.isRunning(serviceID: serviceID) == false)
+        #expect(await registry.getSnapshot(serviceID: serviceID) == nil)
     }
 }

@@ -15,7 +15,13 @@ extension ServiceInspectorViewModel {
         }
     }
 
-    public func scheduleAutoSave() {
+    public func scheduleAutoSave(portsTouched: Bool = false) {
+        if portsTouched {
+            portsDraftDirty = true
+        }
+        if !configurationIssues.isEmpty {
+            clearConfigurationValidationState()
+        }
         pendingSaveRevision += 1
         autoSaveTask?.cancel()
         let targetServiceID = self.serviceID
@@ -33,6 +39,7 @@ extension ServiceInspectorViewModel {
     }
 
     public func commitChanges() async {
+        guard !isLoadingServiceDetail else { return }
         guard var srv = service else { return }
         srv.updatedAt = Date()
         self.service = srv
@@ -63,8 +70,11 @@ extension ServiceInspectorViewModel {
 
         do {
             try await serviceRepository.updateService(srv)
-            try await serviceRepository.updateProvider(activeProv)
-            try await serviceRepository.savePortMappings(realPorts, forService: serviceID, providerID: activeProv.id)
+            try await serviceRepository.updateProvider(activeProv.withKubernetesDefaults())
+            if portsDraftDirty {
+                try await serviceRepository.savePortMappings(realPorts, forService: serviceID, providerID: activeProv.id)
+                portsDraftDirty = false
+            }
 
             if let idx = providers.firstIndex(where: { $0.id == activeProv.id }) {
                 providers[idx] = activeProv

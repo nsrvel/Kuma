@@ -13,8 +13,7 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
     public func start(
         service: Service,
-        provider: Provider,
-        pipeline: ServiceLogPipeline
+        provider: Provider
     ) async throws {
         let engine = provider.tunnelType?.lowercased() ?? "cloudflare"
 
@@ -25,9 +24,9 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
         let normalizedTarget = URLNormalizer.normalize(rawTarget, defaultToHttps: false) ?? "http://localhost:3000"
 
         if engine == "ngrok" {
-            try await startNgrok(service: service, provider: provider, target: normalizedTarget, pipeline: pipeline)
+            try await startNgrok(service: service, provider: provider, target: normalizedTarget)
         } else {
-            try await startCloudflare(service: service, provider: provider, target: normalizedTarget, pipeline: pipeline)
+            try await startCloudflare(service: service, provider: provider, target: normalizedTarget)
         }
     }
 
@@ -44,42 +43,20 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private func startCloudflare(
         service: Service,
         provider: Provider,
-        target: String,
-        pipeline: ServiceLogPipeline
+        target: String
     ) async throws {
         guard let binaryPath = await KumaSettingsExecutableResolver.cloudflared() else {
             throw ServiceExecutionError.binaryNotFound("cloudflared")
         }
 
-        await pipeline.emit(level: "INFO", message: "Starting Cloudflare Tunnel to \(target)...")
-
         let args = ["tunnel", "--url", target, "--no-autoupdate"]
-
-        // Custom output wrapper that detects trycloudflare URL
-        let baseHandler = pipeline.makeOutputHandler()
-        let tryCloudflareRegex = try? NSRegularExpression(pattern: #"https://[a-zA-Z0-9-]+\.trycloudflare\.com"#, options: [])
-
-        let onOutput: @Sendable (String) -> Void = { text in
-            baseHandler(text)
-
-            if let regex = tryCloudflareRegex {
-                let range = NSRange(text.startIndex..<text.endIndex, in: text)
-                if let match = regex.firstMatch(in: text, options: [], range: range),
-                   let r = Range(match.range, in: text) {
-                    let publicUrl = String(text[r])
-                    Task {
-                        await pipeline.emit(level: "INFO", message: "[TUNNEL] Public Tunnel URL: \(publicUrl)")
-                    }
-                }
-            }
-        }
 
         _ = try await processRegistry.launch(
             serviceID: service.id,
             serviceName: service.name,
             executable: binaryPath,
             arguments: args,
-            onOutput: onOutput
+            onOutput: nil
         )
     }
 
@@ -88,8 +65,7 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private func startNgrok(
         service: Service,
         provider: Provider,
-        target: String,
-        pipeline: ServiceLogPipeline
+        target: String
     ) async throws {
         guard let binaryPath = await KumaSettingsExecutableResolver.ngrok() else {
             throw ServiceExecutionError.binaryNotFound("ngrok")
@@ -104,14 +80,12 @@ public final class TunnelRunner: ServiceRunnerProtocol, @unchecked Sendable {
             args.append(contentsOf: ["--authtoken", token])
         }
 
-        await pipeline.emit(level: "INFO", message: "Starting Ngrok Tunnel to \(target)...")
-
         _ = try await processRegistry.launch(
             serviceID: service.id,
             serviceName: service.name,
             executable: binaryPath,
             arguments: args,
-            onOutput: pipeline.makeOutputHandler()
+            onOutput: nil
         )
     }
 }

@@ -28,10 +28,6 @@ struct ContentView: View {
                 FinderDropTargetOverlay()
             }
         }
-        .animation(.easeInOut(duration: 0.15), value: isDragTargetActive)
-
-
-
         .dropDestination(for: URL.self) { urls, _ in
             guard let fileURL = urls.first, fileURL.pathExtension.lowercased() == "json" else {
                 return false
@@ -51,7 +47,10 @@ struct ContentView: View {
                 return false
             }
         } isTargeted: { targeted in
-            isDragTargetActive = targeted
+            guard isDragTargetActive != targeted else { return }
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isDragTargetActive = targeted
+            }
         }
         .sheet(item: $droppedBackup) { backup in
             ImportPreviewSheet(
@@ -120,8 +119,6 @@ struct ContentView: View {
     private func detailView(for selectedID: UUID?) -> some View {
         if selectedID == .stable("settings") {
             SettingsView(viewModel: settingsViewModel, workspaceStore: workspaceStore)
-        } else if selectedID == .stable("live-logs") {
-            LiveLogsView()
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
 
             WorkspaceServicesDeckHost(

@@ -10,7 +10,6 @@
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsCLIToolsSection.swift`
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsPortsConnectionsSection.swift`
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsTunnelingToolsSection.swift`  
-> - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsLogsSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsDataSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Components/AppearanceCard.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Components/BinaryStatusBadge.swift`  
@@ -63,13 +62,9 @@ graph TD
         ShellPicker --> ShellRunner[ShellRunner via KumaShellLaunchConfiguration]
     end
 
-    subgraph PortsLogsData [3. Ports, Logs & Data]
+    subgraph PortsAndData [3. Ports & Data]
         Nav --> PortSec[SettingsPortsConnectionsSection]
         PortSec --> PortPolicy[portConflictPolicy warn / kill]
-        
-        Nav --> LogSec[SettingsLogsSection]
-        LogSec --> LogBuf[LogRetentionLimit: memory lines + disk MB tier]
-        LogSec --> ClearBuf[Clear Buffer on Restart Toggle]
     end
 
     subgraph DataManagement [4. Data]
@@ -111,8 +106,7 @@ graph TD
 | **ngrok Binary Path** | Text Input / File Picker | `customNgrokPath: String` | `kuma.settings.customNgrokPath` | `KumaSettingsExecutableResolver.ngrok()` | ngrok auth token is per-provider, not Settings |
 | **Notify on Service Failure** | Toggle Switch | `notifyOnServiceFailure: Bool` | `kuma.settings.notifyOnServiceFailure` | Crash + health-check alerts; requests notification permission; reads legacy `kuma.settings.notifyOnCrash` | Default: `true` |
 | **Port Conflict Policy**| Select Picker Option | `portConflictPolicy: PortConflictPolicy` | `kuma.settings.portConflictPolicy` | `LocalPortConflictResolver` on K8s/SSH port-forward | Default: `.warnAndBlock` |
-| **Log Retention Buffer** | Select Picker Option | `logRetentionLimit: LogRetentionLimit` | `kuma.settings.logRetentionLimit` | Picker shows per-service line cap (`250`, `500`, `1000`, `Unlimited`); on-disk rotation by tier (10/50/100 MB) | Default: `.fiftyMB` (`500`) |
-| **Clear Buffer on Restart**| Toggle Switch | `clearLogsOnSwitch: Bool` | `kuma.settings.clearLogsOnSwitch` | `ServiceExecutionEngine.start` clears `LogAggregator` for service | Default: `false` |
+| *(removed)* | Logs settings UI removed | — | — | Live logs stream in the Inspector only; legacy log keys cleared on **Reset Settings**; old `Application Support/Kuma/Logs` deleted once at launch | — |
 | **Export Configuration** | Click "Export…" Button | Modal NSSavePanel | None (Reads DB records) | Writes pretty-printed JSON file atomically | Disabled while `isProcessing == true` |
 | **Import Configuration** | Click "Import…" Button / Drag JSON | Modal NSOpenPanel / Sheet | None (Parses JSON) | Opens `ImportPreviewSheet` with selective workspace & service restoration | Version verification (`backup.version <= currentVersion`) |
 | **Reset Settings to Default**| Click "Reset Settings…" Button | Settings Reset | Clears all `kuma.settings.*` keys from UserDefaults | Re-initializes settings properties to factory defaults without touching SQLite database | Protected by confirmation dialog |

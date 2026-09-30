@@ -11,6 +11,7 @@ nonisolated extension KubeConfig: FetchableRecord, PersistableRecord {
         let id = UUID(uuidString: idStr) ?? UUID()
         let name: String = row["name"]
         let configContent: String = row["configContent"]
+        let sourceFilePath: String? = row["sourceFilePath"]
         let createdAt: Date = row["createdAt"]
         let updatedAt: Date = row["updatedAt"]
 
@@ -18,6 +19,7 @@ nonisolated extension KubeConfig: FetchableRecord, PersistableRecord {
             id: id,
             name: name,
             configContent: configContent,
+            sourceFilePath: sourceFilePath,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -27,6 +29,7 @@ nonisolated extension KubeConfig: FetchableRecord, PersistableRecord {
         container["id"] = id.uuidString
         container["name"] = name
         container["configContent"] = configContent
+        container["sourceFilePath"] = sourceFilePath
         container["createdAt"] = createdAt
         container["updatedAt"] = updatedAt
     }

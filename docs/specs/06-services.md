@@ -1,6 +1,6 @@
 # Feature 06: Services — Deep Architectural Audit & Feature Spec
 
-> **Scope**: Full audit of Services Deck, Inspector, CreateService, Forms, ViewModels, Domain models, DB Records/Repositories, Execution Engine, ProcessRegistry, LogAggregator, and LiveLogs.  
+> **Scope**: Services Deck, Inspector, CreateService, Forms, ViewModels, Domain models, DB Records/Repositories, **ExecutionSupervisor** (managed process / compose / poller modes), ProcessRegistry, **LiveLogSession** (inspector-only).  
 > **Files Audited**: 72+ files across Domain, Core, Stores, and Presentation layers.  
 > **Verdict**: Structurally functional but architecturally **severely degraded** — critical security holes, broken state sync, layer violations, process lifecycle bugs, and 15 files over the 150-line limit.
 
@@ -22,6 +22,22 @@
 12. [Entity Relationship Architecture](#12-entity-relationship-architecture)
 13. [Data Flow Analysis: Deck vs Inspector](#13-data-flow-analysis-deck-vs-inspector)
 14. [Invariant Rules & Non-Negotiables](#14-invariant-rules--non-negotiables)
+
+---
+
+## Kubernetes target type × pattern (runtime contract)
+
+[`KubeTargetResolver`](Kuma/Core/Kubernetes/KubeTargetResolver.swift) resolves `kind/name` for **port-forward** ([`KubernetesRunner`](Kuma/Core/Execution/Runners/KubernetesRunner.swift)) and **live logs** ([`LiveLogSourceRunner`](Kuma/Presentation/Features/LiveLogs/LiveLogSourceRunner.swift)). Legacy providers with nil `kubeTargetType` default to **Pod**; nil `usePattern` defaults to **true**.
+
+| Target type | Pattern ON | Pattern OFF |
+|-------------|------------|-------------|
+| Pod | `kubectl get pods` (Running) → match | `pod/<name>` verbatim |
+| Service | `kubectl get services` → match | `service/<name>` verbatim |
+| Deployment | `kubectl get deployments` → match | `deployment/<name>` verbatim |
+
+Pattern rules ([`KubeTargetNameMatcher`](Kuma/Core/Kubernetes/KubeTargetNameMatcher.swift)): with pattern matching **off**, the target name is verbatim. With pattern **on**, `kubectl get` lists resources of the selected type; `*` → substring match; otherwise exact name, or for **Pod** only also `<name>-<replica-suffix>`. Tie-break = lexicographic first among sorted names.
+
+Example: `forwarder-elasticsearch-stage` is usually a **Deployment** (or Service), not a Pod — set Target Type accordingly or port-forward fails with `pods "…" not found`.
 
 ---
 
@@ -55,13 +71,20 @@
 ### DATA-01: `customKubeConfigPath` (legacy)
 - **Status**: Column exists via migration `v4_provider_custom_kubeconfig`; `Provider+Record` persists the field. **No UI** writes this value — prefer `kubeConfigID` + Settings default kube path. `KubeConfigMaterializer` still honors legacy path on import/migration for backward compatibility.
 
+### Kubeconfig registry (custom `kube_config` rows)
+- **UI**: Add/edit uses one registry inline panel: Config Name, **Config** section (segment Choose file / Paste Config + picker or editor), divider between Name and Config, single Cancel/Save footer — no nested source panel or Import File action.
+- **Storage**: Migration `v7_kube_config_source_path` adds `sourceFilePath`. File-backed rows store path on disk and empty encrypted payload; paste-backed rows store vault ciphertext only. `KubeConfigMaterializer` prefers `sourceFilePath` when present. DataPort `ExportKubeConfig.path` round-trips on import/export.
+
 ### DATA-02: Uncommitted Text Discarded on Inspector Dismiss — **Fixed**
 - **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift), [`ServiceInspectorViewModel+AutoSave.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel+AutoSave.swift)
 - **Resolution**: `onDisappear` flushes pending auto-save; revision counter commits any dirty state even when the debounce task already completed. **TC-E01** / **TC-E01b**.
 
-### DATA-03: Global Log Wipe Instead of Per-Service Clear — **Fixed**
-- **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift)
-- **Resolution**: Clear logs calls `LogAggregator.shared.clear(serviceID:)` scoped to the active service only.
+### Live logs (Inspector)
+- **Stream**: [`LiveLogSession`](Kuma/Presentation/Features/LiveLogs/LiveLogSession.swift) — `LiveLogSourceRunner` starts only when **log panel is open** and the service is **running**; stops when the service stops. **Closing the panel** stops the stream and **clears** the in-memory buffer (no hidden retention). Ring **1,000 lines**, ~30 Hz UI coalesce, no disk.
+- **Display**: [`KumaLogConsoleView`](Kuma/Presentation/Components/KumaLogConsoleView.swift) — AppKit `NSTextView`, **raw** lines; stable line IDs; text selectable (⌘C). Copy-all button removed.
+- **Header (logs mode)**: native SwiftUI icon controls — auto-scroll, wrap/no-wrap, clear display, download (`NSSavePanel` plain text). Start/Stop from deck/context menu only.
+- **Trim notice**: one-shot “Showing last 1,000 lines” above the console when the ring buffer drops oldest lines.
+- **Search**: not implemented; future options are in-buffer filter or native NSTextView find — no disk index.
 
 ### UX: Inspector header Start / Stop
 - **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift), [`KumaPrimaryButton.swift`](Kuma/Presentation/Components/KumaPrimaryButton.swift)
@@ -138,29 +161,21 @@
 - **Location**: [`ServicesDeckViewModel+WorkspaceLoad.swift`](Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel+WorkspaceLoad.swift)
 - **Resolution**: `ServiceStateStore.refreshProcessStates(for: serviceIDs)` batch via `ProcessRegistry.runningStates`. **TC-D04**.
 
-### PERF-02: O(n) Array Truncation in LogAggregator — **Fixed**
-- **Location**: [`LogChronologicalBuffer.swift`](Kuma/Core/Execution/LogChronologicalBuffer.swift), [`LogAggregator.swift`](Kuma/Core/Execution/LogAggregator.swift)
-- **Resolution**: Fixed-capacity ring buffer with O(1) eviction. **TC-E04**.
+### PERF-02: Log buffer truncation — **Fixed** (legacy LogAggregator removed)
+- **Location**: [`LiveLogSession.swift`](Kuma/Presentation/Features/LiveLogs/LiveLogSession.swift)
+- **Resolution**: Cap 1,000 lines via `suffix`; trim notice in UI. **TC-L10**.
 
 ### PERF-03: MainActor Task Flooding from Log Pipeline — **Fixed**
-- **Location**: [`ServiceLogPipeline.swift`](Kuma/Core/Execution/Logging/ServiceLogPipeline.swift)
-- **Resolution**: ~30Hz batching to `LogAggregator.appendBatch`; UI append gated on `deliversToUI`. **TC-E03**.
-
-### PERF-04: LiveLogsView Body Computation — **Fixed**
-- **Location**: [`LiveLogsView.swift`](Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift)
-- **Resolution**: `changeToken` drives `displayedLogs`; service picker uses `availableServiceNames` maintained by aggregator.
+- **Location**: [`LiveLogSession.swift`](Kuma/Presentation/Features/LiveLogs/LiveLogSession.swift)
+- **Resolution**: ~30 Hz coalesced flush to `lines`; incremental NSTextView append when line IDs stable. **TC-L12**, **TC-L11**.
 
 ### PERF-05: 10 Concurrent Notification Loops — **Fixed**
 - **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift)
 - **Resolution**: Single merged `AnyPublisher` + `switch` handler (no per-notification `.task` loops).
 
-### PERF-06: ISO8601DateFormatter Created on Every Flush — **Fixed**
-- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
-- **Resolution**: `isoFormatter` cached on `LogFileWriter` actor.
-
-### PERF-07: Unbounded Disk Log Growth — **Fixed (partial)**
-- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
-- **Resolution**: Flush path reads `KumaSettingsKey.logRetentionLimit` and enforces retention on disk (see Settings log retention picker).
+### PERF-06 / PERF-07: Legacy disk log pipeline — **Removed**
+- **Location**: (removed) `LogFileWriter` / global log aggregation
+- **Resolution**: Runner output spools via [`RunSpool`](Kuma/Core/Execution/Supervision/RunSpool.swift); live UI uses in-memory [`LiveLogSession`](Kuma/Presentation/Features/LiveLogs/LiveLogSession.swift) (1,000-line cap). Legacy `UserDefaults` log keys are cleared on factory reset only.
 
 ### PERF-10: Deck Card Observation Fan-Out — **Fixed**
 - **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`SyncedServiceRuntime.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift), [`ServiceTableColumns.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceTableColumns.swift)
@@ -186,7 +201,7 @@
 - **Location**: [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift), [`ComposeStackContext.swift`](Kuma/Core/Execution/Compose/ComposeStackContext.swift)
 - **Resolution**: Compose resolves in order: (1) on-disk `composeFilePath` → working dir = file parent unless `workingDirectory` set; (2) inline `yamlConfig` → ephemeral `kuma-compose-{serviceID}/docker-compose.kuma.yml` (removed on stop); (3) neither → `invalidConfiguration`.
 - **Lifecycle (best practice)**: Detached `docker|podman compose -p kuma-<serviceUUID> -f <file> up -d` via short-lived [`EphemeralCLI`](Kuma/Core/Execution/Subprocess/EphemeralCLI.swift) / [`ComposeCLI`](Kuma/Core/Execution/Compose/ComposeCLI.swift) (not `ProcessRegistry`). Stop runs `compose stop` then `compose down` with the same `-p`/`-f`. Browse-file and paste-YAML share [`ComposeStackResolver`](Kuma/Core/Execution/Compose/ComposeStackResolver.swift). Legacy stacks started without `-p kuma-…` are not torn down by stop — use the same compose file with matching project or manual `compose down`. **TC-D05**, **TC-D05b–f**.
-- **UI state**: After start/stop, deck and inspector call [`ServiceExecutionStateSync`](Kuma/Core/Execution/ServiceExecutionStateSync.swift) so `.running` follows `ServiceExecutionEngine.isServiceRunning` (compose/K8s without registry PID use `pid: 0`). Runner log capture is gated by [`ServiceExecutionLoggingPolicy`](Kuma/Core/Execution/ServiceExecutionLoggingPolicy.swift) (off until Live Logs wiring returns).
+- **UI state**: After start/stop, deck and inspector call [`ServiceExecutionStateSync`](Kuma/Core/Execution/ServiceExecutionStateSync.swift) so `.running` follows `ServiceExecutionEngine.isServiceRunning` (compose/K8s without registry PID use `pid: 0`). Live tailing is gated in the Inspector (`LiveLogSession` + `LiveLogSourceRunner`).
 
 ### PROC-05: Bounded shutdown waits — **Fixed**
 - **Location**: [`SubprocessWait.swift`](Kuma/Core/Execution/SubprocessWait.swift), [`ServiceExecutionEngine.swift`](Kuma/Core/Execution/ServiceExecutionEngine.swift), [`ContainerRunner.swift`](Kuma/Core/Execution/Runners/ContainerRunner.swift)
@@ -254,7 +269,6 @@ Baseline ~39 component views still without `#Preview`; **TC-F02** guards against
 | ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed** | Deck/Components |
 | ~~`ServiceNonPortBadge.metadata`~~ — **Removed** | `ServiceNonPortBadge.swift` |
 | ~~`InspectorStatusHeader.onToggleStar`~~ — **Removed** (unused closure) | `InspectorStatusHeader.swift` |
-| ~~`LiveLogsView.isAutoScroll`~~ — **Removed** misleading toggle | `LiveLogsView.swift` |
 | ~~Podman/Docker compose duplicate UI~~ — **Fixed** via shared [`ComposeSettingsView.swift`](Kuma/Presentation/Features/Services/Views/Forms/ComposeSettingsView.swift) |
 | **Card toggle stale after deck start (Kube)** — **Fixed**: [`ServiceStateStore`](Kuma/Stores/ServiceStateStore.swift) publishes `.kumaServiceStateChanged` on `setExecutionState`; deck rows use [`SyncedServiceRuntime`](Kuma/Presentation/Features/Services/Views/Deck/Components/SyncedServiceRuntime.swift). **TC-D10**. |
 | `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` (verify / remove if still present) |

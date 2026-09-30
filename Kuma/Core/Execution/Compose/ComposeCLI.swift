@@ -4,7 +4,6 @@ public protocol ComposeCLIExecuting: Sendable {
     func run(
         context: ComposeStackContext,
         arguments: [String],
-        pipeline: ServiceLogPipeline?,
         timeout: TimeInterval?
     ) async throws -> Int32
 }
@@ -14,10 +13,9 @@ public struct LiveComposeCLI: ComposeCLIExecuting {
     public func run(
         context: ComposeStackContext,
         arguments: [String],
-        pipeline: ServiceLogPipeline?,
         timeout: TimeInterval?
     ) async throws -> Int32 {
-        try await ComposeCLI.run(context: context, arguments: arguments, pipeline: pipeline, timeout: timeout)
+        try await ComposeCLI.run(context: context, arguments: arguments, timeout: timeout)
     }
 }
 
@@ -31,7 +29,6 @@ enum ComposeCLI {
     static func runDetailed(
         context: ComposeStackContext,
         arguments: [String],
-        pipeline: ServiceLogPipeline?,
         timeout: TimeInterval?
     ) async throws -> RunResult {
         let result = try await EphemeralCLI.run(
@@ -39,7 +36,7 @@ enum ComposeCLI {
             arguments: arguments,
             workingDirectory: context.workingDirectory,
             timeout: timeout,
-            stdio: .merged(pipeline: pipeline)
+            stdio: .merged
         )
         return RunResult(exitCode: result.terminationStatus, output: result.stderr)
     }
@@ -48,9 +45,8 @@ enum ComposeCLI {
     static func run(
         context: ComposeStackContext,
         arguments: [String],
-        pipeline: ServiceLogPipeline?,
         timeout: TimeInterval?
     ) async throws -> Int32 {
-        try await runDetailed(context: context, arguments: arguments, pipeline: pipeline, timeout: timeout).exitCode
+        try await runDetailed(context: context, arguments: arguments, timeout: timeout).exitCode
     }
 }
