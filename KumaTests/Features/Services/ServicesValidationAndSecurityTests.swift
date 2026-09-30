@@ -182,6 +182,83 @@ struct ServicesValidationAndSecurityTests {
         )
     }
 
+    @Test("TC-B04g: Pod pattern matches short deployment names and trailing hyphen")
+    func testKubeTargetNameMatcherShortRedisDeployment() {
+        let pods = ["redis-6bfd5bdc8-r2d8t", "unrelated-aaaaaaaabb-ccccc"]
+        #expect(
+            KubeTargetNameMatcher.firstMatch(
+                pattern: "redis",
+                in: pods,
+                allowPodReplicaPrefix: true
+            ) == "redis-6bfd5bdc8-r2d8t"
+        )
+        #expect(
+            KubeTargetNameMatcher.firstMatch(
+                pattern: "redis-",
+                in: pods,
+                allowPodReplicaPrefix: true
+            ) == "redis-6bfd5bdc8-r2d8t"
+        )
+        #expect(KubeTargetNamingHints.looksLikeStableWorkloadName("redis") == true)
+        #expect(KubeTargetNamingHints.replicaPodWorkloadStem(podName: "redis-6bfd5bdc8-r2d8t") == "redis")
+    }
+
+    @Test("TC-B04f: Pod pattern matches partial deployment stem before ReplicaSet hash")
+    func testKubeTargetNameMatcherPartialDeploymentStem() {
+        let pods = ["padiumkm-ms-masterdata-6cf68f49b4-qgdg7", "unrelated-aaaaaaaabb-ccccc"]
+        #expect(
+            KubeTargetNameMatcher.firstMatch(
+                pattern: "padiumkm-ms-masterdata",
+                in: pods,
+                allowPodReplicaPrefix: true
+            ) == "padiumkm-ms-masterdata-6cf68f49b4-qgdg7"
+        )
+        #expect(
+            KubeTargetNameMatcher.firstMatch(
+                pattern: "padiumkm-ms-master",
+                in: pods,
+                allowPodReplicaPrefix: true
+            ) == "padiumkm-ms-masterdata-6cf68f49b4-qgdg7"
+        )
+    }
+
+    @Test("TC-B04i: resolved kube target updates provider target name")
+    func testKubeResolvedTargetPersistence() {
+        let providerID = UUID()
+        let serviceID = UUID()
+        var provider = Provider(
+            id: providerID,
+            serviceID: serviceID,
+            type: .kubernetes,
+            targetName: "redis",
+            usePattern: true
+        )
+        let resolved = KubeResolvedTarget(kind: "pod", name: "redis-master-0")
+        let updated = KubeResolvedTargetPersistence.providerApplyingResolvedName(provider: provider, resolved: resolved)
+        #expect(updated?.targetName == "redis-master-0")
+        #expect(updated?.usePattern == false)
+
+        provider.targetName = "redis-master-0"
+        #expect(KubeResolvedTargetPersistence.providerApplyingResolvedName(provider: provider, resolved: resolved) == nil)
+    }
+
+    @Test("TC-B04h: kubectl port-forward adoption matches command line")
+    func testKubePortForwardAdoptionMatching() {
+        let plan = KubePortForwardPlan.Built(
+            arguments: [
+                "port-forward", "pod/my-app-pod", "19080:8080",
+                "--kubeconfig", "/tmp/kube/config", "-n", "staging", "--context", "dev",
+            ],
+            localPorts: [19_080],
+            kubectlReference: "pod/my-app-pod"
+        )
+        let command = "/opt/homebrew/bin/kubectl port-forward pod/my-app-pod 19080:8080 --kubeconfig /tmp/kube/config -n staging --context dev"
+        #expect(KubePortForwardAdoption.matchesPortForward(commandLine: command, plan: plan))
+
+        let wrongTarget = "/opt/homebrew/bin/kubectl port-forward pod/other 19080:8080 -n staging"
+        #expect(!KubePortForwardAdoption.matchesPortForward(commandLine: wrongTarget, plan: plan))
+    }
+
     @Test("TC-B04c: KubeTargetType maps to kubectl port-forward kinds")
     func testKubeTargetTypePortForwardKinds() {
         #expect(KubeTargetType.pod.portForwardKind == "pod")

@@ -27,11 +27,11 @@ public struct InspectorConfigFormStack: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                // Status Banner with Live Logs CTA
                 InspectorRunningBanner(
                     runtime: ServiceRuntimeState(executionState: inspectorVM.executionState),
                     isDisabled: service.isDisabled,
                     crashDetail: serviceStateStore.lastFailure(for: serviceID),
+                    configurationIssues: inspectorVM.configurationIssues,
                     onViewLogs: {
                         withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                             inspectorVM.isViewingLogs = true

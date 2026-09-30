@@ -56,10 +56,11 @@ struct KubeTargetResolverTests {
     func testK1PodExact() async throws {
         let fixture = try installFakeKubectl(script: "#!/bin/sh\nexit 0\n")
         defer { fixture.cleanup() }
-        let provider = makeProvider(targetName: "my-app-pod", targetType: .pod, usePattern: false)
+        let podName = "web-6cf68f49b4-abcde"
+        let provider = makeProvider(targetName: podName, targetType: .pod, usePattern: false)
         let exec = KubeExecCredentials(kubeconfigPath: fixture.kubeconfig.path, context: nil)
         let resolved = try await KubeTargetResolver.resolve(provider: provider, kubectlPath: fixture.kubectlPath, exec: exec)
-        #expect(resolved.kubectlReference == "pod/my-app-pod")
+        #expect(resolved.kubectlReference == "pod/\(podName)")
     }
 
     @Test("K2: service exact")

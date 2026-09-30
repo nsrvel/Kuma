@@ -22,6 +22,9 @@ public struct InspectorKubernetesFormSection: View {
                         onFieldChanged()
                     }
                 )
+                .onChange(of: kubeConfigVM.isLoadingNamespaces) { _, _ in onFieldChanged() }
+                .onChange(of: kubeConfigVM.connectionError) { _, _ in onFieldChanged() }
+                .onChange(of: kubeConfigVM.connectionSuccess) { _, _ in onFieldChanged() }
 
                 KumaFormSection(icon: "network", title: "Cluster Connection") {
                     KubeConnectionSettingsView(

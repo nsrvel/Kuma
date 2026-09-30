@@ -5,18 +5,34 @@ public struct InspectorRunningBanner: View {
     public let runtime: ServiceRuntimeState
     public let isDisabled: Bool
     public var crashDetail: String?
+    public var configurationIssues: [ConfigurationIssue]
     public let onViewLogs: () -> Void
 
     public init(
         runtime: ServiceRuntimeState,
         isDisabled: Bool = false,
         crashDetail: String? = nil,
+        configurationIssues: [ConfigurationIssue] = [],
         onViewLogs: @escaping () -> Void
     ) {
         self.runtime = runtime
         self.isDisabled = isDisabled
         self.crashDetail = crashDetail
+        self.configurationIssues = configurationIssues
         self.onViewLogs = onViewLogs
+    }
+
+    private var blockingConfigurationIssues: [ConfigurationIssue] {
+        configurationIssues.filter { $0.severity == .blocking }
+    }
+
+    private var configurationSubtitle: String? {
+        guard let first = blockingConfigurationIssues.first else { return nil }
+        let extra = blockingConfigurationIssues.count - 1
+        if extra > 0 {
+            return "\(first.message) (+\(extra) more)"
+        }
+        return first.message
     }
 
     private var isTransitional: Bool {
@@ -54,24 +70,34 @@ public struct InspectorRunningBanner: View {
                     status: .stopping
                 )
             case .crashed:
-                let detail = crashDetail?
+                let crashLine = crashDetail?
                     .split(whereSeparator: \.isNewline)
                     .first
                     .map(String.init)
                 statusBanner(
                     title: "Crashed",
-                    subtitle: detail ?? "Open Live Logs for details.",
+                    subtitle: crashLine ?? configurationSubtitle ?? "Open Live Logs for details.",
                     status: .crashed,
                     washStrength: 0.12,
                     onViewLogs: onViewLogs
                 )
             case .stopped:
-                statusBanner(
-                    title: "Stopped",
-                    subtitle: "You can edit all settings.",
-                    status: .stopped,
-                    onViewLogs: onViewLogs
-                )
+                if let configSubtitle = configurationSubtitle {
+                    InspectorStatusPillBanner(
+                        title: "Can't start yet",
+                        subtitle: configSubtitle,
+                        tone: KumaStatus.failedIndicator,
+                        washStrength: 0.12,
+                        onViewLogs: onViewLogs
+                    )
+                } else {
+                    statusBanner(
+                        title: "Stopped",
+                        subtitle: "You can edit all settings.",
+                        status: .stopped,
+                        onViewLogs: onViewLogs
+                    )
+                }
             }
         }
     }

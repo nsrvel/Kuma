@@ -19,6 +19,9 @@ extension ServiceInspectorViewModel {
         if portsTouched {
             portsDraftDirty = true
         }
+        if !configurationIssues.isEmpty {
+            clearConfigurationValidationState()
+        }
         pendingSaveRevision += 1
         autoSaveTask?.cancel()
         let targetServiceID = self.serviceID

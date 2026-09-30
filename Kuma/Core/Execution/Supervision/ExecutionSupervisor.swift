@@ -245,19 +245,11 @@ public actor ExecutionSupervisor {
     }
 
     private func composeHasRunningContainers(context: ComposeStackContext) async -> Bool {
-        let args = context.psQuietArguments
-        let result = try? await EphemeralCLI.run(
-            executablePath: context.binaryPath,
-            arguments: args,
-            workingDirectory: context.workingDirectory,
-            timeout: 15,
-            stdio: .captureSeparated
+        let ids = await ComposeStackRuntime.runningContainerIDs(
+            context: context,
+            projectBinding: context.projectBinding
         )
-        let lines = result?.stdout
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty } ?? []
-        return !lines.isEmpty
+        return !ids.isEmpty
     }
 
     // MARK: - Poller loop

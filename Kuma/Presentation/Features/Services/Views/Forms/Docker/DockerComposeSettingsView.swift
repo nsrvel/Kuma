@@ -4,17 +4,20 @@ public struct DockerComposeSettingsView: View {
     @Binding public var yamlConfig: String
     @Binding public var composeFilePath: String
     public var isLocked: Bool
+    public var bindingIdentity: UUID?
     public var onSave: () -> Void
 
     public init(
         yamlConfig: Binding<String>,
         composeFilePath: Binding<String>,
         isLocked: Bool = false,
+        bindingIdentity: UUID? = nil,
         onSave: @escaping () -> Void = {}
     ) {
         self._yamlConfig = yamlConfig
         self._composeFilePath = composeFilePath
         self.isLocked = isLocked
+        self.bindingIdentity = bindingIdentity
         self.onSave = onSave
     }
 
@@ -25,6 +28,7 @@ public struct DockerComposeSettingsView: View {
             yamlConfig: $yamlConfig,
             composeFilePath: $composeFilePath,
             isLocked: isLocked,
+            bindingIdentity: bindingIdentity,
             onSave: onSave
         )
     }

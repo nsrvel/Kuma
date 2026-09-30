@@ -1,5 +1,21 @@
 import SwiftUI
 
+/// Leading checkmark column so macOS context menus show membership like native toggles.
+private struct ContextMenuCheckRow: View {
+    let title: String
+    let isChecked: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 10, weight: .bold))
+                .opacity(isChecked ? 1 : 0)
+                .frame(width: 12, alignment: .leading)
+            Text(title)
+        }
+    }
+}
+
 public struct ServiceProviderSwitchSubmenu: View {
     public let snapshot: ServiceCardSnapshot
     public let onSwitchProvider: (UUID) -> Void
@@ -11,18 +27,12 @@ public struct ServiceProviderSwitchSubmenu: View {
                     Button {
                         onSwitchProvider(option.id)
                     } label: {
-                        HStack {
-                            Text(option.label)
-                            if option.isActive { Image(systemName: "checkmark") }
-                        }
+                        ContextMenuCheckRow(title: option.label, isChecked: option.isActive)
                     }
                 }
             } else {
                 Button {} label: {
-                    HStack {
-                        Text(snapshot.providerCategory.sidebarLabel)
-                        Image(systemName: "checkmark")
-                    }
+                    ContextMenuCheckRow(title: snapshot.providerCategory.sidebarLabel, isChecked: true)
                 }
                 .disabled(true)
             }
@@ -44,12 +54,10 @@ public struct ServiceGroupsSubmenu: View {
                     Button {
                         onToggleGroup(group.id)
                     } label: {
-                        HStack {
-                            Text(group.name)
-                            if selectedGroupIDs.contains(group.id) {
-                                Image(systemName: "checkmark")
-                            }
-                        }
+                        ContextMenuCheckRow(
+                            title: group.name,
+                            isChecked: selectedGroupIDs.contains(group.id)
+                        )
                     }
                 }
             } label: {

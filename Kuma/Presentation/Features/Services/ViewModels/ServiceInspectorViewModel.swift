@@ -19,14 +19,13 @@ public final class ServiceInspectorViewModel {
     public var draftPorts: [KumaPortMappingItem] = []
 
     public var isViewingLogs: Bool = false
-    public var isLogAutoScrollEnabled: Bool = true
-    public var logWrapsLines: Bool = true
-    public var logScrollToBottomRequest: Int = 0
+    public var configurationIssues: [ConfigurationIssue] = []
     public var showDeleteConfirmation: Bool = false
     public var stateStore: ServiceStateStore?
     public var kubeConfigVM: KubeConfigViewModel? = nil
 
     var autoSaveTask: Task<Void, Never>? = nil
+    var kubeAsyncValidationMessage: String?
     var pendingSaveRevision: UInt = 0
     var lastCommittedRevision: UInt = 0
     /// True after the user edits port rows; avoids wiping DB ports on unrelated auto-saves.

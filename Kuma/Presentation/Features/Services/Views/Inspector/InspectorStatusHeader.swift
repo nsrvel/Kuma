@@ -7,26 +7,16 @@ public struct InspectorStatusHeader: View {
     public let provider: Provider?
     public let runtime: ServiceRuntimeState
     public var isViewingLogs: Bool = false
-    @Binding public var isLogAutoScrollEnabled: Bool
-    @Binding public var logWrapsLines: Bool
-    public var onEnableLogAutoScroll: () -> Void
-    public var onClearLogs: () -> Void
-    public var onDownloadLogs: () -> Void
+    public var isStartDisabled: Bool = false
     public let onToggle: () -> Void
     public var onBack: () -> Void = {}
-
-    @State private var logSession = LiveLogSession.shared
 
     public init(
         service: Service,
         provider: Provider?,
         runtime: ServiceRuntimeState,
         isViewingLogs: Bool = false,
-        isLogAutoScrollEnabled: Binding<Bool>,
-        logWrapsLines: Binding<Bool>,
-        onEnableLogAutoScroll: @escaping () -> Void = {},
-        onClearLogs: @escaping () -> Void = {},
-        onDownloadLogs: @escaping () -> Void = {},
+        isStartDisabled: Bool = false,
         onToggle: @escaping () -> Void,
         onBack: @escaping () -> Void = {}
     ) {
@@ -34,21 +24,13 @@ public struct InspectorStatusHeader: View {
         self.provider = provider
         self.runtime = runtime
         self.isViewingLogs = isViewingLogs
-        self._isLogAutoScrollEnabled = isLogAutoScrollEnabled
-        self._logWrapsLines = logWrapsLines
-        self.onEnableLogAutoScroll = onEnableLogAutoScroll
-        self.onClearLogs = onClearLogs
-        self.onDownloadLogs = onDownloadLogs
+        self.isStartDisabled = isStartDisabled
         self.onToggle = onToggle
         self.onBack = onBack
     }
 
     private var category: ProviderCategory {
         provider?.type ?? .docker
-    }
-
-    private var canDownloadLogs: Bool {
-        logSession.bufferedServiceID == service.id && !logSession.lines.isEmpty
     }
 
     public var body: some View {
@@ -126,17 +108,12 @@ public struct InspectorStatusHeader: View {
                         .font(.system(size: 18))
                         .foregroundStyle(.tertiary)
                         .padding(.trailing, 8)
-                } else if isViewingLogs {
-                    InspectorHeaderLogControls(
-                        isLogAutoScrollEnabled: $isLogAutoScrollEnabled,
-                        logWrapsLines: $logWrapsLines,
-                        canDownload: canDownloadLogs,
-                        onEnableAutoScroll: onEnableLogAutoScroll,
-                        onClear: onClearLogs,
-                        onDownload: onDownloadLogs
-                    )
                 } else {
-                    InspectorHeaderActionButton(runtime: runtime, onToggle: onToggle)
+                    InspectorHeaderActionButton(
+                        runtime: runtime,
+                        isStartDisabled: isStartDisabled,
+                        onToggle: onToggle
+                    )
                 }
             }
         }
@@ -150,8 +127,6 @@ public struct InspectorStatusHeader: View {
         service: Service(name: "Preview Service", workspaceID: UUID()),
         provider: nil,
         runtime: .idle,
-        isLogAutoScrollEnabled: .constant(true),
-        logWrapsLines: .constant(true),
         onToggle: {}
     )
     .frame(width: 400)

@@ -22,6 +22,7 @@ public enum KumaServiceNotification {
     public nonisolated static let sourceKey = "source"
     public nonisolated static let sourceDeck = "deck"
     public nonisolated static let sourceInspector = "inspector"
+    public nonisolated static let sourceExecution = "execution"
 
     public nonisolated static func postServiceUpdated(serviceID: UUID, source: String) {
         NotificationCenter.default.post(

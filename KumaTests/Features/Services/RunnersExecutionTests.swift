@@ -262,6 +262,26 @@ struct RunnersExecutionTests {
         #expect(ctx.upArguments.contains("-d"))
     }
 
+    @Test("TC-D05g: implicit default compose project omits -p")
+    func testComposeStackImplicitDefaultArguments() {
+        let serviceID = UUID()
+        let path = "/tmp/deploy/docker-compose.yml"
+        let ctx = ComposeStackContext(
+            serviceID: serviceID,
+            binaryPath: "/usr/local/bin/docker",
+            composeFilePath: path,
+            workingDirectory: "/tmp/deploy",
+            projectName: ComposeStackContext.projectName(for: serviceID),
+            isEphemeralComposeFile: false,
+            projectBinding: .implicitDefault
+        )
+        #expect(ctx.downArguments == [
+            "compose", "-f", path,
+            "down", "--timeout", "5", "--remove-orphans",
+        ])
+        #expect(ctx.psQuietArgumentsImplicitDefault == ctx.psQuietArguments)
+    }
+
     @Test("TC-D05e: ContainerRunner runs startup script from initialScriptPath before compose")
     func testContainerRunnerInitialScriptPath() async throws {
         let dockerKey = KumaSettingsKey.customDockerPath
@@ -355,7 +375,13 @@ struct RunnersExecutionTests {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("kuma-kubectl-mock-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let fakeKubectl = tempDir.appendingPathComponent("kubectl")
-        try "#!/bin/sh\nexit 0\n".write(to: fakeKubectl, atomically: true, encoding: .utf8)
+        try """
+        #!/bin/sh
+        if [ "$1" = "get" ]; then
+          echo "pod/my-app-pod"
+        fi
+        exit 0
+        """.write(to: fakeKubectl, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeKubectl.path)
         defer {
             try? FileManager.default.removeItem(at: tempDir)

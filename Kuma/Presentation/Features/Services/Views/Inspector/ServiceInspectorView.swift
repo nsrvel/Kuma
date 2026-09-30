@@ -39,26 +39,7 @@ public struct ServiceInspectorView: View {
                     provider: inspectorVM.activeProvider,
                     runtime: ServiceRuntimeState(executionState: executionState),
                     isViewingLogs: isViewingLogs,
-                    isLogAutoScrollEnabled: $inspectorVM.isLogAutoScrollEnabled,
-                    logWrapsLines: $inspectorVM.logWrapsLines,
-                    onEnableLogAutoScroll: {
-                        inspectorVM.logScrollToBottomRequest += 1
-                    },
-                    onClearLogs: {
-                        let session = LiveLogSession.shared
-                        if session.bufferedServiceID == service.id {
-                            session.clear()
-                        }
-                    },
-                    onDownloadLogs: {
-                        let session = LiveLogSession.shared
-                        guard session.bufferedServiceID == service.id else { return }
-                        let text = session.lines.map(\.text).joined(separator: "\n")
-                        LiveLogPlainTextExport.save(
-                            defaultFilename: LiveLogPlainTextExport.sanitizedFilename(serviceName: service.name),
-                            text: text
-                        )
-                    },
+                    isStartDisabled: !inspectorVM.canStartService,
                     onToggle: {
                         inspectorVM.toggleRunning()
                     },
@@ -77,19 +58,14 @@ public struct ServiceInspectorView: View {
                     if isViewingLogs {
                         InspectorLiveConsoleView(
                             serviceID: serviceID,
-                            serviceName: service.name,
                             service: service,
                             provider: inspectorVM.activeProvider ?? Provider(
                                 id: UUID(),
                                 serviceID: serviceID,
                                 type: inspectorVM.activeCategory
                             ),
-                            isRunning: isRunning,
-                            isLogAutoScrollEnabled: $inspectorVM.isLogAutoScrollEnabled,
-                            logWrapsLines: $inspectorVM.logWrapsLines,
-                            logScrollToBottomRequest: $inspectorVM.logScrollToBottomRequest
+                            isRunning: isRunning
                         )
-                        .padding(.vertical, 4)
                         .transition(.asymmetric(
                             insertion: .opacity.combined(with: .move(edge: .trailing)),
                             removal: .opacity.combined(with: .move(edge: .trailing))
@@ -129,6 +105,7 @@ public struct ServiceInspectorView: View {
             if inspectorVM.service?.id != newID {
                 inspectorVM.isLoadingServiceDetail = true
                 inspectorVM.isViewingLogs = false
+                inspectorVM.clearConfigurationValidationState()
             }
         }
         .task(id: serviceID) {

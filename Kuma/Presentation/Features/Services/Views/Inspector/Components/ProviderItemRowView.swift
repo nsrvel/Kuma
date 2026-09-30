@@ -59,9 +59,10 @@ public struct ProviderItemRowView: View {
                     title: "Active",
                     tone: KumaStatus.runningIndicator,
                     showsLeadingIndicator: false,
-                    showsCheckmarkLeading: true
+                    showsCheckmarkLeading: true,
+                    showsContainer: false
                 )
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)

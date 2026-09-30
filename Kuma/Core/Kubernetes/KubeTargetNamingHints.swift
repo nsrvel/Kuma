@@ -1,15 +1,26 @@
 import Foundation
 
 enum KubeTargetNamingHints {
-    /// Heuristic: pod names usually end with a ReplicaSet + pod hash (e.g. `my-app-7d4f9b2c3d-8nn4d`).
+    /// Deployment-style pod name without ReplicaSet + pod suffix (e.g. `padiumkm-ms-masterdata-6cf68f49b4-qgdg7` → `padiumkm-ms-masterdata`).
+    nonisolated static func replicaPodWorkloadStem(podName: String) -> String? {
+        let parts = podName.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count >= 3 else { return nil }
+        let podHash = parts[parts.count - 1]
+        let rsHash = parts[parts.count - 2]
+        guard podHash.count == 5,
+              (8 ... 10).contains(rsHash.count),
+              podHash.allSatisfy({ $0.isLetter || $0.isNumber }),
+              rsHash.allSatisfy({ $0.isLetter || $0.isNumber })
+        else { return nil }
+        return parts.dropLast(2).joined(separator: "-")
+    }
+
+    /// Heuristic: deployment/service-style name, not a concrete `…-<rs>-<pod>` instance.
     static func looksLikeStableWorkloadName(_ name: String) -> Bool {
-        let parts = name.split(separator: "-")
-        guard let last = parts.last else { return false }
-        let suffix = String(last)
-        if suffix.lowercased() == "pod" { return false }
-        if suffix.count >= 5, suffix.allSatisfy({ $0.isLetter || $0.isNumber }) {
-            return false
-        }
-        return parts.count >= 2
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        guard !trimmed.isEmpty else { return false }
+        if trimmed.lowercased() == "pod" { return false }
+        return replicaPodWorkloadStem(podName: trimmed) == nil
     }
 }
