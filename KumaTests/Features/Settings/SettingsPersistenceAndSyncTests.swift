@@ -109,6 +109,16 @@ struct SettingsPersistenceAndSyncTests {
         #expect(viewModel.customPodmanPath == "/usr/local/bin/modern_podman")
     }
 
+    @Test("TC-C05b: notifyOnServiceFailure falls back to legacy notifyOnCrash key")
+    func testLegacyNotifyOnCrashFallback() {
+        let harness = SettingsTestHarness()
+        defer { harness.cleanup() }
+
+        harness.userDefaults.set(false, forKey: KumaSettingsKey.legacyNotifyOnCrash)
+        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        #expect(viewModel.notifyOnServiceFailure == false)
+    }
+
     // MARK: - [TC-C06] Concurrent Settings Updates
     @Test("TC-C06: Concurrent updates to separate settings properties execute deterministically")
     func testConcurrentSettingsUpdates() async {
@@ -119,7 +129,7 @@ struct SettingsPersistenceAndSyncTests {
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
-                viewModel.notifyOnCrash = false
+                viewModel.notifyOnServiceFailure = false
             }
             group.addTask { @MainActor in
                 viewModel.clearLogsOnSwitch = true
@@ -129,7 +139,7 @@ struct SettingsPersistenceAndSyncTests {
             }
         }
 
-        #expect(viewModel.notifyOnCrash == false)
+        #expect(viewModel.notifyOnServiceFailure == false)
         #expect(viewModel.clearLogsOnSwitch == true)
         #expect(viewModel.portConflictPolicy == .killExisting)
     }

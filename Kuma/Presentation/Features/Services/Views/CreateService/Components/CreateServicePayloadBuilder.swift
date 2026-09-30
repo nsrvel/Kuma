@@ -17,30 +17,31 @@ public enum CreateServicePayloadBuilder {
             isDisabled: inputs.generalDraft.isDisabled
         )
 
-        var encryptedPassword: String? = nil
-        var encryptedKeyPath: String? = nil
-        var encryptedYaml: String? = nil
-        var encryptedScript: String? = nil
+        var sshPasswordPlain: String? = nil
+        var sshKeyPathPlain: String? = nil
+        var ngrokTokenPlain: String? = nil
+        var yamlConfig: String? = nil
+        var initialScript: String? = nil
 
         if inputs.selectedProvider == .ssh {
             if inputs.sshAuthType == .password && !inputs.sshPassword.isEmpty {
-                encryptedPassword = try CryptoVault.shared.encrypt(plainText: inputs.sshPassword.trimmingCharacters(in: .whitespacesAndNewlines))
+                sshPasswordPlain = inputs.sshPassword.trimmingCharacters(in: .whitespacesAndNewlines)
             } else if inputs.sshAuthType == .key && !inputs.sshKeyPath.isEmpty {
-                encryptedKeyPath = try CryptoVault.shared.encrypt(plainText: inputs.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines))
+                sshKeyPathPlain = inputs.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-        } else if inputs.selectedProvider == .tunnel {
+        } else if inputs.selectedProvider == .tunnel, inputs.tunnelDraft.engine == .ngrok {
             let trimmedToken = inputs.tunnelDraft.authToken.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedToken.isEmpty {
-                encryptedPassword = try CryptoVault.shared.encrypt(plainText: trimmedToken)
+                ngrokTokenPlain = trimmedToken
             }
         }
 
         if inputs.selectedProvider == .docker {
-            encryptedYaml = inputs.dockerDraft.yamlConfig.isEmpty ? nil : inputs.dockerDraft.yamlConfig
-            encryptedScript = inputs.dockerDraft.initialScript.isEmpty ? nil : inputs.dockerDraft.initialScript
+            yamlConfig = inputs.dockerDraft.yamlConfig.isEmpty ? nil : inputs.dockerDraft.yamlConfig
+            initialScript = inputs.dockerDraft.initialScript.isEmpty ? nil : inputs.dockerDraft.initialScript
         } else if inputs.selectedProvider == .podman {
-            encryptedYaml = inputs.podmanDraft.yamlConfig.isEmpty ? nil : inputs.podmanDraft.yamlConfig
-            encryptedScript = inputs.podmanDraft.initialScript.isEmpty ? nil : inputs.podmanDraft.initialScript
+            yamlConfig = inputs.podmanDraft.yamlConfig.isEmpty ? nil : inputs.podmanDraft.yamlConfig
+            initialScript = inputs.podmanDraft.initialScript.isEmpty ? nil : inputs.podmanDraft.initialScript
         }
 
         let providerID = UUID()
@@ -54,20 +55,20 @@ public enum CreateServicePayloadBuilder {
             targetName: inputs.selectedProvider == .kubernetes && !inputs.kubeDraft.targetName.isEmpty ? inputs.kubeDraft.targetName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             kubeTargetType: inputs.kubeDraft.targetType.rawValue,
             usePattern: inputs.kubeDraft.usePattern,
-            yamlConfig: encryptedYaml,
-            initialScript: encryptedScript,
+            yamlConfig: yamlConfig,
+            initialScript: initialScript,
             runCommand: inputs.selectedProvider == .shell && !inputs.shellDraft.runCommand.isEmpty ? inputs.shellDraft.runCommand.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             workingDirectory: inputs.selectedProvider == .shell && !inputs.shellDraft.workingDirectory.isEmpty ? inputs.shellDraft.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             sshHost: inputs.selectedProvider == .ssh && !inputs.sshDraft.host.isEmpty ? inputs.sshDraft.host.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             sshUser: inputs.selectedProvider == .ssh && !inputs.sshDraft.user.isEmpty ? inputs.sshDraft.user.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             sshPort: inputs.selectedProvider == .ssh ? Int(inputs.sshDraft.port.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 22 : nil,
-            sshKeyPath: inputs.selectedProvider == .ssh && inputs.sshAuthType == .key ? encryptedKeyPath : nil,
-            sshPassword: inputs.selectedProvider == .ssh && inputs.sshAuthType == .password ? encryptedPassword : nil,
+            sshKeyPath: inputs.selectedProvider == .ssh && inputs.sshAuthType == .key ? sshKeyPathPlain : nil,
+            sshPassword: inputs.selectedProvider == .ssh && inputs.sshAuthType == .password ? sshPasswordPlain : nil,
             httpCheckUrl: inputs.selectedProvider == .httpCheck && !inputs.healthCheckDraft.url.isEmpty ? healthCheckDraftUrl(inputs.healthCheckDraft.url) : nil,
             httpCheckInterval: inputs.selectedProvider == .httpCheck ? inputs.healthCheckDraft.interval.rawValue : nil,
             tunnelType: inputs.selectedProvider == .tunnel ? inputs.tunnelDraft.engine.rawValue : nil,
             tunnelTargetUrl: inputs.selectedProvider == .tunnel && !inputs.tunnelDraft.targetUrl.isEmpty ? inputs.tunnelDraft.targetUrl.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
-            ngrokAuthToken: inputs.selectedProvider == .tunnel && inputs.tunnelDraft.engine == .ngrok ? encryptedPassword : nil,
+            ngrokAuthToken: ngrokTokenPlain,
             monitorProcessName: inputs.selectedProvider == .processMonitor && !inputs.monitorDraft.processName.isEmpty ? inputs.monitorDraft.processName.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             monitorInterval: inputs.selectedProvider == .processMonitor ? inputs.monitorDraft.interval.rawValue : nil
         )

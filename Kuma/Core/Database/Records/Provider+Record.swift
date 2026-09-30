@@ -118,7 +118,7 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
 
         // Secure encryption for sensitive credentials before persisting to SQLite
         if let pass = sshPassword, !pass.isEmpty {
-            container["sshPassword"] = (try? CryptoVault.shared.encrypt(plainText: pass)) ?? pass
+            container["sshPassword"] = try CredentialProtector.encryptForStorage(pass)
         } else {
             container["sshPassword"] = nil
         }
@@ -129,7 +129,7 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
         container["tunnelTargetUrl"] = tunnelTargetUrl
 
         if let token = ngrokAuthToken, !token.isEmpty {
-            container["ngrokAuthToken"] = (try? CryptoVault.shared.encrypt(plainText: token)) ?? token
+            container["ngrokAuthToken"] = try CredentialProtector.encryptForStorage(token)
         } else {
             container["ngrokAuthToken"] = nil
         }

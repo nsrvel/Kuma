@@ -15,7 +15,6 @@ public nonisolated enum KumaSettingsKey {
     public static let appearance = "kuma.settings.appearance"
 
     // MARK: - Engine & CLI Binary Paths
-    public static let customPathOverride = "kuma.settings.customPathOverride"
     public static let defaultShell = "kuma.settings.defaultShell"
     public static let customKubectlPath = "kuma.settings.customKubectlPath"
     public static let customKubeconfigPath = "kuma.settings.customKubeconfigPath"
@@ -25,11 +24,9 @@ public nonisolated enum KumaSettingsKey {
     // MARK: - Tunneling Custom Binary Paths & Config
     public static let cloudflaredPath = "kuma.settings.cloudflaredPath"
     public static let customNgrokPath = "kuma.settings.customNgrokPath"
-    public static let ngrokAuthToken = "kuma.settings.ngrokAuthToken"
-    public static let ngrokRegion = "kuma.settings.ngrokRegion"
 
     // MARK: - Notifications & Safety
-    public static let notifyOnCrash = "kuma.settings.notifyOnCrash"
+    public static let notifyOnServiceFailure = "kuma.settings.notifyOnServiceFailure"
     public static let portConflictPolicy = "kuma.settings.portConflictPolicy"
 
     // MARK: - Logs & Buffer
@@ -43,6 +40,7 @@ public nonisolated enum KumaSettingsKey {
     public static let legacyPodmanPath = "kuma.custom_podman_path"
     public static let legacyCloudflaredPath = "kuma.custom_cloudflared_path"
     public static let legacyNgrokPath = "kuma.custom_ngrok_path"
+    public static let legacyNotifyOnCrash = "kuma.settings.notifyOnCrash"
 
     /// Helper to resolve a string preference checking new key first, then legacy key fallback.
     public nonisolated static func string(forKey primaryKey: String, fallbackKey: String? = nil, defaults: UserDefaults = .standard) -> String? {
@@ -56,8 +54,16 @@ public nonisolated enum KumaSettingsKey {
     }
 
     /// Helper to resolve a boolean preference with an explicit default value.
-    public nonisolated static func bool(forKey key: String, defaultValue: Bool, defaults: UserDefaults = .standard) -> Bool {
-        if let object = defaults.object(forKey: key) as? Bool {
+    public nonisolated static func bool(
+        forKey key: String,
+        defaultValue: Bool,
+        fallbackKey: String? = nil,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        if defaults.object(forKey: key) != nil, let object = defaults.object(forKey: key) as? Bool {
+            return object
+        }
+        if let fallbackKey, defaults.object(forKey: fallbackKey) != nil, let object = defaults.object(forKey: fallbackKey) as? Bool {
             return object
         }
         return defaultValue

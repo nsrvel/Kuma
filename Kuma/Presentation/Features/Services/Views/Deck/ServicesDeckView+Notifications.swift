@@ -9,6 +9,9 @@ extension ServicesDeckView {
         content
             .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
                 if let sID = notif.object as? UUID {
+                    if (notif.userInfo?[KumaServiceNotification.sourceKey] as? String) == KumaServiceNotification.sourceDeck {
+                        return
+                    }
                     Task { await viewModel.refreshSingleServiceSnapshot(id: sID) }
                 } else {
                     viewModel.loadWorkspace(workspaceID: workspaceID)

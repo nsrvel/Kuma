@@ -3,15 +3,17 @@ import SwiftUI
 /// Isolated content body switcher for ServicesDeckView (Empty State, Cards Grid, or Table List).
 public struct ServicesDeckContentBodyView: View {
     public let viewModel: ServicesDeckViewModel
-    public let workspaceID: UUID
     public let isStarredOnly: Bool
+    public let deckActions: ServiceDeckActions
 
-    @Environment(ServiceStateStore.self) private var serviceStateStore
-
-    public init(viewModel: ServicesDeckViewModel, workspaceID: UUID, isStarredOnly: Bool) {
+    public init(
+        viewModel: ServicesDeckViewModel,
+        isStarredOnly: Bool,
+        deckActions: ServiceDeckActions
+    ) {
         self.viewModel = viewModel
-        self.workspaceID = workspaceID
         self.isStarredOnly = isStarredOnly
+        self.deckActions = deckActions
     }
 
     public var body: some View {
@@ -23,7 +25,7 @@ public struct ServicesDeckContentBodyView: View {
         } else if viewModel.viewMode == .card {
             cardsGrid
         } else {
-            tableList
+            ServiceDeckTableSection(viewModel: viewModel, actions: deckActions)
         }
     }
 
@@ -62,38 +64,14 @@ public struct ServicesDeckContentBodyView: View {
                  spacing: 16
             ) {
                 ForEach(viewModel.filteredSnapshots) { snapshot in
-                    ServiceCardView(
+                    ServiceCardRow(
                         snapshot: snapshot,
-                        runtime: serviceStateStore.runtime(for: snapshot.id),
-                        isSelected: viewModel.selectedServiceID == snapshot.id,
-                        viewModel: viewModel,
-                        workspaceID: workspaceID
+                        isSelected: viewModel.selectedServiceID == snapshot.id
                     )
-                    .equatable()
                 }
             }
             .animation(.spring(response: 0.24, dampingFraction: 0.88), value: viewModel.filterVersion)
             .padding(16)
         }
-    }
-
-    @ViewBuilder
-    private var tableList: some View {
-        ServiceTableView(
-            snapshots: viewModel.filteredSnapshots,
-            runtimeFor: { serviceStateStore.runtime(for: $0) },
-            selectedID: viewModel.selectedServiceID,
-            groups: viewModel.groups,
-            onToggle: { viewModel.toggleService(id: $0) },
-            onRestart: { viewModel.restartService(id: $0) },
-            onSwitchProvider: { serviceID, providerID in viewModel.switchProvider(serviceID: serviceID, providerID: providerID, workspaceID: workspaceID) },
-            onToggleStar: { viewModel.toggleStarred(id: $0, workspaceID: workspaceID) },
-            onToggleDisabled: { viewModel.toggleDisabled(id: $0, workspaceID: workspaceID) },
-            onToggleGroup: { serviceID, groupID in viewModel.toggleGroup(serviceID: serviceID, groupID: groupID, workspaceID: workspaceID) },
-            onDuplicate: { viewModel.duplicateService(id: $0, workspaceID: workspaceID) },
-            onCopyConfig: { viewModel.copyConfig(id: $0) },
-            onDelete: { viewModel.promptDeleteService(id: $0) },
-            onSelect: { viewModel.selectService($0) }
-        )
     }
 }

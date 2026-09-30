@@ -52,15 +52,15 @@
 
 ---
 
-### Kategori D: Runtime/Process State Integration (NotificationCenter & Race Prevention)
+### Kategori D: Runtime/Process State Integration (NotificationCenter, task cancellation, reload deduplication)
 | ID | Nama Test Case | Deskripsi Skenario & Kondisi Batas | Expected Result | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **TC-D01** | `testNotificationPostedOnGroupAdd` | Memanggil `addGroup(workspaceID:)` | `NotificationCenter.default` menerima event `.kumaGroupsUpdated` dengan group ID sebagai payload | ✅ Passed |
 | **TC-D02** | `testNotificationPostedOnGroupRename` | Memanggil `renameGroup(id:newName:)` | `NotificationCenter.default` menerima event `.kumaGroupsUpdated` | ✅ Passed |
 | **TC-D03** | `testNotificationPostedOnGroupDelete` | Memanggil `deleteGroup(id:)` | `NotificationCenter.default` menerima event `.kumaGroupsUpdated` | ✅ Passed |
 | **TC-D04** | `testNotificationPostedOnGroupReorder` | Memanggil `moveGroups(fromOffsets:toOffset:)` | `NotificationCenter.default` menerima event `.kumaGroupsUpdated` | ✅ Passed |
-| **TC-D05** | `testWorkspaceSwitchTriggersReload` | Workspace aktif berganti dari Workspace A ke Workspace B | `loadGroups(workspaceID: B)` dipanggil, entries dan flattenedRows ter-rebuild dengan groups B | ✅ Passed |
-| **TC-D06** | `testConcurrentReloadDeduplication` | Dua pemanggilan `loadGroups` terjadi simultan | Operasi ter-serialize / task terkoordinasi tanpa race condition membaca data usang | ✅ Passed |
+| **TC-D05** | `testWorkspaceSwitchTriggersReload` | Workspace aktif berganti dari Workspace A ke Workspace B | `loadGroups(workspaceID: B)` dipanggil, entries dan flattenedRows ter-rebuild dengan groups B (matches `.task(id:)` in `SidebarView`) | ✅ Passed |
+| **TC-D06** | `testConcurrentReloadDeduplication` | Dua pemanggilan `loadGroups` terjadi simultan | In-memory groups konsisten; tidak ada race membaca data usang | ✅ Passed |
 
 ---
 

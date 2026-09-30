@@ -38,12 +38,11 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
     case hundredMB = 100
     case unlimited = 0
 
+    /// Short label for Settings picker (per-service line cap).
     public var title: String {
         switch self {
-        case .tenMB: return "~250 lines"
-        case .fiftyMB: return "~500 lines"
-        case .hundredMB: return "~1,000 lines"
         case .unlimited: return "Unlimited"
+        default: return "\(maxLinesPerService)"
         }
     }
 
@@ -71,6 +70,16 @@ public enum LogRetentionLimit: Int, CaseIterable, Codable, Sendable {
             return limit
         }
         return .fiftyMB
+    }
+
+    /// On-disk log file size cap per service (MB); `unlimited` disables rotation.
+    public var maxDiskMegabytes: Int? {
+        switch self {
+        case .tenMB: return 10
+        case .fiftyMB: return 50
+        case .hundredMB: return 100
+        case .unlimited: return nil
+        }
     }
 }
 
@@ -121,10 +130,6 @@ public final class SettingsViewModel {
 
     // MARK: - Engine & CLI Settings
 
-    public var customPathOverride: String {
-        didSet { userDefaults.set(customPathOverride, forKey: Keys.customPathOverride) }
-    }
-
     public var defaultShell: String {
         didSet { userDefaults.set(defaultShell, forKey: Keys.defaultShell) }
     }
@@ -155,18 +160,13 @@ public final class SettingsViewModel {
         didSet { userDefaults.set(customNgrokPath, forKey: Keys.customNgrokPath) }
     }
 
-    public var ngrokAuthToken: String {
-        didSet { userDefaults.set(ngrokAuthToken, forKey: Keys.ngrokAuthToken) }
-    }
-
-    public var ngrokRegion: String {
-        didSet { userDefaults.set(ngrokRegion, forKey: Keys.ngrokRegion) }
-    }
-
     // MARK: - Service notifications (failure toggle UI in General)
 
-    public var notifyOnCrash: Bool {
-        didSet { userDefaults.set(notifyOnCrash, forKey: Keys.notifyOnCrash) }
+    public var notifyOnServiceFailure: Bool {
+        didSet {
+            userDefaults.set(notifyOnServiceFailure, forKey: Keys.notifyOnServiceFailure)
+            userDefaults.removeObject(forKey: Keys.legacyNotifyOnCrash)
+        }
     }
 
     // MARK: - Ports & safety
@@ -178,7 +178,10 @@ public final class SettingsViewModel {
     // MARK: - Advanced & Data
 
     public var logRetentionLimit: LogRetentionLimit {
-        didSet { userDefaults.set(logRetentionLimit.rawValue, forKey: Keys.logRetentionLimit) }
+        didSet {
+            userDefaults.set(logRetentionLimit.rawValue, forKey: Keys.logRetentionLimit)
+            LogAggregator.shared.refreshRetentionFromSettings()
+        }
     }
 
     public var clearLogsOnSwitch: Bool {
@@ -197,7 +200,6 @@ public final class SettingsViewModel {
         let rawAppearance = userDefaults.string(forKey: Keys.appearance) ?? KumaAppearance.system.rawValue
         self.appearance = KumaAppearance(rawValue: rawAppearance) ?? .system
 
-        self.customPathOverride = userDefaults.string(forKey: Keys.customPathOverride) ?? ""
         self.defaultShell = userDefaults.string(forKey: Keys.defaultShell) ?? "/bin/zsh"
 
         self.customKubectlPath = KumaSettingsKey.string(
@@ -236,10 +238,12 @@ public final class SettingsViewModel {
             defaults: userDefaults
         ) ?? ""
 
-        self.ngrokAuthToken = userDefaults.string(forKey: Keys.ngrokAuthToken) ?? ""
-        self.ngrokRegion = userDefaults.string(forKey: Keys.ngrokRegion) ?? "auto"
-
-        self.notifyOnCrash = KumaSettingsKey.bool(forKey: Keys.notifyOnCrash, defaultValue: true, defaults: userDefaults)
+        self.notifyOnServiceFailure = KumaSettingsKey.bool(
+            forKey: Keys.notifyOnServiceFailure,
+            defaultValue: true,
+            fallbackKey: Keys.legacyNotifyOnCrash,
+            defaults: userDefaults
+        )
         let rawPortPolicy = userDefaults.string(forKey: Keys.portConflictPolicy) ?? PortConflictPolicy.warnAndBlock.rawValue
         self.portConflictPolicy = PortConflictPolicy(rawValue: rawPortPolicy) ?? .warnAndBlock
 
@@ -290,17 +294,17 @@ public final class SettingsViewModel {
         case .notDetermined:
             // Headless XCTest hosts cannot present the system permission sheet; avoid trapping on CI.
             if SingleInstanceGuard.isTestingEnvironment {
-                self.notifyOnCrash = false
+                self.notifyOnServiceFailure = false
                 return true
             }
             let granted = await SystemNotificationCenter.shared.requestAuthorization()
-            self.notifyOnCrash = granted
+            self.notifyOnServiceFailure = granted
             return !granted
         case .denied:
-            self.notifyOnCrash = false
+            self.notifyOnServiceFailure = false
             return true
         case .authorized, .provisional, .ephemeral:
-            self.notifyOnCrash = true
+            self.notifyOnServiceFailure = true
             return false
         @unknown default:
             return false
@@ -315,7 +319,6 @@ public final class SettingsViewModel {
             Keys.autoResumeServices,
             Keys.confirmBeforeQuit,
             Keys.appearance,
-            Keys.customPathOverride,
             Keys.defaultShell,
             Keys.customKubectlPath,
             Keys.customKubeconfigPath,
@@ -323,9 +326,8 @@ public final class SettingsViewModel {
             Keys.customPodmanPath,
             Keys.cloudflaredPath,
             Keys.customNgrokPath,
-            Keys.ngrokAuthToken,
-            Keys.ngrokRegion,
-            Keys.notifyOnCrash,
+            Keys.notifyOnServiceFailure,
+            Keys.legacyNotifyOnCrash,
             Keys.portConflictPolicy,
             Keys.logRetentionLimit,
             Keys.clearLogsOnSwitch,
@@ -346,7 +348,6 @@ public final class SettingsViewModel {
         self.autoResumeServices = false
         self.confirmBeforeQuit = true
         self.appearance = .system
-        self.customPathOverride = ""
         self.defaultShell = "/bin/zsh"
         self.customKubectlPath = ""
         self.customKubeconfigPath = ""
@@ -354,9 +355,7 @@ public final class SettingsViewModel {
         self.customPodmanPath = ""
         self.cloudflaredPath = ""
         self.customNgrokPath = ""
-        self.ngrokAuthToken = ""
-        self.ngrokRegion = "auto"
-        self.notifyOnCrash = true
+        self.notifyOnServiceFailure = true
         self.portConflictPolicy = .warnAndBlock
         self.logRetentionLimit = .fiftyMB
         self.clearLogsOnSwitch = false

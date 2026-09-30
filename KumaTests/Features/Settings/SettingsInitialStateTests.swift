@@ -40,7 +40,6 @@ struct SettingsInitialStateTests {
 
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
-        #expect(viewModel.customPathOverride.isEmpty)
         #expect(viewModel.customKubectlPath.isEmpty)
         #expect(viewModel.customKubeconfigPath.isEmpty)
         #expect(viewModel.customDockerPath.isEmpty)
@@ -58,6 +57,7 @@ struct SettingsInitialStateTests {
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
         #expect(viewModel.defaultShell == "/bin/zsh")
+        #expect(KumaShellLaunchConfiguration.validatedShellPath(defaults: harness.userDefaults) == "/bin/zsh")
         #expect(DefaultShell.zsh.label == "Zsh")
         #expect(DefaultShell.bash.label == "Bash")
         #expect(DefaultShell.fish.label == "Fish")
@@ -71,7 +71,7 @@ struct SettingsInitialStateTests {
 
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
-        #expect(viewModel.notifyOnCrash == true)
+        #expect(viewModel.notifyOnServiceFailure == true)
     }
 
     // MARK: - [TC-A06] Clean Install Default Log Retention
@@ -83,8 +83,9 @@ struct SettingsInitialStateTests {
         let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
 
         #expect(viewModel.logRetentionLimit == .fiftyMB)
-        #expect(viewModel.logRetentionLimit.title == "~500 lines")
+        #expect(viewModel.logRetentionLimit.title == "500")
         #expect(viewModel.logRetentionLimit.maxTotalLines == 2_000)
+        #expect(viewModel.logRetentionLimit.maxDiskMegabytes == 50)
         #expect(viewModel.clearLogsOnSwitch == false)
     }
 

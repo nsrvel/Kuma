@@ -106,10 +106,10 @@ extension ServicesDeckViewModel {
         Task {
             do {
                 _ = try await serviceRepository.toggleStarred(serviceID: id)
-                NotificationCenter.default.post(name: .kumaServiceUpdated, object: id)
+                KumaServiceNotification.postServiceUpdated(serviceID: id, source: KumaServiceNotification.sourceDeck)
             } catch {
                 Self.logger.error("Failed to persist toggleStarred for service \(id): \(error.localizedDescription)")
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                await refreshSingleServiceSnapshot(id: id)
             }
         }
     }
@@ -142,11 +142,11 @@ extension ServicesDeckViewModel {
                     svc.isDisabled = newDisabled
                     svc.updatedAt = Date()
                     try await serviceRepository.updateService(svc)
-                    NotificationCenter.default.post(name: .kumaServiceUpdated, object: id)
+                    KumaServiceNotification.postServiceUpdated(serviceID: id, source: KumaServiceNotification.sourceDeck)
                 }
             } catch {
                 Self.logger.error("Failed to toggle disabled for service \(id): \(error)")
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                await refreshSingleServiceSnapshot(id: id)
             }
         }
     }
@@ -165,8 +165,8 @@ extension ServicesDeckViewModel {
                     svc.activeProviderID = providerID
                     svc.updatedAt = Date()
                     try await serviceRepository.updateService(svc)
-                    await loadWorkspaceAsync(workspaceID: workspaceID)
-                    NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                    await refreshSingleServiceSnapshot(id: serviceID)
+                    KumaServiceNotification.postServiceUpdated(serviceID: serviceID, source: KumaServiceNotification.sourceDeck)
 
                     if isCurrentlyRunning {
                         stateStore?.setExecutionState(.starting, for: serviceID)
@@ -214,10 +214,10 @@ extension ServicesDeckViewModel {
         Task {
             do {
                 _ = try await serviceRepository.toggleGroupMembership(serviceID: serviceID, groupID: groupID)
-                NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+                KumaServiceNotification.postServiceUpdated(serviceID: serviceID, source: KumaServiceNotification.sourceDeck)
             } catch {
                 Self.logger.error("Failed to toggle group membership for service \(serviceID): \(error)")
-                await loadWorkspaceAsync(workspaceID: workspaceID)
+                await refreshSingleServiceSnapshot(id: serviceID)
             }
         }
     }

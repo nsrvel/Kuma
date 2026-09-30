@@ -20,6 +20,10 @@ public actor LogFileWriter {
     private let flushIntervalNanoseconds: UInt64 = 250_000_000 // 250ms
 
     private let logsDirectory: URL
+    private let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        return f
+    }()
 
     private init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? URL(fileURLWithPath: NSTemporaryDirectory())
@@ -29,28 +33,22 @@ public actor LogFileWriter {
         try? FileManager.default.createDirectory(at: kumaLogs, withIntermediateDirectories: true)
     }
 
-    /// Appends a new log line to the cold storage buffer.
     public func append(serviceID: UUID, level: String = "INFO", message: String) {
         let item = QueuedLog(serviceID: serviceID, timestamp: Date(), level: level, message: message)
         buffer.append(item)
-
-        if buffer.count >= maxBufferSize {
-            flushTask?.cancel()
-            flushTask = nil
-            flushBuffer()
-        } else if flushTask == nil {
-            scheduleFlush()
-        }
+        scheduleFlushIfNeeded()
     }
 
-    /// Appends multiple log lines directly to the cold storage buffer.
     public func appendBatch(serviceID: UUID, items: [(level: String, message: String)]) {
         guard !items.isEmpty else { return }
         let now = Date()
         for item in items {
             buffer.append(QueuedLog(serviceID: serviceID, timestamp: now, level: item.level, message: item.message))
         }
+        scheduleFlushIfNeeded()
+    }
 
+    private func scheduleFlushIfNeeded() {
         if buffer.count >= maxBufferSize {
             flushTask?.cancel()
             flushTask = nil
@@ -75,43 +73,66 @@ public actor LogFileWriter {
         let currentBatch = buffer
         buffer.removeAll(keepingCapacity: true)
 
-        // Group by serviceID to batch file appends
         var grouped: [UUID: [QueuedLog]] = [:]
         for item in currentBatch {
             grouped[item.serviceID, default: []].append(item)
         }
 
-        let dateFormatter = ISO8601DateFormatter()
+        let maxBytes = diskCapBytes()
 
         for (serviceID, items) in grouped {
             let serviceDir = logsDirectory.appendingPathComponent(serviceID.uuidString, isDirectory: true)
             try? FileManager.default.createDirectory(at: serviceDir, withIntermediateDirectories: true)
 
-            // 1 file per day / session rotation
-            let dayString = dateFormatter.string(from: Date()).prefix(10) // YYYY-MM-DD
+            let dayString = isoFormatter.string(from: Date()).prefix(10)
             let fileURL = serviceDir.appendingPathComponent("\(dayString).log")
+
+            if let maxBytes {
+                rotateIfNeeded(fileURL: fileURL, maxBytes: maxBytes)
+            }
 
             var payload = ""
             for it in items {
-                let time = dateFormatter.string(from: it.timestamp)
+                let time = isoFormatter.string(from: it.timestamp)
                 payload += "[\(time)] [\(it.level)] \(it.message)\n"
             }
 
             guard let data = payload.data(using: .utf8) else { continue }
-
-            if FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) {
-                if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
-                    defer { try? fileHandle.close() }
-                    _ = try? fileHandle.seekToEnd()
-                    try? fileHandle.write(contentsOf: data)
-                }
-            } else {
-                try? data.write(to: fileURL, options: .atomic)
-            }
+            appendData(data, to: fileURL)
         }
     }
 
-    /// Explicitly flushes any pending buffer contents (e.g., on app termination).
+    private func diskCapBytes() -> Int64? {
+        let raw = UserDefaults.standard.object(forKey: KumaSettingsKey.logRetentionLimit) as? Int ?? 50
+        guard raw != 0 else { return nil }
+        return Int64(raw) * 1_024 * 1_024
+    }
+
+    private func rotateIfNeeded(fileURL: URL, maxBytes: Int64) {
+        let path = fileURL.path(percentEncoded: false)
+        guard FileManager.default.fileExists(atPath: path),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+              let size = attrs[.size] as? Int64,
+              size >= maxBytes else {
+            return
+        }
+        let rotated = fileURL.appendingPathExtension("1")
+        try? FileManager.default.removeItem(at: rotated)
+        try? FileManager.default.moveItem(at: fileURL, to: rotated)
+    }
+
+    private func appendData(_ data: Data, to fileURL: URL) {
+        if FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) {
+            if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
+                defer { try? fileHandle.close() }
+                _ = try? fileHandle.seekToEnd()
+                try? fileHandle.write(contentsOf: data)
+            }
+        } else {
+            try? data.write(to: fileURL, options: .atomic)
+        }
+    }
+
     public func flushAll() {
         flushBuffer()
     }

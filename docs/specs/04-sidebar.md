@@ -19,15 +19,18 @@
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarDropIndicator.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarEmptyPlaceholderRow.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarFooterButton.swift`  
-> - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarNewServiceButton.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/SidebarRowIcon.swift`  
 > - `Kuma/Presentation/Features/Sidebar/Views/Components/GroupDragDropModifier.swift`  
 > - `Kuma/Lib/Extensions/UUID+Stable.swift`  
+> - `Kuma/ContentView.swift` (detail routing, `.kumaOpenSettings`, `.kumaCreateServiceRequested`)  
+> - `Kuma/Presentation/Features/Services/Views/Deck/WorkspaceServicesDeckHost.swift`  
+> - `Kuma/Presentation/Features/Workspace/Views/SidebarWorkspaceRow.swift`  
+> - `Kuma/Presentation/Features/Services/Views/Deck/ServicesToolbar.swift` (Create Service → notification bus)  
 > **Test Suite Target:** `KumaTests/Features/Sidebar/`  
 > - `SidebarInitialStateTests.swift` (Kategori A: Baseline Structure, Stable UUIDs, Default Expansion)  
 > - `SidebarValidationAndSecurityTests.swift` (Kategori B: Group Name Sanitization, Boundary Limits, Drag-Drop Payload Validation)  
 > - `SidebarPersistenceAndReorderTests.swift` (Kategori C: GRDB CRUD, Workspace Scoping, Batch SortOrder Reordering, Concurrency)  
-> - `SidebarRuntimeAndNotificationTests.swift` (Kategori D: NotificationCenter Bus, Workspace Switch Reload, Debounced Race Elimination)  
+> - `SidebarRuntimeAndNotificationTests.swift` (Kategori D: NotificationCenter Bus, Workspace Switch Reload, Task cancellation & concurrent reload deduplication)  
 > - `SidebarEdgeCasesAndErrorTests.swift` (Kategori E: Rapid Keyboard Traversal, Missing/Corrupt Groups, Selection Fallback)  
 > - `SidebarVisualAndAccessibilityTests.swift` (Kategori F: Headless SwiftUI Hierarchy, Strict File Line Limit <150, Dead-Code Elimination)  
 > - `KumaTests/Harness/SidebarTestHarness.swift` (Shared In-Memory SQLite & Test Harness for Sidebar/Groups)  
@@ -40,10 +43,13 @@
 graph TD
     User([User in Sidebar]) --> List[SidebarView: Native Inset List <120 lines]
 
-    subgraph HeaderSection [Workspace Header & Quick Action]
-        List --> WRow[SidebarWorkspaceRow: Active Workspace & Popover Switcher]
-        List --> NewSvc[SidebarNewServiceButton: Emits .kumaCreateServiceRequested]
+    subgraph HeaderSection [Workspace Header]
+        List --> WRow[SidebarWorkspaceRow: Active Workspace and Popover Switcher]
         List --> Div1[KumaDivider]
+    end
+
+    subgraph ServicesDeck [Services Deck not in sidebar list]
+        DeckToolbar[ServicesToolbar or empty state] -->|kumaCreateServiceRequested| ContentViewHandler[ContentView selects all-services and opens sheet]
     end
 
     subgraph FixedEntries [Fixed Navigation Nodes]
@@ -77,9 +83,11 @@ graph TD
         VM -->|Background Task Async| Repo[ServiceGroupRepository: SQLite 'service_group']
         Repo --> GRDB[(GRDB SQLite DatabasePool/Queue)]
         VM -->|Publish .kumaGroupsUpdated| Bus[NotificationCenter Event Bus]
-        Bus --> Deck[ServicesDeckView: Filters services by selected group]
+        Bus --> DeckHost[WorkspaceServicesDeckHost applies sidebar selection filters]
     end
 ```
+
+**Create Service** is not a sidebar row. The deck posts the same global notification (`.kumaCreateServiceRequested`); `ContentView` selects `all-services` and presents `CreateServiceSheet`.
 
 ---
 
@@ -96,7 +104,7 @@ graph TD
 | **Any State** | Keyboard `Up` arrow | Current index > 0 | **Previous Row Selected** | `selectedID` moves up 1 position with spring animation. |
 | **Any State** | Keyboard `Left` arrow | Selected node has children & is expanded | **Node Collapsed** | `expandedIDs.remove(selectedID)`. Children rows hidden. |
 | **Any State** | Keyboard `Right` arrow | Selected node has children & is collapsed | **Node Expanded** | `expandedIDs.insert(selectedID)`. Children rows shown. |
-| **Workspace Changed** | `workspaceStore.activeWorkspace.id` changes | Valid new workspace UUID | **Groups Reloaded (Debounced)** | `loadGroups(workspaceID:)` cancels in-flight reload task, fetches groups for new workspace, rebuilds entries. |
+| **Workspace Changed** | `workspaceStore.activeWorkspace.id` changes | Valid new workspace UUID | **Groups reloaded** | SwiftUI `.task(id: workspaceID)` cancels the prior load; `loadGroups(workspaceID:)` fetches groups, `rebuildEntries()`, `reconcileSelectionForLoadedWorkspace()`. |
 
 ### B. Service Groups CRUD & Reordering State
 
@@ -110,6 +118,29 @@ graph TD
 | **Idle** | User triggers Move Up ($G$) | `index > 0` | **Groups Reordered** | In-memory swap with predecessor. Re-index `sortOrder (0..n)`. Async `repository.updateSortOrders()`. |
 | **Idle** | User triggers Move Down ($G$) | `index < count - 1` | **Groups Reordered** | In-memory swap with successor. Re-index `sortOrder (0..n)`. Async `repository.updateSortOrders()`. |
 | **Idle** | User drags $G_A$ drops on $G_B$ | $G_A \ne G_B$ and valid indices | **Groups Reordered** | In-memory `move(fromOffsets:toOffset:)`. Batch re-index. Async `repository.updateSortOrders()`. |
+
+### C. Detail pane integration (`selectedID` → detail)
+
+| `selectedID` | Detail view | Deck filter (`WorkspaceServicesDeckHost`) |
+| :--- | :--- | :--- |
+| `.stable("all-services")` | `WorkspaceServicesDeckHost` | `isStarredOnly = false`, `filterGroupID = nil` |
+| `.stable("starred-services")` | same | `isStarredOnly = true` |
+| Service group UUID | same | `filterGroupID` from `groupIDForSelectedRow(_:)` |
+| `.stable("live-logs")` | `LiveLogsView` via `ContentView.detailView` | N/A |
+| `.stable("settings")` | `SettingsView` via `ContentView.detailView` | N/A; footer Settings button uses active highlight |
+
+**Selection hygiene:** On workspace switch or after `loadGroups`, `reconcileSelectionForLoadedWorkspace()` keeps selection if it is a global nav stable ID or a group in the current workspace; otherwise falls back to `.stable("all-services")`.
+
+```mermaid
+flowchart LR
+  SidebarVM[SidebarViewModel.selectedID]
+  ContentView[ContentView.detailView]
+  DeckHost[WorkspaceServicesDeckHost]
+  DeckVM[ServicesDeckViewModel filters]
+  SidebarVM --> ContentView
+  ContentView --> DeckHost
+  DeckHost --> DeckVM
+```
 
 ---
 
@@ -141,7 +172,9 @@ graph TD
 9. **`[INV-SIDEBAR-09]` Zero Dead Code & Reusable Action Button Integration**:
    - `SidebarRowActionButtons` MUST reuse `SidebarActionButton.swift` instead of duplicating button structure or leaving orphaned components.
 10. **`[INV-SIDEBAR-10]` Race-Free Asynchronous Workspace Synchronization**:
-    - Dual `.task` triggers on workspace boot and notification events MUST be coordinated safely (debounced or deduplicated by ID) to prevent concurrent conflicting reads from SQLite.
+    - Workspace changes use `.task(id: workspaceID)` so the previous `loadGroups` task is cancelled before a new fetch runs.
+    - `.onReceive(.kumaGroupsUpdated)` may trigger an additional reload for the active workspace.
+    - Concurrent `loadGroups` calls must not corrupt in-memory group state (verified by TC-D06).
 
 ---
 
@@ -158,7 +191,7 @@ graph TD
 | **`[INV-SIDEBAR-07]`** | Keyboard arrow navigation (`up`, `down`, `left`, `right`), expand/collapse | `SidebarEdgeCasesAndErrorTests` |
 | **`[INV-SIDEBAR-08]`** | Strict file line limits check (< 150 lines per view file, decomposition verified) | `SidebarVisualAndAccessibilityTests` |
 | **`[INV-SIDEBAR-09]`** | Zero dead code verification (`SidebarActionButton` reused in `SidebarRowActionButtons`) | `SidebarVisualAndAccessibilityTests` |
-| **`[INV-SIDEBAR-10]`** | NotificationCenter event broadcasting (`.kumaGroupsUpdated`) & race-free task sync | `SidebarRuntimeAndNotificationTests` |
+| **`[INV-SIDEBAR-10]`** | `.kumaGroupsUpdated` broadcast; workspace switch reload (TC-D05); concurrent `loadGroups` (TC-D06) | `SidebarRuntimeAndNotificationTests` |
 
 ---
 

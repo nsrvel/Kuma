@@ -7,15 +7,17 @@
 > - `Kuma/Presentation/Features/Settings/Views/SettingsView.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsGeneralSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsAppearanceSection.swift`  
-> - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsNotificationsSection.swift`  
-> - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsCLIToolsSection.swift`  
+> - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsCLIToolsSection.swift`
+> - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsPortsConnectionsSection.swift`
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsTunnelingToolsSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsLogsSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Sections/SettingsDataSection.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Components/AppearanceCard.swift`  
 > - `Kuma/Presentation/Features/Settings/Views/Components/BinaryStatusBadge.swift`  
 > - `Kuma/Domain/Models/KumaSettingsKey.swift`  
-> - `Kuma/Core/DataPort/DataPortService.swift`  
+> - `Kuma/Core/DataPort/DataPortService.swift`
+> - `Kuma/Core/Environment/KumaSettingsExecutableResolver.swift`
+> - `Kuma/Core/Environment/KumaShellLaunchConfiguration.swift`  
 > **Test Suite Target:** `KumaTests/Features/Settings/`  
 > - `SettingsInitialStateTests.swift` (Kategori A: Baseline Default Settings)  
 > - `SettingsValidationAndSecurityTests.swift` (Kategori B: Validasi CLI & Tunneling Paths)  
@@ -37,6 +39,8 @@ graph TD
         GeneralSec --> SMApp[SMAppService.mainApp Register / Unregister]
         GeneralSec --> AutoResume[Auto-Resume Services Toggle]
         GeneralSec --> ConfirmQuit[Confirm Before Quitting Toggle]
+        GeneralSec --> NotifyFail[Notify on Service Failure]
+        GeneralSec --> UNPerm[UNUserNotificationCenter Auth Request]
         
         Nav --> AppSec[SettingsAppearanceSection]
         AppSec --> AppCard[AppearanceCard: System / Light / Dark]
@@ -54,22 +58,21 @@ graph TD
         TunnelSec --> Ngrok[ngrok Binary Path]
         
         KubeCLI & ContainerCLI & Cloudflared & Ngrok --> DepCheck[DependencyChecker Zero-Latency Validation]
+        DepCheck --> ExecResolve[KumaSettingsExecutableResolver at runtime]
         DepCheck --> ConcreteVal[Concrete Path Population / 'Not detected' Placeholder]
+        ShellPicker --> ShellRunner[ShellRunner via KumaShellLaunchConfiguration]
     end
 
-    subgraph NotificationsAndLogs [3. Notifications & Buffer]
-        Nav --> NotifSec[SettingsNotificationsSection]
-        NotifSec --> CrashAlert[Notify on Crash]
-        NotifSec --> UNPerm[UNUserNotificationCenter Auth Request]
-        NotifSec --> HealthFail[Notify on Health Failure]
-        NotifSec --> PortSafety[Port Collision Alerts]
+    subgraph PortsLogsData [3. Ports, Logs & Data]
+        Nav --> PortSec[SettingsPortsConnectionsSection]
+        PortSec --> PortPolicy[portConflictPolicy warn / kill]
         
         Nav --> LogSec[SettingsLogsSection]
-        LogSec --> LogBuf[LogRetentionLimit: 10MB / 50MB / 100MB / Unlimited]
+        LogSec --> LogBuf[LogRetentionLimit: memory lines + disk MB tier]
         LogSec --> ClearBuf[Clear Buffer on Restart Toggle]
     end
 
-    subgraph DataManagement [4. Backup & Danger Zone]
+    subgraph DataManagement [4. Data]
         Nav --> DataSec[SettingsDataSection]
         DataSec --> ExportJSON[Export Kuma Backup JSON]
         ExportJSON --> DataPortEnc[DataPortService.encodeBackup Atomic File Write]
@@ -96,20 +99,20 @@ graph TD
 | Setting Category / Control | Trigger / User Event | State / Property Affected | Underlying Persistence Key (`KumaSettingsKey` / `Keys`) | System / External Side Effect | Fallback / Guard Condition |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Launch at Login** | Toggle Switch | `launchAtLogin: Bool` | `kuma.settings.launchAtLogin` | `SMAppService.mainApp.register()` or `unregister()` | Log error on permission denial; does not crash |
-| **Auto-Resume Services** | Toggle Switch | `autoResumeServices: Bool` | `kuma.settings.autoResumeServices` | Read during app boot in `WorkspaceStore` / startup flow | Default: `true` |
+| **Auto-Resume Services** | Toggle Switch | `autoResumeServices: Bool` | `kuma.settings.autoResumeServices` | `ServicesDeckViewModel.resumeServicesIfNeeded` on workspace load | Default: `false` |
 | **Confirm Before Quit** | Toggle Switch | `confirmBeforeQuit: Bool` | `kuma.settings.confirmBeforeQuit` | Intercepted in `AppDelegate.applicationShouldTerminate` | Default: `true` |
 | **Appearance Theme** | Select Card (`system`/`light`/`dark`) | `appearance: KumaAppearance` | `kuma.settings.appearance` | `NSApp.appearance = nil` / `NSAppearance(named: .aqua)` / `.darkAqua` | Immediate zero-delay UI theme update |
-| **Default Shell** | Select Picker Option | `defaultShell: String` | `kuma.settings.defaultShell` | Process executor spawns selected shell (`/bin/zsh`, `/bin/bash`, `/opt/homebrew/bin/fish`) | Default: `/bin/zsh` |
-| **Kubectl Path** | Text Input / File Picker | `customKubectlPath: String` | `kuma.settings.customKubectlPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_kubectl_path` |
+| **Default Shell** | Select Picker Option | `defaultShell: String` | `kuma.settings.defaultShell` | `ShellRunner` via `KumaShellLaunchConfiguration` | Default: `/bin/zsh` |
+| **Kubectl Path** | Text Input / File Picker | `customKubectlPath: String` | `kuma.settings.customKubectlPath` | `KumaSettingsExecutableResolver.kubectl()` then PATH search | Checks fallback `kuma.custom_kubectl_path` |
 | **Kubeconfig Path** | Text Input / File Picker | `customKubeconfigPath: String` | `kuma.settings.customKubeconfigPath` | Evaluated against file existence & YAML structure | Checks fallback `kuma.custom_kubeconfig_path` |
-| **Docker Binary Path** | Text Input / File Picker | `customDockerPath: String` | `kuma.settings.customDockerPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_docker_path` |
-| **Podman Binary Path** | Text Input / File Picker | `customPodmanPath: String` | `kuma.settings.customPodmanPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_podman_path` |
-| **Cloudflared Path** | Text Input / File Picker | `cloudflaredPath: String` | `kuma.settings.cloudflaredPath` | Evaluated against `DependencyChecker.validateCustomBinary` | Checks fallback `kuma.custom_cloudflared_path` |
-| **Notify on Crash** | Toggle Switch | `notifyOnCrash: Bool` | `kuma.settings.notifyOnCrash` | Requests `UNUserNotificationCenter` authorization | Resets to `false` and alerts user if denied |
-| **Notify on Health Fail**| Toggle Switch | `notifyOnHealthFailure: Bool`| `kuma.settings.notifyOnHealthFailure` | HealthCheck engine suppresses or dispatches alerts | Default: `true` (SettingsNotificationsSection) |
-| **Port Conflict Policy**| Select Picker Option | `portConflictPolicy: PortConflictPolicy` | `kuma.settings.portConflictPolicy` | Determines action when port is bound (`warnAndBlock` or `killExisting`) | Default: `.warnAndBlock` (SettingsPortsConnectionsSection) |
-| **Log Retention Buffer** | Select Picker Option | `logRetentionLimit: LogRetentionLimit` | `kuma.settings.logRetentionLimit` | Ring buffer ceiling for process log outputs (10MB, 50MB, 100MB, 0=unlimited) | Default: `50MB` |
-| **Clear Buffer on Restart**| Toggle Switch | `clearLogsOnSwitch: Bool` | `kuma.settings.clearLogsOnSwitch` | Service restart handler purges in-memory log buffer | Default: `false` |
+| **Docker Binary Path** | Text Input / File Picker | `customDockerPath: String` | `kuma.settings.customDockerPath` | `KumaSettingsExecutableResolver.docker()` | Checks fallback `kuma.custom_docker_path` |
+| **Podman Binary Path** | Text Input / File Picker | `customPodmanPath: String` | `kuma.settings.customPodmanPath` | `KumaSettingsExecutableResolver.podman()` | Checks fallback `kuma.custom_podman_path` |
+| **Cloudflared Path** | Text Input / File Picker | `cloudflaredPath: String` | `kuma.settings.cloudflaredPath` | `KumaSettingsExecutableResolver.cloudflared()` | Checks fallback `kuma.custom_cloudflared_path` |
+| **ngrok Binary Path** | Text Input / File Picker | `customNgrokPath: String` | `kuma.settings.customNgrokPath` | `KumaSettingsExecutableResolver.ngrok()` | ngrok auth token is per-provider, not Settings |
+| **Notify on Service Failure** | Toggle Switch | `notifyOnServiceFailure: Bool` | `kuma.settings.notifyOnServiceFailure` | Crash + health-check alerts; requests notification permission; reads legacy `kuma.settings.notifyOnCrash` | Default: `true` |
+| **Port Conflict Policy**| Select Picker Option | `portConflictPolicy: PortConflictPolicy` | `kuma.settings.portConflictPolicy` | `LocalPortConflictResolver` on K8s/SSH port-forward | Default: `.warnAndBlock` |
+| **Log Retention Buffer** | Select Picker Option | `logRetentionLimit: LogRetentionLimit` | `kuma.settings.logRetentionLimit` | Picker shows per-service line cap (`250`, `500`, `1000`, `Unlimited`); on-disk rotation by tier (10/50/100 MB) | Default: `.fiftyMB` (`500`) |
+| **Clear Buffer on Restart**| Toggle Switch | `clearLogsOnSwitch: Bool` | `kuma.settings.clearLogsOnSwitch` | `ServiceExecutionEngine.start` clears `LogAggregator` for service | Default: `false` |
 | **Export Configuration** | Click "Export…" Button | Modal NSSavePanel | None (Reads DB records) | Writes pretty-printed JSON file atomically | Disabled while `isProcessing == true` |
 | **Import Configuration** | Click "Import…" Button / Drag JSON | Modal NSOpenPanel / Sheet | None (Parses JSON) | Opens `ImportPreviewSheet` with selective workspace & service restoration | Version verification (`backup.version <= currentVersion`) |
 | **Reset Settings to Default**| Click "Reset Settings…" Button | Settings Reset | Clears all `kuma.settings.*` keys from UserDefaults | Re-initializes settings properties to factory defaults without touching SQLite database | Protected by confirmation dialog |

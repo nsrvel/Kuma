@@ -15,6 +15,15 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(parsed == .running(pid: 4242))
     }
 
+    @Test("TC-D09: ServiceStateNotification maps starting and stopping without flattening to idle")
+    func testServiceStateNotificationTransientStates() {
+        let startingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.starting]
+        #expect(ServiceStateNotification.executionState(from: startingInfo, existing: .idle) == .starting)
+
+        let stoppingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopping]
+        #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .running(pid: 9)) == .stopping)
+    }
+
     @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
     func testServiceStateNotificationExitCode() {
         let userInfo: [String: Any] = [
@@ -78,11 +87,31 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(snapshot != nil)
         #expect(snapshot?.pid == pid)
 
-        // Stop gracefully
+        let stoppedFlag = LockIsolated(false)
+        let token = NotificationCenter.default.addObserver(
+            forName: .kumaServiceStateChanged,
+            object: nil,
+            queue: .main
+        ) { notif in
+            guard let changedID = notif.object as? UUID, changedID == serviceID else { return }
+            let legacy = notif.userInfo?[ServiceStateNotification.stateKey] as? ServiceState
+            if legacy == .stopped {
+                stoppedFlag.withValue { $0 = true }
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+
         await registry.stop(serviceID: serviceID)
 
         let isRunningAfter = await registry.isRunning(serviceID: serviceID)
         #expect(isRunningAfter == false)
+
+        let deadline = Date().addingTimeInterval(3.0)
+        while !stoppedFlag.value && Date() < deadline {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
+        #expect(stoppedFlag.value == true)
     }
 
     // MARK: - [TC-D06] ProcessRegistry Output Capture

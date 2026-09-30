@@ -27,9 +27,6 @@ public struct InspectorLiveConsoleView: View {
         if list.isEmpty && isRunning {
             return [Self.awaitingOutputEntry(serviceID: serviceID, serviceName: serviceName)]
         }
-        if list.count > 300 {
-            return Array(list.suffix(300))
-        }
         return list
     }
 

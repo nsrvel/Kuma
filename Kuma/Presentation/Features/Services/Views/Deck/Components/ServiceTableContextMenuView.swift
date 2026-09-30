@@ -4,18 +4,35 @@ extension View {
     @ViewBuilder
     public func serviceTableContextMenu(
         snapshots: [ServiceCardSnapshot],
-        runtimeFor: @escaping (UUID) -> ServiceRuntimeState,
-        groups: [ServiceGroup],
+        groupsProvider: @escaping () -> [ServiceGroup],
         handlers: ServiceTableActionHandlers
     ) -> some View {
-        self.contextMenu(forSelectionType: UUID.self) { selectedIDs in
+        modifier(
+            ServiceTableContextMenuModifier(
+                snapshots: snapshots,
+                groupsProvider: groupsProvider,
+                handlers: handlers
+            )
+        )
+    }
+}
+
+private struct ServiceTableContextMenuModifier: ViewModifier {
+    let snapshots: [ServiceCardSnapshot]
+    let groupsProvider: () -> [ServiceGroup]
+    let handlers: ServiceTableActionHandlers
+
+    @Environment(ServiceStateStore.self) private var serviceStateStore
+
+    func body(content: Content) -> some View {
+        content.contextMenu(forSelectionType: UUID.self) { selectedIDs in
             if let firstID = selectedIDs.first,
                let snapshot = snapshots.first(where: { $0.id == firstID }) {
-                let runtime = runtimeFor(snapshot.id)
+                let runtime = serviceStateStore.runtime(for: snapshot.id)
                 ServiceActionContextMenu(
                     snapshot: snapshot,
                     runtime: runtime,
-                    groups: groups,
+                    groupsProvider: groupsProvider,
                     onToggle: { handlers.onToggle(snapshot.id) },
                     onRestart: { handlers.onRestart(snapshot.id) },
                     onSwitchProvider: { provID in handlers.onSwitchProvider(snapshot.id, provID) },

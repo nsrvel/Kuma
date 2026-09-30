@@ -134,11 +134,13 @@ public struct ServicesDeckView: View {
     }
 
     private var contentBody: some View {
-        ServicesDeckContentBodyView(
+        let deckActions = viewModel.makeDeckActions(workspaceID: workspaceID)
+        return ServicesDeckContentBodyView(
             viewModel: viewModel,
-            workspaceID: workspaceID,
-            isStarredOnly: isStarredOnly
+            isStarredOnly: isStarredOnly,
+            deckActions: deckActions
         )
+        .environment(\.serviceDeckActions, deckActions)
     }
 }
 

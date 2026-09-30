@@ -6,7 +6,7 @@ extension ServiceInspectorViewModel {
         guard providerID != activeProviderID else { return }
 
         Task {
-            let wasRunning = isRunning
+            let wasRunning = stateStore?.state(for: serviceID).isOperational ?? isRunning
             await flushPendingAutoSave()
 
             guard var srv = service else { return }
@@ -37,7 +37,6 @@ extension ServiceInspectorViewModel {
                     } else {
                         stateStore?.setExecutionState(.running(pid: 0), for: serviceID)
                     }
-                    self.isRunning = true
                     let pid = await ProcessRegistry.shared.getSnapshot(serviceID: serviceID)?.pid ?? 0
                     ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
                 }

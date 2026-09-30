@@ -38,15 +38,15 @@
 
 ## 2. CRITICAL: Security Violations
 
-### SEC-01: Plaintext Passwords & Tokens in SQLite
+### SEC-01: Plaintext Passwords & Tokens in SQLite — **Fixed**
 - **Rule Violated**: AGENTS.md §4 — *"Plaintext passwords, tokens, and private SSH keys must be encrypted using `CryptoVault.shared.encrypt(plainText:)` before persisting to SQLite."*
-- **Location**: [`Provider+Record.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Database/Records/Provider+Record.swift) lines 36, 42, 101, 106
-- **Detail**: `sshPassword` and `ngrokAuthToken` are read from and written to SQLite in **unencrypted plaintext**. Neither `Provider+Record`, `ServiceRepository`, nor `CreateServiceSheet` passes credentials through `CryptoVault.shared.encrypt(plainText:)`.
-- **Impact**: Any SQLite browser or backup export leaks user credentials in cleartext.
+- **Location**: [`Provider+Record.swift`](Kuma/Core/Database/Records/Provider+Record.swift), [`CredentialProtector.swift`](Kuma/Core/Security/CredentialProtector.swift), [`CreateServicePayloadBuilder.swift`](Kuma/Presentation/Features/Services/Views/CreateService/Components/CreateServicePayloadBuilder.swift)
+- **Resolution**: Create path keeps **plaintext** on domain `Provider`; **only** `Provider+Record.encode` encrypts via `CredentialProtector` (throws on failure — no `?? plaintext` fallback). `sshKeyPath` remains a filesystem path, not encrypted.
+- **Note**: Rows double-encrypted before this fix may need re-save from Inspector if decrypt fails.
 
-### SEC-02: Plaintext Credentials in JSON Backups
-- **Location**: [`DataPortRepository.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Database/Repositories/DataPortRepository.swift) — `exportProviders` function
-- **Detail**: Export engine serializes `sshPassword` and `ngrokAuthToken` directly into JSON backup files without encryption.
+### SEC-02: Plaintext Credentials in JSON Backups — **Fixed**
+- **Location**: [`DataPortRepository+Mapping.swift`](Kuma/Core/Database/Repositories/DataPortRepository+Mapping.swift) — `toExportProvider`
+- **Resolution**: Export encrypts credentials for JSON backup; encrypt failure **fails the export** (fail-closed). Covered by **TC-B02b** (no plaintext password substring in export JSON).
 
 ---
 
@@ -59,26 +59,25 @@
 - **Location**: [`ServiceInspectorView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift) — `onDisappear`
 - **Detail**: `onDisappear` calls `inspectorVM.cancelAutoSave()` **without committing**. If a user edits a field and closes the inspector within the 300ms debounce window, changes are permanently dropped.
 
-### DATA-03: Global Log Wipe Instead of Per-Service Clear
-- **Location**: [`InspectorStatusHeader.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/InspectorStatusHeader.swift) line 134
-- **Detail**: Trash button calls `LogAggregator.shared.clear()` without passing `serviceID`, **wiping ALL logs across ALL services** instead of clearing only the current service's logs.
+### DATA-03: Global Log Wipe Instead of Per-Service Clear — **Fixed**
+- **Location**: [`InspectorHeaderActionButtons.swift`](Kuma/Presentation/Features/Services/Views/Inspector/Components/InspectorHeaderActionButtons.swift)
+- **Resolution**: Clear logs calls `LogAggregator.shared.clear(serviceID:)` scoped to the active service only.
 
 ---
 
 ## 4. CRITICAL: Process Lifecycle Race Conditions
 
-### PROC-01: POSIX Process Group Race (`setpgid` After `run()`)
-- **Location**: [`ProcessRegistry.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ProcessRegistry.swift) line 90
-- **Detail**: `setpgid(pid, pid)` is invoked **after** `try process.run()`. If the child binary has already exec'd, `setpgid` fails with `EACCES`/`EPERM`. Return value is unhandled.
-- **Impact**: Child processes may not be placed in isolated process groups, breaking orphan killing.
+### PROC-01: POSIX Process Group Race (`setpgid` After `run()`) — **Fixed**
+- **Location**: [`ProcessRegistry.swift`](Kuma/Core/Execution/ProcessRegistry.swift)
+- **Resolution**: After `run()`, `setpgid` outcome selects `SignalTarget` (process group vs single PID); `kill()` uses `-pgid` or PID accordingly.
 
-### PROC-02: Premature Pipe Teardown on Stop → SIGPIPE
-- **Location**: [`ProcessRegistry.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ProcessRegistry.swift) `stop(serviceID:)` line 136
-- **Detail**: `activeProcesses.removeValue(forKey:)` and `cleanupPipes()` execute **immediately before** sending `SIGINT`. If the child writes shutdown logs during the 1.5s grace window, it receives `SIGPIPE` and crashes.
+### PROC-02: Premature Pipe Teardown on Stop → SIGPIPE — **Fixed**
+- **Location**: [`ProcessRegistry.swift`](Kuma/Core/Execution/ProcessRegistry.swift) `stop(serviceID:)`
+- **Resolution**: Pipes stay open through signal escalation; `cleanupPipes(drainRemaining:)` runs only in `handleProcessTerminated`.
 
-### PROC-03: Missing Exit State Notification on Graceful Stop
-- **Location**: [`ProcessRegistry.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ProcessRegistry.swift) — `stop()` + `handleProcessTerminated()`
-- **Detail**: `stop()` removes the process from `activeProcesses`. When `terminationHandler` fires, `handleProcessTerminated` finds nothing and exits early **without posting `.kumaServiceStateChanged`**. The UI never learns a deliberate stop completed.
+### PROC-03: Missing Exit State Notification on Graceful Stop — **Fixed**
+- **Location**: [`ProcessRegistry.swift`](Kuma/Core/Execution/ProcessRegistry.swift) — `stop()` + `handleProcessTerminated()`
+- **Resolution**: `stop()` no longer removes the managed process early; termination handler owns cleanup and posts `.kumaServiceStateChanged` (`.stopped`). SIGKILL timeout path calls `handleProcessTerminated` as fallback. **TC-D05** asserts stopped notification after graceful stop.
 
 ### PROC-04: Cooperative Thread Blocking in Async Engine
 - **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `resolveDynamicPod()`, `killProcessOccupying()`
@@ -88,8 +87,9 @@
 
 ## 5. CRITICAL: Deck ↔ Inspector State Desynchronization
 
-### SYNC-01: Inspector Flattens Runtime State to Boolean
-- **Location**: [`ServiceInspectorViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift) — `public var isRunning: Bool`
+### SYNC-01: Inspector Flattens Runtime State to Boolean — **Fixed (partial)**
+- **Location**: [`ServiceInspectorViewModel.swift`](Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift), [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
+- **Resolution**: Inspector UI and toggles use `ServiceStateStore` / `ServiceExecutionState`; `toggleRunning` mutates the store (`.idle` after stop). Legacy `isRunning` getter may remain for compat but is no longer the source of truth.
 - **Rule Violated**: AGENTS.md §2 — *"Enums Over Multi-Booleans"*
 - **Detail**: Inspector tracks runtime state via `isRunning: Bool`. States `.starting`, `.stopping`, and `.crashed` are **flattened to `false`**. `InspectorRunningBanner` branches for these states are dead code.
 - **Chain**:
@@ -100,21 +100,21 @@
   → .starting / .stopping / .crashed states NEVER reach UI
   ```
 
-### SYNC-02: Inspector Ignores Deck Mutations
-- **Location**: [`ServiceInspectorView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
-- **Detail**: Inspector listens **only** to `.kumaServiceStateChanged`. It does **NOT** observe:
+### SYNC-02: Inspector Ignores Deck Mutations — **Fixed (partial)**
+- **Location**: [`ServiceInspectorView.swift`](Kuma/Presentation/Features/Services/Views/Inspector/ServiceInspectorView.swift)
+- **Resolution**: Inspector reloads on `.kumaServiceUpdated` (skips `source == inspector`) and `.kumaGroupsUpdated`; service delete is handled by Deck (close inspector + clear selection). Previously missing observers:
   - `.kumaServiceUpdated` — provider switch, rename, star, disable from Deck
   - `.kumaServiceDeleted` — service deleted from context menu while Inspector is open
   - `.kumaGroupsUpdated` — group membership changes
 - **Impact**: Inspector displays stale data after any Deck-initiated mutation until manually reopened.
 
-### SYNC-03: Full Workspace Reload on Every Single Keystroke
-- **Detail**: Every debounced auto-save from Inspector writes to SQLite → posts `.kumaServiceUpdated` → Deck responds by reloading **ALL** snapshots, groups, and process states for the **entire workspace**.
-- **Impact**: Typing in a text field triggers a full O(N) workspace reload every 300ms.
+### SYNC-03: Full Workspace Reload on Every Single Keystroke — **Fixed (partial)**
+- **Detail**: Deck now uses `refreshSingleServiceSnapshot` for many single-service mutations; inspector-sourced updates still refresh one card instead of full workspace where possible.
+- **Remaining**: Inspector auto-save may still post `.kumaServiceUpdated` frequently — deck skips self-originated deck actions via `KumaServiceNotification.sourceDeck`.
 
-### SYNC-04: Optimistic Update Overwrite Race
-- **Location**: [`ServicesDeckViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel.swift) — `toggleStarred()`
-- **Detail**: Mutates local state optimistically → posts `.kumaServiceUpdated` → Deck catches notification and triggers `loadWorkspaceAsync`. If SQLite write latency exceeds notification delivery, the reload reads pre-update data, overwriting the optimistic state → UI flicker.
+### SYNC-04: Optimistic Update Overwrite Race — **Fixed (partial)**
+- **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift), [`ServicesDeckViewModel+ServiceActions.swift`](Kuma/Presentation/Features/Services/ViewModels/ServicesDeckViewModel+ServiceActions.swift)
+- **Resolution**: Deck-initiated updates post `userInfo[source] = deck`; deck notification handler **skips** `refreshSingleServiceSnapshot` for those events so optimistic UI is not overwritten by a redundant reload.
 
 ---
 
@@ -166,17 +166,22 @@
 - **Location**: [`LiveLogsView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/LiveLogs/Views/LiveLogsView.swift) line 36
 - **Detail**: `Array(Set(logAggregator.entries.map(\.serviceName))).sorted()` runs inside the view body. Every appended log re-maps, deduplicates, and sorts on the MainActor.
 
-### PERF-05: 10 Concurrent Notification Loops
-- **Location**: [`ServicesDeckView.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView.swift)
-- **Detail**: 10 separate `.task` modifiers each run an infinite `for await` stream on `NotificationCenter`. When views rebuild, all 10 are torn down and recreated.
+### PERF-05: 10 Concurrent Notification Loops — **Fixed (partial)**
+- **Location**: [`ServicesDeckView+Notifications.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServicesDeckView+Notifications.swift)
+- **Resolution**: Deck uses consolidated `.onReceive` handlers instead of multiple infinite `.task` notification loops (reduces duplicate listeners and rebuild churn).
 
 ### PERF-06: ISO8601DateFormatter Created on Every Flush
 - **Location**: [`LogFileWriter.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/LogFileWriter.swift) line 67
 - **Detail**: `let dateFormatter = ISO8601DateFormatter()` instantiated inside `flushBuffer()` on every flush cycle instead of being cached.
 
-### PERF-07: Unbounded Disk Log Growth
-- **Location**: [`LogFileWriter.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/LogFileWriter.swift)
-- **Detail**: No log retention enforcement despite `KumaSettingsKey.logRetentionLimit` existing. Log files accumulate indefinitely.
+### PERF-07: Unbounded Disk Log Growth — **Fixed (partial)**
+- **Location**: [`LogFileWriter.swift`](Kuma/Core/Execution/LogFileWriter.swift)
+- **Resolution**: Flush path reads `KumaSettingsKey.logRetentionLimit` and enforces retention on disk (see Settings log retention picker).
+
+### PERF-10: Deck Card Observation Fan-Out — **Fixed (partial)**
+- **Location**: [`ServiceCardRow.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardRow.swift), [`ServiceDeckActions.swift`](Kuma/Presentation/Features/Services/Views/Deck/ServiceDeckActions.swift), [`ServiceCardView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServiceCardView.swift)
+- **Detail**: Grid parent read `ServiceStateStore` for every row; each card held `ServicesDeckViewModel` and `groups`, causing O(n) invalidation on unrelated deck mutations.
+- **Resolution**: Runtime isolated in `ServiceCardRow`; cards use `ServiceDeckActions` environment (closures, not `@Observable` VM); table status/actions cells read store per row; Canvas brand icons use `drawingGroup` to reduce repaint cost.
 
 ### PERF-08: Triple Database Trip on Inspector Open
 - **Location**: [`ServiceInspectorViewModel.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/ViewModels/ServiceInspectorViewModel.swift) — `loadService()`
@@ -201,9 +206,9 @@
 - **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `startSSH()`
 - **Detail**: `provider.sshKeyPath` is never passed with `-i` flag.
 
-### RUN-03: Shell Runner Hardcodes `/bin/zsh`
-- **Location**: [`ServiceExecutionEngine.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Core/Execution/ServiceExecutionEngine.swift) — `startShell()`
-- **Detail**: Ignores `KumaSettingsKey.defaultShell` and user path overrides.
+### RUN-03: Shell Runner Hardcodes `/bin/zsh` — **Fixed**
+- **Location**: [`ShellRunner.swift`](Kuma/Core/Execution/Runners/ShellRunner.swift) + [`KumaShellLaunchConfiguration.swift`](Kuma/Core/Environment/KumaShellLaunchConfiguration.swift)
+- **Detail**: Previously ignored `KumaSettingsKey.defaultShell`. Now reads Settings and launches zsh/bash/fish with appropriate bootstrap.
 
 ### RUN-04: SSH Auth Type Binding Broken
 - **Location**: [`InspectorFormSections.swift`](file:///Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Services/Views/Inspector/InspectorFormSections.swift) lines 155-157
@@ -244,8 +249,8 @@
 
 1. `ServicesToolbar.swift:163` — Sidebar toggle
 2. `ServiceTableView.swift:177` — Row actions ellipsis
-3. `ServiceCardView.swift:165` — Card toggle switch
-4. `ServiceCardView.swift:160` — Lock badge
+3. ~~`ServiceCardView.swift:165` — Card toggle switch~~ — **Fixed** via [`CardToggleSwitch.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/CardToggleSwitch.swift) Run/Stop labels
+4. ~~`ServiceCardView.swift:160` — Lock badge~~ — **Fixed** via `CardToggleSwitch` disabled label
 5. `InspectorStatusHeader.swift:42` — Back chevron
 6. `InspectorStatusHeader.swift:133` — Clear logs (trash)
 7. `InspectorOptionsSection.swift:39` — Disable switch
@@ -259,6 +264,7 @@
 
 | Issue | Location |
 |:------|:---------|
+| ~~Unused AppKit `ServiceDeckCollection*` grid~~ — **Removed**; production grid is `LazyVGrid` in [`ServicesDeckContentBodyView.swift`](Kuma/Presentation/Features/Services/Views/Deck/Components/ServicesDeckContentBodyView.swift) | Deck/Components |
 | `ServiceNonPortBadge.metadata` — 20-line computed property never referenced | `ServiceNonPortBadge.swift` |
 | `ServiceTableView.isMonospaced` — private helper never invoked | `ServiceTableView.swift` |
 | `InspectorLiveConsoleView.copiedRecently` — unused `@State` | `InspectorLiveConsoleView.swift` |
@@ -312,8 +318,8 @@ erDiagram
         String yamlConfig
         String runCommand
         String sshHost
-        String sshPassword "⚠️ PLAINTEXT"
-        String ngrokAuthToken "⚠️ PLAINTEXT"
+        String sshPassword "encrypted at rest"
+        String ngrokAuthToken "encrypted at rest"
         String customKubeConfigPath "⚠️ SILENTLY DROPPED"
     }
 
