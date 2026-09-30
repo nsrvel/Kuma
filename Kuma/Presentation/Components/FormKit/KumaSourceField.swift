@@ -185,8 +185,9 @@ private extension View {
     func kumaAcceptFileDrop(isEnabled: Bool, onPick: @MainActor @escaping (URL) -> Void) -> some View {
         if #available(macOS 26.0, *) {
             dropDestination(for: URL.self) { urls, _ in
-                guard isEnabled, let url = urls.first else { return }
+                guard isEnabled, let url = urls.first else { return false }
                 onPick(url)
+                return true
             }
         } else {
             onDrop(of: [.fileURL], isTargeted: nil) { providers in
