@@ -2,7 +2,11 @@
 
 Native macOS app for managing local development services — Kubernetes port-forwards, Docker/Podman, shell, SSH tunnels, health checks, and more — organized by workspace.
 
+![Kuma service deck with inspector](docs/images/kuma-deck-screenshot.png)
+
 **Distribution:** [GitHub Releases](https://github.com/nsrvel/Kuma/releases) (not the Mac App Store). DMGs are **not** committed to git (`dist/` is ignored); download binaries from the Releases page.
+
+**Demo workspace for screenshots:** import [`docs/samples/Kuma-Screenshot-Demo.json`](docs/samples/Kuma-Screenshot-Demo.json) via drag-and-drop or deck import (all provider types, fake hosts).
 
 ## Requirements
 
