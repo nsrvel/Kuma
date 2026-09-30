@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test (macOS)
+    # objectVersion 77 requires Xcode 16+ (macos-14 images ship Xcode 15.4).
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16'
+
+      - name: Resolve Swift packages
+        run: xcodebuild -scheme Kuma -resolvePackageDependencies -clonedSourcePackagesDirPath .spm
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -scheme Kuma \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath .spm \
+            -derivedDataPath build/DerivedData \
+            build
+
+      - name: Test
+        run: |
+          xcodebuild \
+            -scheme Kuma \
+            -destination 'platform=macOS' \
+            -clonedSourcePackagesDirPath .spm \
+            -derivedDataPath build/DerivedData \
+            test

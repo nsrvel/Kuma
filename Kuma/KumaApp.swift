@@ -15,14 +15,14 @@ struct KumaApp: App {
                 .environment(coordinator)
                 .environment(workspaceStore)
                 .environment(serviceStateStore)
-                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+                .kumaMainWorkspaceChrome()
                 .onAppear {
                     appDelegate.serviceStateStore = serviceStateStore
                 }
         }
         .defaultSize(width: 1100, height: 750)
         .windowResizability(.contentMinSize)
-        .restorationBehavior(.disabled)
+        .kumaDisabledWindowRestoration()
         .commands {
             KumaCommands(coordinator: coordinator, workspaceStore: workspaceStore)
         }
@@ -34,13 +34,10 @@ struct KumaApp: App {
                 coordinator.transitionTo(.mainWorkspace)
             }
             .environment(coordinator)
-            .gesture(WindowDragGesture())
+            .kumaOnboardingWindowDragSupport()
         }
-        .windowStyle(.plain)
         .windowResizability(.contentSize)
-        .windowBackgroundDragBehavior(.enabled)
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
+        .kumaOnboardingWindowChrome()
 
         // ─── Scene 3: macOS MenuBar Extra ────────────────────────────
         // Compact Status Item in macOS Menu Bar with quick service controls

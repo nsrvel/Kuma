@@ -4,11 +4,13 @@ import Testing
 
 // MARK: - Mock Performer
 
-@MainActor
 private final class MockHapticPerformer: NSObject, NSHapticFeedbackPerformer {
-    var performedPatterns: [NSHapticFeedbackManager.FeedbackPattern] = []
+    nonisolated(unsafe) var performedPatterns: [NSHapticFeedbackManager.FeedbackPattern] = []
 
-    func perform(_ pattern: NSHapticFeedbackManager.FeedbackPattern, performanceTime: NSHapticFeedbackManager.PerformanceTime) {
+    nonisolated func perform(
+        _ pattern: NSHapticFeedbackManager.FeedbackPattern,
+        performanceTime: NSHapticFeedbackManager.PerformanceTime
+    ) {
         performedPatterns.append(pattern)
     }
 }

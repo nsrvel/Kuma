@@ -128,6 +128,12 @@ public final class ServicesTestHarness {
             }
         }
 
+        migrator.registerMigration("v5_port_mapping_provider") { db in
+            try db.alter(table: "portMapping") { t in
+                t.add(column: "providerID", .text).references("provider", onDelete: .cascade)
+            }
+        }
+
         try! migrator.migrate(queue)
 
         // Seed default workspace
@@ -150,6 +156,8 @@ public final class ServicesTestHarness {
         sshPassword: String? = nil,
         ngrokAuthToken: String? = nil,
         customKubeConfigPath: String? = nil,
+        kubeConfigID: UUID? = nil,
+        targetName: String? = nil,
         ports: [(Int, Int)] = []
     ) async throws -> (Service, Provider) {
         let serviceID = UUID()
@@ -166,7 +174,9 @@ public final class ServicesTestHarness {
             id: providerID,
             serviceID: serviceID,
             type: providerType,
+            kubeConfigID: kubeConfigID,
             customKubeConfigPath: customKubeConfigPath,
+            targetName: targetName,
             sshPassword: sshPassword,
             ngrokAuthToken: ngrokAuthToken
         )
@@ -174,6 +184,7 @@ public final class ServicesTestHarness {
         let portMappings = ports.map { local, remote in
             ServicePortMapping(
                 serviceID: serviceID,
+                providerID: providerID,
                 localPort: local,
                 remotePort: remote
             )

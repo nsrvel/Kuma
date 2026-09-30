@@ -1,5 +1,5 @@
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 import os
 
 public enum SystemNotificationType: Sendable {
@@ -9,21 +9,18 @@ public enum SystemNotificationType: Sendable {
     case custom(title: String, body: String)
 }
 
-public actor SystemNotificationCenter {
+@MainActor
+public final class SystemNotificationCenter {
     public static let shared = SystemNotificationCenter()
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SystemNotificationCenter")
 
-    private let center: UNUserNotificationCenter
-
-    public init(center: UNUserNotificationCenter = .current()) {
-        self.center = center
-    }
+    public init() {}
 
     // MARK: - Permission Request
 
     public func requestAuthorization() async -> Bool {
         do {
-            let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
+            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             Self.logger.info("Notification authorization granted: \(granted)")
             return granted
         } catch {
@@ -33,8 +30,11 @@ public actor SystemNotificationCenter {
     }
 
     public func checkAuthorizationStatus() async -> UNAuthorizationStatus {
-        let settings = await center.notificationSettings()
-        return settings.authorizationStatus
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
     }
 
     // MARK: - Dispatch Notification
@@ -88,7 +88,7 @@ public actor SystemNotificationCenter {
         )
 
         do {
-            try await center.add(request)
+            try await UNUserNotificationCenter.current().add(request)
         } catch {
             Self.logger.error("Failed to deliver notification: \(error.localizedDescription)")
         }

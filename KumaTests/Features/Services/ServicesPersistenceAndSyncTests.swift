@@ -162,4 +162,37 @@ struct ServicesPersistenceAndSyncTests {
         let updatedSnapshot = deckVM.snapshots.first(where: { $0.id == service.id })
         #expect(updatedSnapshot?.providerCategory == .kubernetes)
     }
+
+    // MARK: - [TC-C10] Port mappings follow active provider
+    @Test("TC-C10: Each provider keeps its own port mappings; card reflects active provider ports")
+    func testPortMappingsScopedPerProvider() async throws {
+        let harness = ServicesTestHarness()
+        let (service, sshProvider) = try await harness.seedServiceWithProvider(
+            name: "Dual Access",
+            providerType: .ssh,
+            ports: [(2222, 22)]
+        )
+
+        let k8sProvider = Provider(id: UUID(), serviceID: service.id, type: .kubernetes, targetName: "api-svc")
+        try await harness.serviceRepository.insertProvider(k8sProvider)
+        try await harness.serviceRepository.savePortMappings(
+            [ServicePortMapping(serviceID: service.id, providerID: k8sProvider.id, localPort: 8080, remotePort: 80)],
+            forService: service.id,
+            providerID: k8sProvider.id
+        )
+
+        let sshActivePorts = try await harness.serviceRepository.fetchPortMappings(forService: service.id)
+        #expect(sshActivePorts.map(\.localPort) == [2222])
+
+        var svc = service
+        svc.activeProviderID = k8sProvider.id
+        try await harness.serviceRepository.updateService(svc)
+
+        let k8sActivePorts = try await harness.serviceRepository.fetchPortMappings(forService: service.id)
+        #expect(k8sActivePorts.map(\.localPort) == [8080])
+
+        let snapshot = try await harness.serviceRepository.fetchSnapshot(serviceID: service.id)
+        #expect(snapshot?.portDisplays == [8080])
+        #expect(snapshot?.providerCategory == .kubernetes)
+    }
 }

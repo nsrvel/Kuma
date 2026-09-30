@@ -73,11 +73,12 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         let exportPorts = ports.map { p in
             DataPortService.ExportPortMapping(
                 id: p.id,
-                providerID: svc.activeProviderID ?? svc.id,
+                providerID: p.providerID ?? svc.activeProviderID ?? svc.id,
                 localPort: p.localPort,
                 remotePort: p.remotePort
             )
         }
+        let kubeConfigs = try await kubeConfigsForExport(exportProviders: exportProviders)
 
         return DataPortService.KumaBackup(
             version: DataPortService.currentVersion,
@@ -88,7 +89,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             services: [exportService],
             providers: exportProviders,
             portMappings: exportPorts,
-            kubeConfigs: []
+            kubeConfigs: kubeConfigs
         )
     }
 
@@ -141,7 +142,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
                 return DataPortService.ExportPortMapping(
                     id: pm.id,
-                    providerID: associatedProviderID,
+                    providerID: pm.providerID ?? associatedProviderID,
                     localPort: pm.localPort,
                     remotePort: pm.remotePort
                 )
@@ -159,6 +160,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             }
         }
 
+        let kubeConfigs = try await kubeConfigsForExport(exportProviders: exportProviders)
+
         return DataPortService.KumaBackup(
             version: DataPortService.currentVersion,
             exportedAt: Date(),
@@ -168,7 +171,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             services: exportServices,
             providers: exportProviders,
             portMappings: exportPortMappings,
-            kubeConfigs: []
+            kubeConfigs: kubeConfigs
         )
     }
 
@@ -189,6 +192,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         // 2. Write all relational data in a single atomic DB transaction
         let paths = resolvedImagePaths
         try await dbWriter.write { db in
+            try Self.importKubeConfigs(backup.kubeConfigs, db: db)
+
             // Restore Workspaces
             for ws in backup.workspaces {
                 var workspaceToSave = ws
@@ -251,16 +256,20 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
                 if let targetServiceID {
                     try db.execute(
                         sql: """
-                        INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(id) DO UPDATE SET localPort=excluded.localPort, remotePort=excluded.remotePort
+                        INSERT INTO portMapping (id, serviceID, localPort, remotePort, protocolType, providerID)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            localPort=excluded.localPort,
+                            remotePort=excluded.remotePort,
+                            providerID=excluded.providerID
                         """,
                         arguments: [
                             exportPort.id.uuidString,
                             targetServiceID.uuidString,
                             exportPort.localPort,
                             exportPort.remotePort,
-                            "TCP"
+                            "TCP",
+                            exportPort.providerID.uuidString
                         ]
                     )
                 }
@@ -284,6 +293,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         let filteredPortMappings = backup.portMappings.filter {
             filteredProviderIdSet.contains($0.providerID) || filteredServiceIdSet.contains($0.providerID)
         }
+        let referencedKubeIDs = Self.collectReferencedKubeConfigIDs(from: filteredProviders)
+        let filteredKubeConfigs = backup.kubeConfigs.filter { referencedKubeIDs.contains($0.id) }
 
         let filteredBackup = DataPortService.KumaBackup(
             version: backup.version,
@@ -297,7 +308,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             services: filteredServices,
             providers: filteredProviders,
             portMappings: filteredPortMappings,
-            kubeConfigs: []
+            kubeConfigs: filteredKubeConfigs
         )
 
         try await importAll(from: filteredBackup)
@@ -369,7 +380,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
 
                 return DataPortService.ExportPortMapping(
                     id: pm.id,
-                    providerID: associatedProviderID,
+                    providerID: pm.providerID ?? associatedProviderID,
                     localPort: pm.localPort,
                     remotePort: pm.remotePort
                 )
@@ -386,6 +397,8 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             }
         }
 
+        let kubeConfigs = try await kubeConfigsForExport(exportProviders: exportProviders)
+
         return DataPortService.KumaBackup(
             version: DataPortService.currentVersion,
             exportedAt: Date(),
@@ -395,7 +408,7 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             services: exportServices,
             providers: exportProviders,
             portMappings: exportPortMappings,
-            kubeConfigs: []
+            kubeConfigs: kubeConfigs
         )
     }
 
@@ -495,6 +508,9 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             )
         }
 
+        let referencedKubeIDs = Self.collectReferencedKubeConfigIDs(from: newProviders)
+        let kubeConfigs = backup.kubeConfigs.filter { referencedKubeIDs.contains($0.id) }
+
         let newBackup = DataPortService.KumaBackup(
             version: backup.version,
             exportedAt: backup.exportedAt,
@@ -504,13 +520,71 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
             services: newServices,
             providers: newProviders,
             portMappings: newPortMappings,
-            kubeConfigs: []
+            kubeConfigs: kubeConfigs
         )
 
         try await importAll(from: newBackup)
     }
 
     // MARK: - Helpers
+
+    private func kubeConfigsForExport(exportProviders: [DataPortService.ExportProvider]) async throws -> [DataPortService.ExportKubeConfig] {
+        let ids = Self.collectReferencedKubeConfigIDs(from: exportProviders)
+        return try await exportKubeConfigs(ids: ids)
+    }
+
+    private func exportKubeConfigs(ids: Set<UUID>) async throws -> [DataPortService.ExportKubeConfig] {
+        guard !ids.isEmpty else { return [] }
+        return try await dbWriter.read { db in
+            var exported: [DataPortService.ExportKubeConfig] = []
+            for id in ids {
+                guard let row = try KubeConfig.fetchOne(db, key: id.uuidString) else { continue }
+                exported.append(
+                    DataPortService.ExportKubeConfig(
+                        id: row.id,
+                        name: row.name,
+                        path: nil,
+                        encryptedConfigContent: row.configContent,
+                        createdAt: row.createdAt,
+                        updatedAt: row.updatedAt
+                    )
+                )
+            }
+            return exported
+        }
+    }
+
+    private nonisolated static func collectReferencedKubeConfigIDs(from providers: [DataPortService.ExportProvider]) -> Set<UUID> {
+        Set(providers.compactMap(\.kubeConfigID).filter { $0 != KubeConfig.defaultID })
+    }
+
+    private nonisolated static func importKubeConfigs(_ configs: [DataPortService.ExportKubeConfig], db: Database) throws {
+        for exportKube in configs {
+            guard exportKube.id != KubeConfig.defaultID else { continue }
+            guard let cipher = exportKube.encryptedConfigContent?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !cipher.isEmpty else { continue }
+
+            let createdAt = exportKube.createdAt ?? Date()
+            let updatedAt = exportKube.updatedAt ?? Date()
+            try db.execute(
+                sql: """
+                INSERT INTO kube_config (id, name, configContent, createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    configContent = excluded.configContent,
+                    updatedAt = excluded.updatedAt
+                """,
+                arguments: [
+                    exportKube.id.uuidString,
+                    exportKube.name ?? "Imported",
+                    cipher,
+                    createdAt,
+                    updatedAt
+                ]
+            )
+        }
+    }
 
     public nonisolated static func toExportProvider(_ p: Provider) -> DataPortService.ExportProvider {
         let encryptedPassword: String?
@@ -634,18 +708,20 @@ public final class DataPortRepository: DataPortRepositoryProtocol, @unchecked Se
         let exportPorts = ports.map { p in
             DataPortService.ExportPortMapping(
                 id: p.id,
-                providerID: svc.activeProviderID ?? svc.id,
+                providerID: p.providerID ?? svc.activeProviderID ?? svc.id,
                 localPort: p.localPort,
                 remotePort: p.remotePort
             )
         }
+        let kubeConfigs = try await kubeConfigsForExport(exportProviders: exportProviders)
 
         let singleExport = DataPortService.SingleServiceExport(
             version: DataPortService.currentVersion,
             exportedAt: Date(),
             service: exportService,
             providers: exportProviders,
-            portMappings: exportPorts
+            portMappings: exportPorts,
+            kubeConfigs: kubeConfigs
         )
 
         let data = try DataPortService.encodeSingleService(singleExport)

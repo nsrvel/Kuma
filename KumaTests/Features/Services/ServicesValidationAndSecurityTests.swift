@@ -86,6 +86,110 @@ struct ServicesValidationAndSecurityTests {
         #expect(fetchedProviders.first?.customKubeConfigPath == customPath)
     }
 
+    // MARK: - [TC-B04] KubeConfig ID Materializes For kubectl
+    @Test("TC-B04: Provider kubeConfigID resolves to on-disk kubeconfig for execution")
+    func testKubeConfigIDMaterializesForExecution() async throws {
+        let harness = ServicesTestHarness()
+        let configID = UUID()
+        let yaml = "apiVersion: v1\nkind: Config\n"
+        let encrypted = try CryptoVault.shared.encrypt(plainText: yaml)
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(
+            KubeConfig(id: configID, name: "Staging", configContent: encrypted)
+        )
+
+        let provider = Provider(serviceID: UUID(), type: .kubernetes, kubeConfigID: configID)
+        let path = try await KubeConfigMaterializer.kubectlKubeconfigPath(for: provider, repo: kubeRepo)
+        #expect(path != nil)
+        let content = try String(contentsOfFile: path!, encoding: .utf8)
+        #expect(content.contains("apiVersion: v1"))
+    }
+
+    // MARK: - [TC-B04b] Kube target name pattern matching
+    @Test("TC-B04b: KubeTargetNameMatcher resolves wildcard and exact names")
+    func testKubeTargetNameMatcher() {
+        let names = ["mongo-svc-prod", "mongo-svc-staging", "redis-svc"]
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "mongo-svc-*", in: names) == "mongo-svc-prod")
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "redis-svc", in: names) == "redis-svc")
+        #expect(KubeTargetNameMatcher.firstMatch(pattern: "missing-*", in: names) == nil)
+    }
+
+    @Test("TC-B04c: KubeTargetType maps to kubectl port-forward kinds")
+    func testKubeTargetTypePortForwardKinds() {
+        #expect(KubeTargetType.pod.portForwardKind == "pod")
+        #expect(KubeTargetType.service.portForwardKind == "service")
+        #expect(KubeTargetType.deployment.portForwardKind == "deployment")
+        #expect(KubeTargetType.service.listResource == "services")
+        #expect(KubeTargetType.deployment.listResource == "deployments")
+    }
+
+    // MARK: - [TC-B05a] Stale Kube Context Dropped At Runtime Parse
+    @Test("TC-B05a: YAML parser drops stored context that is absent from kubeconfig file")
+    func testYAMLParserDropsStaleProviderContext() {
+        let yaml = """
+        apiVersion: v1
+        kind: Config
+        current-context: staging
+        contexts:
+        - name: staging
+          context:
+            cluster: staging
+        """
+        #expect(KubeConfigYAMLParser.resolveContextName(stored: "c1-ins-abc-prod", in: yaml) == "staging")
+    }
+
+    // MARK: - [TC-B05b] Stale Kube Context Dropped On Config Switch
+    @Test("TC-B05b: Validation context resets when provider context is not in selected kubeconfig")
+    func testResolvedValidationContextDropsStaleProviderContext() {
+        let harness = ServicesTestHarness()
+        let vm = KubeConfigViewModel(repo: KubeConfigRepository(dbWriter: harness.databaseQueue))
+        let configID = UUID()
+        let yaml = """
+        current-context: staging
+        contexts:
+        - name: staging
+        - name: prod
+        """
+        vm.availableKubeConfigs = [KubeConfig(id: configID, name: "Test", configContent: yaml)]
+        vm.selectedKubeConfigID = configID
+
+        #expect(vm.resolvedValidationContext(storedProviderContext: "docker-desktop") == "staging")
+        #expect(vm.resolvedValidationContext(storedProviderContext: "prod") == "prod")
+        #expect(vm.sanitizedProviderContext(storedProviderContext: "docker-desktop") == "staging")
+    }
+
+    // MARK: - [TC-B05] Inspector Persists Selected KubeConfig ID
+    @Test("TC-B05: Inspector commit persists kubeConfigID from KubeConfigViewModel")
+    func testInspectorPersistsSelectedKubeConfigID() async throws {
+        let harness = ServicesTestHarness()
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "K8s Service",
+            providerType: .kubernetes
+        )
+
+        let selectedID = UUID()
+        let encrypted = try CryptoVault.shared.encrypt(plainText: "apiVersion: v1\n")
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(
+            KubeConfig(id: selectedID, name: "Prod", configContent: encrypted)
+        )
+
+        let vm = ServiceInspectorViewModel(
+            serviceID: service.id,
+            workspaceID: harness.defaultWorkspaceID,
+            serviceRepository: harness.serviceRepository
+        )
+        await vm.loadService(id: service.id)
+        vm.kubeConfigVM = KubeConfigViewModel(repo: kubeRepo)
+        await vm.kubeConfigVM?.loadConfigs(preferredSelectionID: selectedID)
+        vm.kubeConfigVM?.selectedKubeConfigID = selectedID
+
+        await vm.commitChanges()
+
+        let providers = try await harness.serviceRepository.fetchProviders(forService: service.id)
+        #expect(providers.first?.kubeConfigID == selectedID)
+    }
+
     // MARK: - [TC-E01] Auto-Save Flushed On Disappear
     @Test("TC-E01: Inspector auto-save flush immediately persists changes")
     func testInspectorAutoSaveFlushImmediatelyPersists() async throws {
@@ -133,6 +237,96 @@ struct ServicesValidationAndSecurityTests {
 
         #expect(!aggregator.entries.contains(where: { $0.serviceID == serviceA }), "Service A logs must be cleared")
         #expect(aggregator.entries.contains(where: { $0.serviceID == serviceB }), "Service B logs must remain intact")
+    }
+
+    // MARK: - [TC-B06b] Kubeconfig not exported as plaintext YAML
+    @Test("TC-B06b: DataPort kube export keeps YAML encrypted in backup JSON")
+    func testDataPortKubeConfigNotPlaintext() async throws {
+        let harness = ServicesTestHarness()
+        let plainYAML = "apiVersion: v1\nkind: Config\nclusters:\n"
+        let kubeID = UUID()
+        let cipher = try CryptoVault.shared.encrypt(plainText: plainYAML)
+        let kubeRepo = KubeConfigRepository(dbWriter: harness.databaseQueue)
+        try await kubeRepo.insert(KubeConfig(id: kubeID, name: "Prod", configContent: cipher))
+
+        let (service, _) = try await harness.seedServiceWithProvider(
+            name: "K8s Prod",
+            providerType: .kubernetes,
+            kubeConfigID: kubeID,
+            targetName: "api"
+        )
+
+        let dataPortRepo = DataPortRepository(dbWriter: harness.databaseQueue)
+        let backup = try await dataPortRepo.exportData(scope: .service(service.id))
+
+        let exportedKube = backup.kubeConfigs.first(where: { $0.id == kubeID })
+        #expect(exportedKube != nil)
+        #expect(exportedKube?.encryptedConfigContent == cipher)
+        #expect(exportedKube?.encryptedConfigContent?.contains("apiVersion:") == false)
+    }
+
+    // MARK: - [TC-B08] Create K8s form validation
+    @Test("TC-B08: Create Kubernetes form requires kubeconfig, context, ports, and target")
+    func testCreateKubernetesFormValidation() {
+        let baseInputs = CreateServiceDraftInputs(
+            selectedProvider: .kubernetes,
+            generalDraft: ServiceGeneralDraft(name: "DB"),
+            kubeDraft: ServiceKubernetesDraft(
+                context: "minikube",
+                targetName: "postgres-svc"
+            ),
+            selectedKubeConfigID: KubeConfig.defaultID,
+            dockerDraft: ServiceComposeDraft(),
+            podmanDraft: ServiceComposeDraft(),
+            shellDraft: ServiceShellDraft(),
+            sshDraft: ServiceSSHDraft(),
+            sshAuthType: .key,
+            sshKeyPath: "",
+            sshPassword: "",
+            healthCheckDraft: ServiceHealthCheckDraft(),
+            tunnelDraft: ServiceTunnelDraft(),
+            monitorDraft: ServiceProcessMonitorDraft(),
+            temporaryPorts: [KumaPortMappingItem(local: "5432", remote: "5432")]
+        )
+        #expect(CreateServicePayloadBuilder.isFormValid(inputs: baseInputs))
+
+        let missingConfig = CreateServiceDraftInputs(
+            selectedProvider: .kubernetes,
+            generalDraft: ServiceGeneralDraft(name: "DB"),
+            kubeDraft: ServiceKubernetesDraft(context: "minikube", targetName: "postgres-svc"),
+            selectedKubeConfigID: nil,
+            dockerDraft: ServiceComposeDraft(),
+            podmanDraft: ServiceComposeDraft(),
+            shellDraft: ServiceShellDraft(),
+            sshDraft: ServiceSSHDraft(),
+            sshAuthType: .key,
+            sshKeyPath: "",
+            sshPassword: "",
+            healthCheckDraft: ServiceHealthCheckDraft(),
+            tunnelDraft: ServiceTunnelDraft(),
+            monitorDraft: ServiceProcessMonitorDraft(),
+            temporaryPorts: [KumaPortMappingItem(local: "5432", remote: "5432")]
+        )
+        #expect(!CreateServicePayloadBuilder.isFormValid(inputs: missingConfig))
+
+        let missingPort = CreateServiceDraftInputs(
+            selectedProvider: .kubernetes,
+            generalDraft: ServiceGeneralDraft(name: "DB"),
+            kubeDraft: ServiceKubernetesDraft(context: "minikube", targetName: "postgres-svc"),
+            selectedKubeConfigID: KubeConfig.defaultID,
+            dockerDraft: ServiceComposeDraft(),
+            podmanDraft: ServiceComposeDraft(),
+            shellDraft: ServiceShellDraft(),
+            sshDraft: ServiceSSHDraft(),
+            sshAuthType: .key,
+            sshKeyPath: "",
+            sshPassword: "",
+            healthCheckDraft: ServiceHealthCheckDraft(),
+            tunnelDraft: ServiceTunnelDraft(),
+            monitorDraft: ServiceProcessMonitorDraft(),
+            temporaryPorts: [KumaPortMappingItem()]
+        )
+        #expect(!CreateServicePayloadBuilder.isFormValid(inputs: missingPort))
     }
 
     // MARK: - [TC-B06] DataPort Export Credential Encryption

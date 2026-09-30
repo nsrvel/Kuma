@@ -89,30 +89,18 @@ public struct ServiceInspectorView: View {
             inspectorVM.stateStore = serviceStateStore
             await inspectorVM.loadService(id: serviceID)
         }
-        .task(id: serviceID) {
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    for await notif in NotificationCenter.default.notifications(named: .kumaServiceStateChanged) {
-                        if let changedID = notif.object as? UUID, changedID == serviceID, let state = notif.userInfo?["state"] as? ServiceState {
-                            await MainActor.run {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                    inspectorVM.isRunning = state.isOperational
-                                }
-                            }
-                        }
-                    }
-                }
-                group.addTask {
-                    for await notif in NotificationCenter.default.notifications(named: .kumaServiceUpdated) {
-                        if notif.userInfo?["source"] as? String == "inspector" {
-                            continue
-                        }
-                        if let changedID = notif.object as? UUID, changedID == serviceID {
-                            await inspectorVM.loadService(id: serviceID)
-                        }
-                    }
-                }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceStateChanged)) { notif in
+            guard let changedID = notif.object as? UUID,
+                  changedID == serviceID,
+                  let state = notif.userInfo?["state"] as? ServiceState else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                inspectorVM.isRunning = state.isOperational
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceUpdated)) { notif in
+            if notif.userInfo?["source"] as? String == "inspector" { return }
+            guard let changedID = notif.object as? UUID, changedID == serviceID else { return }
+            Task { await inspectorVM.loadService(id: serviceID) }
         }
         .onDisappear {
             Task {

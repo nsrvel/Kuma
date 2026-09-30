@@ -13,7 +13,7 @@ public struct WelcomeStepView: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
 
-                Text("A unified dashboard for port-forwards, containers, and background runners without the terminal clutter.")
+                Text("Orchestrate your local dev services and tunnels effortlessly on macOS without the terminal clutter.")
                     .font(KumaFont.heroSubtitle)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -23,9 +23,9 @@ public struct WelcomeStepView: View {
 
             // Minimal Feature Tags — Pure, minimal icon + label
             HStack(spacing: KumaSpacing.xl) {
-                featureTag(icon: "network", label: "Multi-Provider")
-                featureTag(icon: "bolt.horizontal.fill", label: "Public Tunnels")
-                featureTag(icon: "lock.shield.fill", label: "Local-First")
+                featureTag(icon: "command", label: "Unified Control")
+                featureTag(icon: "swift", label: "Native")
+                featureTag(icon: "lock.fill", label: "Encrypted")
             }
             .padding(.top, KumaSpacing.xs)
         }

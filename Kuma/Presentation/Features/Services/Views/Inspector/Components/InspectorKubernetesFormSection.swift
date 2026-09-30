@@ -13,7 +13,14 @@ public struct InspectorKubernetesFormSection: View {
                     viewModel: kubeConfigVM,
                     isLocked: isLocked,
                     contextToTest: provider.kubeContext ?? "",
-                    onConfigChanged: onFieldChanged
+                    onConfigChanged: {
+                        let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: provider.kubeContext)
+                        if provider.kubeContext != sanitized {
+                            provider.kubeContext = sanitized
+                        }
+                        kubeConfigVM.testConnection(storedProviderContext: provider.kubeContext)
+                        onFieldChanged()
+                    }
                 )
                 .disabled(isLocked)
 
@@ -25,11 +32,22 @@ public struct InspectorKubernetesFormSection: View {
                         ),
                         kubeContext: Binding(
                             get: { provider.kubeContext ?? "" },
-                            set: { provider.kubeContext = $0.isEmpty ? nil : $0; onFieldChanged() }
+                            set: { newValue in
+                                provider.kubeContext = newValue.isEmpty ? nil : newValue
+                                onFieldChanged()
+                                kubeConfigVM.testConnection(storedProviderContext: provider.kubeContext)
+                            }
                         ),
                         availableContexts: kubeConfigVM.availableContexts
                     )
                     .disabled(isLocked)
+                    .onChange(of: kubeConfigVM.availableContexts) { _, _ in
+                        let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: provider.kubeContext)
+                        if provider.kubeContext != sanitized {
+                            provider.kubeContext = sanitized
+                            onFieldChanged()
+                        }
+                    }
                 }
             }
 

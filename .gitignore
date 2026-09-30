@@ -1,7 +1,13 @@
 # Xcode build outputs & caches
 build/
 DerivedData/
+.derivedData/
+.build/
 .swiftpm/
+.spm/
+
+# Local distribution artifacts (upload via GitHub Releases instead)
+dist/
 
 # Build logs & artifacts
 *.log

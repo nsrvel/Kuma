@@ -53,7 +53,13 @@ public struct CreateServiceContextualFormView: View {
                 viewModel: kubeConfigVM,
                 isLocked: false,
                 contextToTest: kubeDraft.context,
-                onConfigChanged: {}
+                onConfigChanged: {
+                    let stored = kubeDraft.context.isEmpty ? nil : kubeDraft.context
+                    if let sanitized = kubeConfigVM.sanitizedProviderContext(storedProviderContext: stored) {
+                        kubeDraft.context = sanitized
+                    }
+                    kubeConfigVM.testConnection(storedProviderContext: kubeDraft.context.isEmpty ? nil : kubeDraft.context)
+                }
             )
 
             KumaFormSection(icon: "network", title: "Cluster Connection") {
@@ -62,6 +68,9 @@ public struct CreateServiceContextualFormView: View {
                     kubeContext: $kubeDraft.context,
                     availableContexts: kubeConfigVM.availableContexts
                 )
+                .onChange(of: kubeDraft.context) { _, newContext in
+                    kubeConfigVM.testConnection(storedProviderContext: newContext)
+                }
             }
             .onChange(of: kubeConfigVM.availableContexts, initial: true) { _, contexts in
                 if let active = kubeConfigVM.activeContextName, contexts.contains(active) {

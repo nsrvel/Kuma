@@ -15,7 +15,7 @@ public struct PublicTunnelingStepView: View {
                     .font(KumaFont.stepTitle)
                     .foregroundStyle(.primary)
 
-                Text("Utilities to expose local services to the internet.")
+                Text("Optional utilities to expose local services to the internet.")
                     .font(KumaFont.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

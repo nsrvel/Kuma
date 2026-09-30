@@ -98,6 +98,7 @@ public nonisolated enum DataPortService {
         public let service: ExportService
         public let providers: [ExportProvider]
         public let portMappings: [ExportPortMapping]
+        public let kubeConfigs: [ExportKubeConfig]
 
         public var id: UUID { service.id }
 
@@ -106,13 +107,25 @@ public nonisolated enum DataPortService {
             exportedAt: Date = Date(),
             service: ExportService,
             providers: [ExportProvider],
-            portMappings: [ExportPortMapping]
+            portMappings: [ExportPortMapping],
+            kubeConfigs: [ExportKubeConfig] = []
         ) {
             self.version = version
             self.exportedAt = exportedAt
             self.service = service
             self.providers = providers
             self.portMappings = portMappings
+            self.kubeConfigs = kubeConfigs
+        }
+
+        public nonisolated init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            version = try container.decode(Int.self, forKey: .version)
+            exportedAt = try container.decode(Date.self, forKey: .exportedAt)
+            service = try container.decode(ExportService.self, forKey: .service)
+            providers = try container.decode([ExportProvider].self, forKey: .providers)
+            portMappings = try container.decode([ExportPortMapping].self, forKey: .portMappings)
+            kubeConfigs = try container.decodeIfPresent([ExportKubeConfig].self, forKey: .kubeConfigs) ?? []
         }
     }
 
@@ -314,11 +327,25 @@ public nonisolated enum DataPortService {
         public let id: UUID
         public let name: String?
         public let path: String?
+        /// Vault ciphertext (`nonce:tag:ciphertext`), same as `kube_config.configContent` in SQLite.
+        public let encryptedConfigContent: String?
+        public let createdAt: Date?
+        public let updatedAt: Date?
 
-        public nonisolated init(id: UUID = UUID(), name: String? = nil, path: String? = nil) {
+        public nonisolated init(
+            id: UUID = UUID(),
+            name: String? = nil,
+            path: String? = nil,
+            encryptedConfigContent: String? = nil,
+            createdAt: Date? = nil,
+            updatedAt: Date? = nil
+        ) {
             self.id = id
             self.name = name
             self.path = path
+            self.encryptedConfigContent = encryptedConfigContent
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
         }
     }
 
@@ -362,7 +389,7 @@ public nonisolated enum DataPortService {
             services: [service],
             providers: singleExport.providers,
             portMappings: singleExport.portMappings,
-            kubeConfigs: []
+            kubeConfigs: singleExport.kubeConfigs
         )
     }
 

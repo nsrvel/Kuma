@@ -1,6 +1,6 @@
 import SwiftUI
 
-public struct KumaPortMappingItem: Identifiable, Equatable {
+public struct KumaPortMappingItem: Identifiable, Equatable, Sendable {
     public let id: UUID
     public var local: String
     public var remote: String

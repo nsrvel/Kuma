@@ -13,6 +13,7 @@ public final class KubeConfigViewModel {
     public var selectedKubeConfigID: UUID? = nil {
         didSet {
             if oldValue != selectedKubeConfigID {
+                reloadDefaultKubeConfigContentIfNeeded()
                 refreshContextsForCurrentConfig()
                 triggerBackgroundValidation()
             }
@@ -52,7 +53,7 @@ public final class KubeConfigViewModel {
         }
     }
 
-    public func loadConfigs() async {
+    public func loadConfigs(preferredSelectionID: UUID? = nil) async {
         let repo = self.repo
         let customPath = KumaSettingsKey.string(
             forKey: KumaSettingsKey.customKubeconfigPath,
@@ -64,7 +65,10 @@ public final class KubeConfigViewModel {
         }.value
 
         self.availableKubeConfigs = finalizedList
-        if self.selectedKubeConfigID == nil, let first = finalizedList.first {
+        if let preferredSelectionID,
+           finalizedList.contains(where: { $0.id == preferredSelectionID }) {
+            self.selectedKubeConfigID = preferredSelectionID
+        } else if self.selectedKubeConfigID == nil, let first = finalizedList.first {
             self.selectedKubeConfigID = first.id
         }
         self.refreshContextsForCurrentConfig()
@@ -110,6 +114,36 @@ public final class KubeConfigViewModel {
         return list
     }
 
+    /// Context name to pass to kubectl for the selected kubeconfig.
+    public func resolvedValidationContext(storedProviderContext: String?) -> String {
+        guard let configID = selectedKubeConfigID,
+              let config = availableKubeConfigs.first(where: { $0.id == configID }) else {
+            return ""
+        }
+        return KubeConfigYAMLParser.resolveContextName(stored: storedProviderContext, in: config.configContent) ?? ""
+    }
+
+    /// Provider field value that matches `availableContexts` after a kubeconfig switch.
+    public func sanitizedProviderContext(storedProviderContext: String?) -> String? {
+        let resolved = resolvedValidationContext(storedProviderContext: storedProviderContext)
+        return resolved.isEmpty ? nil : resolved
+    }
+
+    private func reloadDefaultKubeConfigContentIfNeeded() {
+        guard selectedKubeConfigID == KubeConfig.defaultID,
+              let index = availableKubeConfigs.firstIndex(where: { $0.id == KubeConfig.defaultID }) else {
+            return
+        }
+        let customPath = KumaSettingsKey.string(
+            forKey: KumaSettingsKey.customKubeconfigPath,
+            fallbackKey: KumaSettingsKey.legacyKubeconfigPath,
+            defaults: userDefaults
+        )
+        guard let path = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) else { return }
+        let content = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+        availableKubeConfigs[index].configContent = content
+    }
+
     /// Extract context names from the currently selected kubeconfig YAML content
     public func refreshContextsForCurrentConfig() {
         guard let configID = selectedKubeConfigID,
@@ -118,55 +152,16 @@ public final class KubeConfigViewModel {
             self.activeContextName = nil
             return
         }
-        self.activeContextName = Self.parseCurrentContext(fromYaml: config.configContent)
-        self.availableContexts = Self.parseContexts(fromYaml: config.configContent)
+        self.activeContextName = KubeConfigYAMLParser.parseCurrentContext(fromYaml: config.configContent)
+        self.availableContexts = KubeConfigYAMLParser.parseContexts(fromYaml: config.configContent)
     }
 
-    /// Parses the `current-context: ...` value from YAML
     public nonisolated static func parseCurrentContext(fromYaml yaml: String) -> String? {
-        let lines = yaml.components(separatedBy: .newlines)
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.starts(with: "current-context:") {
-                let parts = trimmed.components(separatedBy: ":")
-                if parts.count >= 2 {
-                    let ctx = parts[1].trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "'", with: "")
-                    return ctx.isEmpty ? nil : ctx
-                }
-            }
-        }
-        return nil
+        KubeConfigYAMLParser.parseCurrentContext(fromYaml: yaml)
     }
 
-    /// High performance line-based parser to extract `- name: ...` under `contexts:` in kubeconfig
     public nonisolated static func parseContexts(fromYaml yaml: String) -> [String] {
-        var contexts: [String] = []
-        var inContextsBlock = false
-
-        let lines = yaml.components(separatedBy: .newlines)
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.starts(with: "contexts:") {
-                inContextsBlock = true
-                continue
-            }
-            if inContextsBlock {
-                // If we encounter another top-level root key without leading spaces (e.g. "users:", "clusters:"), stop
-                if !line.starts(with: " ") && !line.starts(with: "\t") && trimmed.contains(":") && !trimmed.starts(with: "-") {
-                    break
-                }
-                if trimmed.starts(with: "- name:") || (trimmed.starts(with: "name:") && line.starts(with: " ")) {
-                    let parts = trimmed.components(separatedBy: "name:")
-                    if parts.count >= 2 {
-                        let name = parts[1].trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "'", with: "")
-                        if !name.isEmpty && !contexts.contains(name) {
-                            contexts.append(name)
-                        }
-                    }
-                }
-            }
-        }
-        return contexts
+        KubeConfigYAMLParser.parseContexts(fromYaml: yaml)
     }
 
     public func saveConfig() async {
@@ -228,7 +223,7 @@ public final class KubeConfigViewModel {
 
     // MARK: - Non-blocking Background Validation & Caching
 
-    public func triggerBackgroundValidation(context: String = "", forceRefresh: Bool = false) {
+    public func triggerBackgroundValidation(storedProviderContext: String? = nil, forceRefresh: Bool = false) {
         activeValidationTask?.cancel()
 
         guard let configID = selectedKubeConfigID,
@@ -240,6 +235,7 @@ public final class KubeConfigViewModel {
         }
 
         let content = config.configContent
+        let validationContext = resolvedValidationContext(storedProviderContext: storedProviderContext)
         self.isLoadingNamespaces = true
         self.connectionError = nil
         self.connectionSuccess = false
@@ -247,11 +243,12 @@ public final class KubeConfigViewModel {
         activeValidationTask = Task {
             let result = await KubeConnectionValidator.shared.validateConnection(
                 configContent: content,
-                context: context,
+                context: validationContext,
                 forceRefresh: forceRefresh
             )
 
             guard !Task.isCancelled else { return }
+            guard self.selectedKubeConfigID == configID else { return }
 
             self.isLoadingNamespaces = false
             if result.isReachable {
@@ -264,7 +261,7 @@ public final class KubeConfigViewModel {
         }
     }
 
-    public func testConnection(context: String = "") {
-        triggerBackgroundValidation(context: context, forceRefresh: true)
+    public func testConnection(storedProviderContext: String? = nil) {
+        triggerBackgroundValidation(storedProviderContext: storedProviderContext, forceRefresh: true)
     }
 }

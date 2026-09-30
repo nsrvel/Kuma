@@ -43,7 +43,9 @@ public enum CreateServicePayloadBuilder {
             encryptedScript = inputs.podmanDraft.initialScript.isEmpty ? nil : inputs.podmanDraft.initialScript
         }
 
+        let providerID = UUID()
         let provider = Provider(
+            id: providerID,
             serviceID: serviceID,
             type: inputs.selectedProvider,
             kubeConfigID: inputs.selectedProvider == .kubernetes ? inputs.selectedKubeConfigID : nil,
@@ -77,6 +79,7 @@ public enum CreateServicePayloadBuilder {
                 return ServicePortMapping(
                     id: item.id,
                     serviceID: serviceID,
+                    providerID: providerID,
                     localPort: local,
                     remotePort: remote
                 )
@@ -111,7 +114,16 @@ public enum CreateServicePayloadBuilder {
 
         switch inputs.selectedProvider {
         case .kubernetes:
-            return !inputs.kubeDraft.targetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let targetOK = !inputs.kubeDraft.targetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let kubeConfigOK = inputs.selectedKubeConfigID != nil
+            let contextOK = !inputs.kubeDraft.context.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let hasCompletePort = inputs.temporaryPorts.contains { item in
+                guard let local = Int(item.local.trimmingCharacters(in: .whitespacesAndNewlines)),
+                      let remote = Int(item.remote.trimmingCharacters(in: .whitespacesAndNewlines)),
+                      local > 0, local <= 65535, remote > 0, remote <= 65535 else { return false }
+                return true
+            }
+            return targetOK && kubeConfigOK && contextOK && hasCompletePort
         case .docker:
             return !inputs.dockerDraft.yamlConfig.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .podman:

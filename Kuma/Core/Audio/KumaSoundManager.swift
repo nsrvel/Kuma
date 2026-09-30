@@ -67,9 +67,12 @@ public final class KumaSoundManager: NSObject, AVAudioPlayerDelegate {
 
     // MARK: - AVAudioPlayerDelegate
 
-    public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        if player == audioPlayer {
-            audioPlayer = nil
+    nonisolated public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        let finishedID = ObjectIdentifier(player)
+        Task { @MainActor in
+            if let current = self.audioPlayer, ObjectIdentifier(current) == finishedID {
+                self.audioPlayer = nil
+            }
         }
     }
 }

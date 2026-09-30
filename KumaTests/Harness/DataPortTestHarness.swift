@@ -133,6 +133,12 @@ public final class DataPortTestHarness {
             }
         }
 
+        migrator.registerMigration("v5_port_mapping_provider") { db in
+            try db.alter(table: "portMapping") { t in
+                t.add(column: "providerID", .text).references("provider", onDelete: .cascade)
+            }
+        }
+
         try! migrator.migrate(queue)
 
         // Seed default workspace
@@ -200,12 +206,36 @@ public final class DataPortTestHarness {
         type: String = "docker",
         label: String? = nil,
         yamlConfig: String? = nil,
-        runCommand: String? = nil
+        runCommand: String? = nil,
+        kubeConfigID: UUID? = nil,
+        kubeContext: String? = nil,
+        targetName: String? = nil
     ) throws {
         try databaseQueue.write { db in
             try db.execute(
-                sql: "INSERT OR REPLACE INTO provider (id, serviceID, type, label, yamlConfig, runCommand, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                arguments: [id.uuidString, serviceID.uuidString, type, label, yamlConfig, runCommand, Date(), Date()]
+                sql: """
+                INSERT OR REPLACE INTO provider (
+                    id, serviceID, type, label, yamlConfig, runCommand,
+                    kubeConfigID, kubeContext, targetName, createdAt, updatedAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [
+                    id.uuidString, serviceID.uuidString, type, label, yamlConfig, runCommand,
+                    kubeConfigID?.uuidString, kubeContext, targetName, Date(), Date()
+                ]
+            )
+        }
+    }
+
+    public func seedKubeConfig(
+        id: UUID = UUID(),
+        name: String,
+        encryptedContent: String
+    ) throws {
+        try databaseQueue.write { db in
+            try db.execute(
+                sql: "INSERT OR REPLACE INTO kube_config (id, name, configContent, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)",
+                arguments: [id.uuidString, name, encryptedContent, Date(), Date()]
             )
         }
     }
@@ -213,13 +243,17 @@ public final class DataPortTestHarness {
     public func seedPortMapping(
         id: UUID = UUID(),
         serviceID: UUID,
+        providerID: UUID? = nil,
         localPort: Int,
         remotePort: Int
     ) throws {
         try databaseQueue.write { db in
             try db.execute(
-                sql: "INSERT OR REPLACE INTO portMapping (id, serviceID, localPort, remotePort, protocolType) VALUES (?, ?, ?, ?, ?)",
-                arguments: [id.uuidString, serviceID.uuidString, localPort, remotePort, "TCP"]
+                sql: """
+                INSERT OR REPLACE INTO portMapping (id, serviceID, providerID, localPort, remotePort, protocolType)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                arguments: [id.uuidString, serviceID.uuidString, providerID?.uuidString, localPort, remotePort, "TCP"]
             )
         }
     }
