@@ -144,7 +144,7 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
 
         container["monitorProcessName"] = monitorProcessName
         container["monitorInterval"] = monitorInterval
-        container["autoReconnect"] = autoReconnect
+        container["autoReconnect"] = autoReconnect ?? false
         container["createdAt"] = createdAt
         container["updatedAt"] = updatedAt
     }

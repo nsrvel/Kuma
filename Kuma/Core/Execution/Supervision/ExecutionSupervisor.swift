@@ -155,6 +155,7 @@ public actor ExecutionSupervisor {
         exitCode: Int32,
         intentionalStop: Bool
     ) async {
+        let failureTail = (!intentionalStop && exitCode != 0) ? RunSpool.tail(for: serviceID) : nil
         RunSpool.remove(for: serviceID)
         KubeLiveTargetDisplay.clear(serviceID: serviceID)
 
@@ -194,12 +195,11 @@ public actor ExecutionSupervisor {
             return
         }
 
-        let failure = RunSpool.tail(for: serviceID)
         await finalizeManagedProcessCrash(
             serviceID: serviceID,
             serviceName: serviceName,
             exitCode: exitCode,
-            failure: failure,
+            failure: failureTail,
             notify: true
         )
     }

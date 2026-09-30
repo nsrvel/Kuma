@@ -2,7 +2,7 @@
 
 Native macOS app for managing local development services — Kubernetes port-forwards, Docker/Podman, shell, SSH tunnels, health checks, and more — organized by workspace.
 
-**Distribution:** [GitHub Releases](https://github.com/nsrvel/Kuma/releases) (not the Mac App Store).
+**Distribution:** [GitHub Releases](https://github.com/nsrvel/Kuma/releases) (not the Mac App Store). DMGs are **not** committed to git (`dist/` is ignored); download binaries from the Releases page.
 
 ## Requirements
 
@@ -36,9 +36,9 @@ xcodebuild -scheme Kuma -destination 'platform=macOS' test
 ### Build a DMG locally
 
 ```bash
-chmod +x Scripts/make-dmg.sh
-./Scripts/make-dmg.sh
-# Output: dist/Kuma-<version>.dmg
+make dmg
+# or: ./Scripts/make-dmg.sh
+# Output: dist/Kuma-<version>.dmg (ad-hoc signed unless MACOS_SIGN_IDENTITY is set)
 ```
 
 ### Publish a GitHub Release (maintainers)
