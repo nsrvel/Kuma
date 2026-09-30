@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     name: Build & Test (macOS)
-    timeout-minutes: 15
+    timeout-minutes: 20
     # objectVersion 77 requires Xcode 16+ (macos-14 images ship Xcode 15.4).
     runs-on: macos-15
     steps:
@@ -65,6 +65,7 @@ jobs:
             -derivedDataPath build/DerivedData \
             -resultBundlePath TestResults.xcresult \
             -maximum-test-execution-time-allowance 120 \
+            -parallel-testing-worker-count 4 \
             test-without-building
 
       - name: Upload test results on failure
