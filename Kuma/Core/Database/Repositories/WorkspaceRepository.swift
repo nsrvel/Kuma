@@ -9,6 +9,8 @@ public protocol WorkspaceRepositoryProtocol: Sendable {
     func delete(id: UUID) async throws
 }
 
+/// `@unchecked Sendable`: Thread safety is guaranteed by GRDB's underlying `DatabaseWriter` (DatabasePool / DatabaseQueue)
+/// which synchronizes access via serialized dispatch queues. Do not add mutable stored properties to this class.
 public final class WorkspaceRepository: WorkspaceRepositoryProtocol, @unchecked Sendable {
     private let dbWriter: any DatabaseWriter
 

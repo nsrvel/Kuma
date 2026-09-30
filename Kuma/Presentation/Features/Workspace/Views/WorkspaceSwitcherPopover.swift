@@ -14,12 +14,10 @@ public struct WorkspaceSwitcherPopover: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Active Workspace Container Box (Content-First & Instant Context)
             if let activeWS = store.activeWorkspace {
                 activeWorkspaceRow(activeWS)
             }
 
-            // Inactive Workspaces (Compact Scrollable List)
             let inactiveWS = store.workspaces.filter { $0.id != store.selectedWorkspaceId }
             if !inactiveWS.isEmpty {
                 ScrollView(.vertical, showsIndicators: true) {
@@ -31,26 +29,23 @@ public struct WorkspaceSwitcherPopover: View {
                                 shortcutIndex: fullIndex <= 9 ? fullIndex : nil,
                                 canDelete: store.workspaces.count > 1,
                                 onSelect: {
+                                    KumaHapticManager.shared.levelChange()
                                     store.selectWorkspace(ws)
                                     isPresented = false
                                 },
                                 onEdit: {
                                     isPresented = false
-                                    DispatchQueue.main.async {
-                                        store.workspaceToEdit = ws
-                                    }
+                                    store.workspaceToEdit = ws
                                 },
                                 onDelete: {
                                     isPresented = false
-                                    DispatchQueue.main.async {
-                                        AlertService.shared.confirmDelete(
-                                            title: "Delete Workspace?",
-                                            message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
-                                            onConfirm: {
-                                                store.deleteWorkspace(ws)
-                                            }
-                                        )
-                                    }
+                                    AlertService.shared.confirmDelete(
+                                        title: "Delete Workspace?",
+                                        message: "All services and configurations in “\(ws.name)” will be permanently deleted. This action cannot be undone.",
+                                        onConfirm: {
+                                            store.deleteWorkspace(ws)
+                                        }
+                                    )
                                 }
                             )
                         }
@@ -61,20 +56,16 @@ public struct WorkspaceSwitcherPopover: View {
                 .padding(.top, 2)
             }
 
-            // Subtle Divider
             KumaDivider(opacity: 0.06, verticalPadding: 6, horizontalPadding: 10)
 
-            // "New Workspace…" plain action button at the bottom
             NewWorkspaceBottomButton {
                 isPresented = false
-                DispatchQueue.main.async {
-                    store.showCreateSheet = true
-                }
+                store.showCreateSheet = true
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 8)
         }
-        .frame(width: 275)
+        .frame(width: KumaTheme.Workspace.popoverWidth)
     }
 
     private func activeWorkspaceRow(_ activeWS: Workspace) -> some View {
@@ -94,12 +85,9 @@ public struct WorkspaceSwitcherPopover: View {
 
             Spacer()
 
-            // Settings gear button
             Button {
                 isPresented = false
-                DispatchQueue.main.async {
-                    store.workspaceToEdit = activeWS
-                }
+                store.workspaceToEdit = activeWS
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 13))
@@ -112,7 +100,6 @@ public struct WorkspaceSwitcherPopover: View {
             .help("Workspace Settings")
         }
         .padding(8)
-
         .background(Color.primary.opacity(isHoveringActiveRow ? 0.05 : 0.03))
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
@@ -130,27 +117,22 @@ public struct WorkspaceSwitcherPopover: View {
         .contextMenu {
             Button {
                 isPresented = false
-                DispatchQueue.main.async {
-                    store.workspaceToEdit = activeWS
-                }
+                store.workspaceToEdit = activeWS
             } label: {
-                Label("Settings…", systemImage: "gearshape")
+                Label("Workspace Settings", systemImage: "gearshape")
             }
 
             if store.workspaces.count > 1 {
                 Divider()
-
                 Button(role: .destructive) {
                     isPresented = false
-                    DispatchQueue.main.async {
-                        AlertService.shared.confirmDelete(
-                            title: "Delete Workspace?",
-                            message: "All services and configurations in “\(activeWS.name)” will be permanently deleted. This action cannot be undone.",
-                            onConfirm: {
-                                store.deleteWorkspace(activeWS)
-                            }
-                        )
-                    }
+                    AlertService.shared.confirmDelete(
+                        title: "Delete Workspace?",
+                        message: "All services and configurations in “\(activeWS.name)” will be permanently deleted. This action cannot be undone.",
+                        onConfirm: {
+                            store.deleteWorkspace(activeWS)
+                        }
+                    )
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }

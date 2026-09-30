@@ -7,7 +7,7 @@ import os
 @Observable
 @MainActor
 public final class KubeConfigViewModel {
-    private static let logger = Logger(subsystem: "lokastudio.kuma", category: "KubeConfigViewModel")
+    private nonisolated static let logger = Logger(subsystem: "lokastudio.kuma", category: "KubeConfigViewModel")
 
     public var availableKubeConfigs: [KubeConfig] = []
     public var selectedKubeConfigID: UUID? = nil {
@@ -38,25 +38,14 @@ public final class KubeConfigViewModel {
 
     private let repo: any KubeConfigRepositoryProtocol
     private var activeValidationTask: Task<Void, Never>? = nil
+    private let userDefaults: UserDefaults
 
-    public init(repo: any KubeConfigRepositoryProtocol = KubeConfigRepository()) {
+    public init(
+        repo: any KubeConfigRepositoryProtocol = KubeConfigRepository(),
+        userDefaults: UserDefaults = .standard
+    ) {
         self.repo = repo
-
-        // Synchronously resolve default kubeconfig (~/.kube/config) to guarantee immediate display (0ms frame 1)
-        let customPath = UserDefaults.standard.string(forKey: "kuma.custom_kubeconfig_path")
-        if let defaultPath = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) {
-            let content = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
-            let defaultConfig = KubeConfig(
-                id: KubeConfig.defaultID,
-                name: "Default",
-                configContent: content,
-                isDefault: true
-            )
-            self.availableKubeConfigs = [defaultConfig]
-            self.selectedKubeConfigID = KubeConfig.defaultID
-            self.availableContexts = Self.parseContexts(fromYaml: content)
-            self.activeContextName = Self.parseCurrentContext(fromYaml: content)
-        }
+        self.userDefaults = userDefaults
 
         Task {
             await self.loadConfigs()
@@ -65,42 +54,13 @@ public final class KubeConfigViewModel {
 
     public func loadConfigs() async {
         let repo = self.repo
+        let customPath = KumaSettingsKey.string(
+            forKey: KumaSettingsKey.customKubeconfigPath,
+            fallbackKey: KumaSettingsKey.legacyKubeconfigPath,
+            defaults: self.userDefaults
+        )
         let finalizedList = await Task.detached(priority: .utility) { () -> [KubeConfig] in
-            var list: [KubeConfig] = []
-
-            // 1. Resolve default system Kubeconfig (~/.kube/config or custom setting)
-            let customPath = UserDefaults.standard.string(forKey: "kuma.custom_kubeconfig_path")
-            if let defaultPath = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) {
-                let content = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
-                let defaultConfig = KubeConfig(
-                    id: KubeConfig.defaultID,
-                    name: "Default",
-                    configContent: content,
-                    isDefault: true
-                )
-                list.append(defaultConfig)
-            }
-
-            // 2. Fetch custom registered configs from DB and decrypt contents
-            do {
-                let customConfigs = try await repo.fetchAll()
-                var decryptedList: [KubeConfig] = []
-                for config in customConfigs {
-                    var decrypted = config
-                    do {
-                        let plain = try await CryptoVault.shared.decrypt(cipherText: config.configContent)
-                        decrypted.configContent = plain
-                    } catch {
-                        Self.logger.error("Failed to decrypt config '\(config.name)': \(error.localizedDescription)")
-                    }
-                    decryptedList.append(decrypted)
-                }
-                list.append(contentsOf: decryptedList)
-            } catch {
-                Self.logger.error("Failed to fetch KubeConfigs from database: \(error.localizedDescription)")
-            }
-
-            return list
+            return await Self.fetchAndDecryptConfigs(repo: repo, customPath: customPath)
         }.value
 
         self.availableKubeConfigs = finalizedList
@@ -108,6 +68,46 @@ public final class KubeConfigViewModel {
             self.selectedKubeConfigID = first.id
         }
         self.refreshContextsForCurrentConfig()
+    }
+
+    private nonisolated static func fetchAndDecryptConfigs(
+        repo: any KubeConfigRepositoryProtocol,
+        customPath: String?
+    ) async -> [KubeConfig] {
+        var list: [KubeConfig] = []
+
+        // 1. Resolve default system Kubeconfig (~/.kube/config or custom setting)
+        if let defaultPath = DependencyChecker.resolvedKubeconfigPath(customPath: customPath) {
+            let content = (try? String(contentsOfFile: defaultPath, encoding: .utf8)) ?? ""
+            let defaultConfig = KubeConfig(
+                id: KubeConfig.defaultID,
+                name: "Default",
+                configContent: content,
+                isDefault: true
+            )
+            list.append(defaultConfig)
+        }
+
+        // 2. Fetch custom registered configs from DB and decrypt contents
+        do {
+            let customConfigs = try await repo.fetchAll()
+            var decryptedList: [KubeConfig] = []
+            for config in customConfigs {
+                var decrypted = config
+                do {
+                    let plain = try CryptoVault.shared.decrypt(cipherText: config.configContent)
+                    decrypted.configContent = plain
+                } catch {
+                    logger.error("Failed to decrypt config '\(config.name)': \(error.localizedDescription)")
+                }
+                decryptedList.append(decrypted)
+            }
+            list.append(contentsOf: decryptedList)
+        } catch {
+            logger.error("Failed to fetch KubeConfigs from database: \(error.localizedDescription)")
+        }
+
+        return list
     }
 
     /// Extract context names from the currently selected kubeconfig YAML content
@@ -176,7 +176,7 @@ public final class KubeConfigViewModel {
 
         do {
             // Encrypt content using AES-256-GCM MasterKey before writing to database
-            let encryptedContent = try await CryptoVault.shared.encrypt(plainText: plainContent)
+            let encryptedContent = try CryptoVault.shared.encrypt(plainText: plainContent)
 
             let savedID: UUID
             if let editID = editingKubeConfigID {

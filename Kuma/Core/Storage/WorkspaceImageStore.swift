@@ -83,7 +83,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
             }
 
             try pngData.write(to: destURL, options: .atomic)
-            cache.removeObject(forKey: destFileName as NSString)
+            evictCache(for: destFileName)
             self.logger.info("Saved workspace image for \(workspaceID) to \(destPath)")
             return destFileName
         } catch {
@@ -100,7 +100,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
 
         do {
             try data.write(to: destURL, options: .atomic)
-            cache.removeObject(forKey: destFileName as NSString)
+            evictCache(for: destFileName)
             return destFileName
         } catch {
             self.logger.error("Failed to write base64 image to disk: \(error.localizedDescription)")
@@ -125,7 +125,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
     public nonisolated func thumbnail(for fileNameOrPath: String, maxDimension: CGFloat = 128) -> NSImage? {
         let fileURL = resolveURL(for: fileNameOrPath)
         let filePath = fileURL.path(percentEncoded: false)
-        let cacheKey = "\(filePath)-\(Int(maxDimension))" as NSString
+        let cacheKey = cacheKey(for: filePath, maxDimension: maxDimension)
 
         if let cached = cache.object(forKey: cacheKey) {
             return cached
@@ -155,6 +155,18 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
         return thumbnail
     }
 
+    private nonisolated func cacheKey(for filePath: String, maxDimension: CGFloat) -> NSString {
+        "\(filePath)-\(Int(maxDimension))" as NSString
+    }
+
+    private nonisolated func evictCache(for fileNameOrPath: String) {
+        let fileURL = resolveURL(for: fileNameOrPath)
+        let filePath = fileURL.path(percentEncoded: false)
+        for dimension in [24, 32, 48, 64, 80, 128, 256, 512] {
+            cache.removeObject(forKey: cacheKey(for: filePath, maxDimension: CGFloat(dimension)))
+        }
+        cache.removeObject(forKey: fileNameOrPath as NSString)
+    }
 
     /// Resolves filename or legacy absolute path to a valid URL
     public nonisolated func resolveURL(for fileNameOrPath: String) -> URL {
@@ -168,7 +180,7 @@ public nonisolated final class WorkspaceImageStore: @unchecked Sendable {
     public nonisolated func deleteImage(for fileNameOrPath: String) {
         let fileURL = resolveURL(for: fileNameOrPath)
         try? FileManager.default.removeItem(at: fileURL)
-        cache.removeObject(forKey: fileNameOrPath as NSString)
+        evictCache(for: fileNameOrPath)
     }
 
     /// Clears the memory cache

@@ -29,12 +29,12 @@ public struct KubeConnectionSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             KumaRowPickerField(
                 label: "Context",
-                description: "Target cluster context.",
+                description: "Target Kubernetes context.",
                 options: contextOptions,
                 selection: $kubeContext,
                 titleResolver: { opt in
                     if opt.isEmpty {
-                        return availableContexts.isEmpty ? "No Contexts Available" : "Select Context..."
+                        return availableContexts.isEmpty ? "No Contexts Available" : "Select Context"
                     }
                     return opt
                 }

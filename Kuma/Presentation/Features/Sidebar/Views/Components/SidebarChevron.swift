@@ -12,17 +12,19 @@ public struct SidebarChevron: View {
     }
 
     public var body: some View {
-        Image(systemName: "chevron.right")
-            .imageScale(.small)
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(isHovering ? Color.primary : Color.secondary)
-            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-            .frame(width: 20, height: 20)
-            .contentShape(Rectangle())
-            .help(isExpanded ? "Collapse" : "Expand")
-            .onHover { isHovering = $0 }
-            .onTapGesture {
-                onToggle?()
-            }
+        Button {
+            onToggle?()
+        } label: {
+            Image(systemName: "chevron.right")
+                .imageScale(.small)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded ? "Collapse" : "Expand")
+        .onHover { isHovering = $0 }
     }
 }

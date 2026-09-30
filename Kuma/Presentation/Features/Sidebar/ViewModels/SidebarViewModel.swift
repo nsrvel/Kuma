@@ -7,17 +7,28 @@ import os
 public final class SidebarViewModel {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "SidebarViewModel")
 
-    public private(set) var entries: [SidebarEntry]
+    public private(set) var entries: [SidebarEntry] = [] {
+        didSet { rebuildFlattenedRows() }
+    }
     public var selectedID: UUID?
-    public var expandedIDs: Set<UUID>
+    public var expandedIDs: Set<UUID> = [] {
+        didSet { rebuildFlattenedRows() }
+    }
+    public private(set) var flattenedRows: [FlattenedRow] = []
+    public var groups: [ServiceGroup] = []
+    public var editingGroupID: UUID? = nil
+
+    private let groupRepository: any ServiceGroupRepositoryProtocol
+    private var currentWorkspaceID: UUID? = nil
 
     public init(
         entries: [SidebarEntry] = [],
         selectedID: UUID? = nil,
-        expandedIDs: Set<UUID> = []
+        expandedIDs: Set<UUID> = [],
+        groupRepository: any ServiceGroupRepositoryProtocol = ServiceGroupRepository()
     ) {
+        self.groupRepository = groupRepository
         let finalEntries = entries.isEmpty ? Self.defaultEntries : entries
-        self.entries = finalEntries
         self.selectedID = selectedID ?? .stable("all-services")
 
         var initialExpanded = expandedIDs
@@ -29,6 +40,8 @@ public final class SidebarViewModel {
             }
         }
         self.expandedIDs = initialExpanded
+        self.entries = finalEntries
+        self.rebuildFlattenedRows()
     }
 
     // MARK: - Expand / Collapse
@@ -45,6 +58,219 @@ public final class SidebarViewModel {
         expandedIDs.contains(id)
     }
 
+    // MARK: - Groups Data Management
+
+    public func loadGroups(workspaceID: UUID) async {
+        self.currentWorkspaceID = workspaceID
+        do {
+            self.groups = try await groupRepository.fetchAll(workspaceID: workspaceID)
+            rebuildEntries()
+        } catch {
+            Self.logger.error("Failed to load groups for workspace \(workspaceID): \(error)")
+        }
+    }
+
+    public func addGroup(name: String = "New Group", workspaceID: UUID) {
+        self.currentWorkspaceID = workspaceID
+        let nextSortOrder = (groups.map(\.sortOrder).max() ?? 0) + 1
+        let newGroup = ServiceGroup(
+            name: name,
+            workspaceID: workspaceID,
+            sortOrder: nextSortOrder
+        )
+
+        // 1. Instant Optimistic In-Memory Update (0ms)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+            self.groups.append(newGroup)
+            self.expandedIDs.insert(.stable("groups"))
+            self.editingGroupID = newGroup.id
+            self.selectedID = newGroup.id
+            self.rebuildEntries()
+        }
+
+        // 2. Background Persistence
+        Task {
+            do {
+                try await groupRepository.insert(newGroup)
+                NotificationCenter.default.post(name: .kumaGroupsUpdated, object: newGroup.id)
+            } catch {
+                Self.logger.error("Failed to insert group: \(error)")
+            }
+        }
+    }
+
+    public func renameGroup(id: UUID, newName: String) {
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = trimmed.isEmpty ? "Untitled Group" : trimmed
+
+        // 1. Instant Optimistic In-Memory Update (0ms)
+        var updated = groups[index]
+        updated.name = finalName
+        updated.updatedAt = Date()
+
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
+            self.groups[index] = updated
+            self.editingGroupID = nil
+            self.rebuildEntries()
+        }
+
+        // 2. Background Persistence
+        Task {
+            do {
+                try await groupRepository.update(updated)
+                NotificationCenter.default.post(name: .kumaGroupsUpdated, object: id)
+            } catch {
+                Self.logger.error("Failed to rename group \(id): \(error)")
+            }
+        }
+    }
+
+    public func deleteGroup(id: UUID) {
+        // 1. Instant Optimistic In-Memory Update (0ms)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+            self.groups.removeAll(where: { $0.id == id })
+            if self.selectedID == id {
+                self.selectedID = .stable("all-services")
+            }
+            if self.editingGroupID == id {
+                self.editingGroupID = nil
+            }
+            self.rebuildEntries()
+        }
+
+        // 2. Background Persistence
+        Task {
+            do {
+                try await groupRepository.delete(id: id)
+                NotificationCenter.default.post(name: .kumaGroupsUpdated, object: id)
+            } catch {
+                Self.logger.error("Failed to delete group \(id): \(error)")
+            }
+        }
+    }
+
+    public func groupIDForSelectedRow(_ id: UUID?) -> UUID? {
+        guard let id else { return nil }
+        return groups.first(where: { $0.id == id })?.id
+    }
+
+    // MARK: - Reordering
+
+    public func moveGroups(fromOffsets source: IndexSet, toOffset destination: Int) {
+        // 1. Instant Optimistic In-Memory Update (0ms)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.86)) {
+            self.groups.move(fromOffsets: source, toOffset: destination)
+            for (index, _) in self.groups.enumerated() {
+                self.groups[index].sortOrder = index
+                self.groups[index].updatedAt = Date()
+            }
+            self.rebuildEntries()
+        }
+
+        // 2. Background Persistence
+        let orders = self.groups.enumerated().map { (index, group) in
+            (id: group.id, sortOrder: index)
+        }
+        Task {
+            do {
+                try await groupRepository.updateSortOrders(orders)
+                NotificationCenter.default.post(name: .kumaGroupsUpdated, object: nil)
+            } catch {
+                Self.logger.error("Failed to persist group reorder: \(error)")
+            }
+        }
+    }
+
+    public func moveGroupUp(id: UUID) {
+        guard let index = groups.firstIndex(where: { $0.id == id }), index > 0 else { return }
+        moveGroups(fromOffsets: IndexSet(integer: index), toOffset: index - 1)
+    }
+
+    public func moveGroupDown(id: UUID) {
+        guard let index = groups.firstIndex(where: { $0.id == id }), index < groups.count - 1 else { return }
+        moveGroups(fromOffsets: IndexSet(integer: index), toOffset: index + 2)
+    }
+
+    public func canMoveGroupUp(id: UUID) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        return index > 0
+    }
+
+    public func canMoveGroupDown(id: UUID) -> Bool {
+        guard let index = groups.firstIndex(where: { $0.id == id }) else { return false }
+        return index < groups.count - 1
+    }
+
+    public func reorderGroup(draggedID: UUID, targetID: UUID) {
+        guard draggedID != targetID,
+              let fromIndex = groups.firstIndex(where: { $0.id == draggedID }),
+              let toIndex = groups.firstIndex(where: { $0.id == targetID }) else { return }
+
+        let destination = toIndex > fromIndex ? toIndex + 1 : toIndex
+        moveGroups(fromOffsets: IndexSet(integer: fromIndex), toOffset: destination)
+    }
+
+    public var fixedRows: [FlattenedRow] {
+        flattenedRows.filter { row in
+            guard case .item(let node) = row.entry else { return true }
+            return node.id != .stable("groups") && !node.isGroupRow && !row.isPlaceholder
+        }
+    }
+
+    public var groupsHeaderRow: FlattenedRow? {
+        flattenedRows.first { $0.id == .stable("groups") }
+    }
+
+    private func rebuildEntries() {
+        let groupChildren: [SidebarEntry] = groups.map { group in
+            .item(SidebarNode(
+                id: group.id,
+                title: group.name,
+                icon: .system("folder"),
+                children: nil,
+                isGroupRow: true
+            ))
+        }
+
+        let groupsHeader = SidebarNode(
+            id: .stable("groups"),
+            title: "Groups",
+            icon: .system("folder"),
+            children: groupChildren,
+            actions: [
+                SidebarAction(icon: "plus", tooltip: "New Group") { [weak self] in
+                    guard let self, let wsID = self.currentWorkspaceID else { return }
+                    self.addGroup(workspaceID: wsID)
+                }
+            ],
+            isSpecialHeader: true,
+            isExpandedByDefault: true
+        )
+
+        self.entries = [
+            .item(SidebarNode(
+                id: .stable("all-services"),
+                title: "All Services",
+                icon: .system("square.grid.2x2.fill"),
+                children: nil
+            )),
+            .item(SidebarNode(
+                id: .stable("starred-services"),
+                title: "Starred",
+                icon: .system("star"),
+                children: nil
+            )),
+            .item(SidebarNode(
+                id: .stable("live-logs"),
+                title: "Live Logs",
+                icon: .system("terminal"),
+                children: nil
+            )),
+            .item(groupsHeader)
+        ]
+    }
+
     public static var defaultEntries: [SidebarEntry] {
         [
             .item(SidebarNode(
@@ -59,20 +285,12 @@ public final class SidebarViewModel {
                 icon: .system("star"),
                 children: nil
             )),
-//            .divider(),
-            .item(SidebarNode(
-                id: .stable("port-registry"),
-                title: "Port Registry",
-                icon: .system("arrow.left.arrow.right"),
-                children: nil
-            )),
             .item(SidebarNode(
                 id: .stable("live-logs"),
                 title: "Live Logs",
                 icon: .system("terminal"),
                 children: nil
             )),
-//            .divider(),
             .item(SidebarNode(
                 id: .stable("groups"),
                 title: "Groups",
@@ -80,7 +298,7 @@ public final class SidebarViewModel {
                 children: [],
                 actions: [
                     SidebarAction(icon: "plus", tooltip: "New Group") {
-                        // TODO: Add new group action
+                        // Action handled dynamically when VM is initialized
                     }
                 ],
                 isSpecialHeader: true,
@@ -91,8 +309,7 @@ public final class SidebarViewModel {
 
     // MARK: - Flattened Hierarchy for Native List
 
-    public struct FlattenedRow: Identifiable {
-
+    public struct FlattenedRow: Identifiable, Equatable {
         public let id: UUID
         public let entry: SidebarEntry
         public let indentLevel: Int
@@ -107,7 +324,7 @@ public final class SidebarViewModel {
         }
     }
 
-    public var flattenedRows: [FlattenedRow] {
+    private func rebuildFlattenedRows() {
         var result: [FlattenedRow] = []
 
         func appendEntry(_ entry: SidebarEntry, indentLevel: Int) {
@@ -181,7 +398,7 @@ public final class SidebarViewModel {
             }
         }
 
-        return result
+        self.flattenedRows = result
     }
 
     private func emptyPlaceholderText(for node: SidebarNode) -> String {
@@ -251,4 +468,3 @@ extension SidebarViewModel {
         )
     }
 }
-

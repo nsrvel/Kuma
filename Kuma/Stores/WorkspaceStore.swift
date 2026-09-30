@@ -27,6 +27,8 @@ public final class WorkspaceStore {
         workspaces.first(where: { $0.id == selectedWorkspaceId }) ?? workspaces.first
     }
 
+    private var mutationTask: Task<Void, Never>? = nil
+
     public init(
         initialWorkspaces: [Workspace]? = nil,
         repository: any WorkspaceRepositoryProtocol = WorkspaceRepository(),
@@ -44,9 +46,11 @@ public final class WorkspaceStore {
     }
 
     public func loadFromDatabase() {
-        Task {
+        mutationTask?.cancel()
+        mutationTask = Task {
             do {
                 let fetched = try await repository.fetchAll()
+                guard !Task.isCancelled else { return }
                 if !fetched.isEmpty {
                     self.workspaces = fetched
                     let savedSelectedStr = userDefaults.string(forKey: Self.selectedWorkspaceKey)
@@ -57,12 +61,19 @@ public final class WorkspaceStore {
                     }
                 } else {
                     let defaultWS = Workspace.defaultWorkspace
-                    try? await repository.insert(defaultWS)
-                    self.workspaces = [defaultWS]
-                    self.selectedWorkspaceId = defaultWS.id
+                    do {
+                        try await repository.insert(defaultWS)
+                        guard !Task.isCancelled else { return }
+                        self.workspaces = [defaultWS]
+                        self.selectedWorkspaceId = defaultWS.id
+                    } catch {
+                        Self.logger.error("Failed to insert default workspace: \(error.localizedDescription)")
+                        AlertService.shared.showError(title: "Database Error", message: "Failed to create default workspace: \(error.localizedDescription)")
+                    }
                 }
             } catch {
-                Self.logger.error("Failed to load workspaces from DB: \(error)")
+                Self.logger.error("Failed to load workspaces from DB: \(error.localizedDescription)")
+                AlertService.shared.showError(title: "Database Error", message: "Failed to load workspaces: \(error.localizedDescription)")
             }
         }
     }
@@ -90,7 +101,12 @@ public final class WorkspaceStore {
         self.selectedWorkspaceId = newWorkspace.id
 
         Task {
-            try? await repository.insert(newWorkspace)
+            do {
+                try await repository.insert(newWorkspace)
+            } catch {
+                Self.logger.error("Failed to insert workspace \(newWorkspace.id): \(error.localizedDescription)")
+                AlertService.shared.showError(title: "Save Failed", message: "Could not save workspace: \(error.localizedDescription)")
+            }
         }
         Self.logger.info("Added new workspace: \(finalName)")
         return newWorkspace
@@ -103,7 +119,12 @@ public final class WorkspaceStore {
         let updated = workspaces[index]
 
         Task {
-            try? await repository.update(updated)
+            do {
+                try await repository.update(updated)
+            } catch {
+                Self.logger.error("Failed to rename workspace \(workspace.id): \(error.localizedDescription)")
+                AlertService.shared.showError(title: "Update Failed", message: "Could not rename workspace: \(error.localizedDescription)")
+            }
         }
         Self.logger.info("Renamed workspace \(workspace.id) to \(newName)")
     }
@@ -113,6 +134,10 @@ public final class WorkspaceStore {
         var updated = workspace
 
         if let newExternalImageURL {
+            // Delete previous image file if it exists to avoid leaking storage
+            if let oldImagePath = updated.imagePath {
+                WorkspaceImageStore.shared.deleteImage(for: oldImagePath)
+            }
             let managedFileName = WorkspaceImageStore.shared.saveWorkspaceImage(from: newExternalImageURL, workspaceID: workspace.id)
             updated.imagePath = managedFileName
         }
@@ -121,12 +146,23 @@ public final class WorkspaceStore {
         workspaces[index] = updated
 
         Task {
-            try? await repository.update(updated)
+            do {
+                try await repository.update(updated)
+            } catch {
+                Self.logger.error("Failed to update workspace \(workspace.id): \(error.localizedDescription)")
+                AlertService.shared.showError(title: "Update Failed", message: "Could not update workspace: \(error.localizedDescription)")
+            }
         }
         Self.logger.info("Updated workspace: \(updated.name)")
     }
 
     public func deleteWorkspace(_ workspace: Workspace) {
+        // Invariant Rule: App must never have 0 workspaces
+        guard workspaces.count > 1 else {
+            Self.logger.warning("Attempted to delete the sole remaining workspace \(workspace.id). Operation blocked.")
+            return
+        }
+
         if let imagePath = workspace.imagePath {
             WorkspaceImageStore.shared.deleteImage(for: imagePath)
         }
@@ -138,13 +174,21 @@ public final class WorkspaceStore {
         }
 
         Task {
-            try? await repository.delete(id: workspace.id)
+            do {
+                try await repository.delete(id: workspace.id)
+            } catch {
+                Self.logger.error("Failed to delete workspace \(workspace.id): \(error.localizedDescription)")
+                AlertService.shared.showError(title: "Delete Failed", message: "Could not delete workspace: \(error.localizedDescription)")
+            }
         }
         Self.logger.info("Deleted workspace: \(workspace.name)")
     }
 
     public func moveWorkspace(from sourceIndex: Int, to destinationIndex: Int) {
-        guard sourceIndex < workspaces.count && destinationIndex < workspaces.count else { return }
+        guard sourceIndex >= 0, sourceIndex < workspaces.count,
+              destinationIndex >= 0, destinationIndex < workspaces.count,
+              sourceIndex != destinationIndex else { return }
+
         workspaces.swapAt(sourceIndex, destinationIndex)
 
         var ordersToUpdate: [(id: UUID, sortOrder: Int)] = []
@@ -157,7 +201,12 @@ public final class WorkspaceStore {
         }
 
         Task {
-            try? await repository.updateSortOrders(ordersToUpdate)
+            do {
+                try await repository.updateSortOrders(ordersToUpdate)
+            } catch {
+                Self.logger.error("Failed to update sort orders: \(error.localizedDescription)")
+                AlertService.shared.showError(title: "Reorder Failed", message: "Could not save workspace order: \(error.localizedDescription)")
+            }
         }
     }
 }

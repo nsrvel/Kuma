@@ -5,6 +5,7 @@ struct KumaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var coordinator = AppCoordinator()
     @State private var workspaceStore = WorkspaceStore()
+    @State private var serviceStateStore = ServiceStateStore()
 
     var body: some Scene {
         // ─── Scene 1: Main Workspace Window ───────────────────────────
@@ -13,7 +14,11 @@ struct KumaApp: App {
             ContentView()
                 .environment(coordinator)
                 .environment(workspaceStore)
+                .environment(serviceStateStore)
                 .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+                .onAppear {
+                    appDelegate.serviceStateStore = serviceStateStore
+                }
         }
         .defaultSize(width: 1100, height: 750)
         .windowResizability(.contentMinSize)
@@ -35,6 +40,8 @@ struct KumaApp: App {
         .windowResizability(.contentSize)
         .windowBackgroundDragBehavior(.enabled)
         .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+
         // ─── Scene 3: macOS MenuBar Extra ────────────────────────────
         // Compact Status Item in macOS Menu Bar with quick service controls
         MenuBarExtra("Kuma", systemImage: "bolt.horizontal.fill") {

@@ -3,8 +3,8 @@ import GRDB
 
 // MARK: - Service GRDB Record Conformance
 
-extension Service: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "service"
+nonisolated extension Service: FetchableRecord, PersistableRecord {
+    public nonisolated static let databaseTableName = "service"
 
     public nonisolated init(row: Row) throws {
         let idStr: String = row["id"]
@@ -30,6 +30,7 @@ extension Service: FetchableRecord, PersistableRecord {
             description: description,
             activeProviderID: activeProviderID,
             workspaceID: workspaceID,
+            groupIDs: [],
             isDisabled: isDisabled,
             isStarred: isStarred,
             createdAt: createdAt,

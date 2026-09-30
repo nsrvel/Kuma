@@ -20,10 +20,21 @@ public struct SettingsView: View {
                 // Developer & Engine Tools
                 SettingsCLIToolsSection(viewModel: viewModel)
                 SettingsTunnelingToolsSection(viewModel: viewModel)
+                SettingsPortsConnectionsSection(viewModel: viewModel)
                 SettingsLogsSection(viewModel: viewModel)
 
                 // Data & Storage Management
-                SettingsDataSection(workspaceStore: workspaceStore)
+                SettingsDataSection(viewModel: viewModel, workspaceStore: workspaceStore)
+
+                // App Version & Metadata Footer
+                VStack(spacing: KumaSpacing.xs) {
+                    Text("Kuma v\(appVersion) (\(buildNumber))")
+                        .font(KumaFont.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, KumaSpacing.sm)
+                .padding(.bottom, KumaSpacing.lg)
             }
             .padding(.horizontal, KumaSpacing.xxl)
             .padding(.vertical, KumaSpacing.xl)
@@ -32,6 +43,14 @@ public struct SettingsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Settings")
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 }
 

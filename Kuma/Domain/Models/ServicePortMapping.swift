@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ServicePortMapping: Identifiable, Codable, Equatable, Sendable, Hashable {
+public nonisolated struct ServicePortMapping: Identifiable, Codable, Equatable, Sendable, Hashable {
     public var id: UUID
     public var serviceID: UUID?
     public var localPort: Int

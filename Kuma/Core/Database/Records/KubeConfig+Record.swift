@@ -3,8 +3,8 @@ import GRDB
 
 // MARK: - KubeConfig GRDB Record Conformance
 
-extension KubeConfig: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "kube_config"
+nonisolated extension KubeConfig: FetchableRecord, PersistableRecord {
+    public nonisolated static let databaseTableName = "kube_config"
 
     public nonisolated init(row: Row) throws {
         let idStr: String = row["id"]

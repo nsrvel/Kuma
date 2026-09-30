@@ -30,9 +30,9 @@ extension ServicesDeckView {
         Task {
             do {
                 let dataPort = DataPortRepository()
-                let backup = try await dataPort.exportWorkspace(id: workspaceID)
+                let backup = try await dataPort.exportData(scope: .workspace(workspaceID))
                 let data = try DataPortService.encodeBackup(backup)
-                try data.write(to: url)
+                try data.write(to: url, options: .atomic)
             } catch {
                 alertMessage = "Failed to export workspace: \(error.localizedDescription)"
             }
@@ -66,7 +66,7 @@ extension ServicesDeckView {
     public func processWorkspaceImportUrl(_ url: URL) {
         do {
             let data = try Data(contentsOf: url)
-            let backup = try DataPortService.decodeBackup(from: data)
+            let backup = try DataPortService.parseAnyBackup(from: data, targetWorkspaceID: workspaceID)
             self.pendingImportBackup = backup
             self.pendingImportFileName = url.lastPathComponent
         } catch {

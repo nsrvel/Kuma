@@ -3,133 +3,80 @@ import SwiftUI
 public struct ServiceInspectorView: View {
     public let serviceID: UUID
     public let workspaceID: UUID
-    @Bindable var viewModel: ServicesDeckViewModel
     @State private var inspectorVM: ServiceInspectorViewModel
+    @Environment(ServiceStateStore.self) var serviceStateStore
 
     public init(
         serviceID: UUID,
         workspaceID: UUID,
-        viewModel: ServicesDeckViewModel,
-        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository()
+        serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
+        stateStore: ServiceStateStore? = nil
     ) {
         self.serviceID = serviceID
         self.workspaceID = workspaceID
-        self.viewModel = viewModel
-        let snap = viewModel.snapshots.first(where: { $0.id == serviceID })
         _inspectorVM = State(initialValue: ServiceInspectorViewModel(
             serviceID: serviceID,
             workspaceID: workspaceID,
-            initialCategory: snap?.providerCategory,
-            initialName: snap?.name ?? "",
-            serviceRepository: serviceRepository
+            serviceRepository: serviceRepository,
+            stateStore: stateStore
         ))
-    }
-
-    private var snapshot: ServiceCardSnapshot? {
-        viewModel.snapshots.first(where: { $0.id == serviceID })
-    }
-
-    private var runtime: ServiceRuntimeState {
-        viewModel.runtimeStates[serviceID] ?? ServiceRuntimeState()
     }
 
     public var body: some View {
         VStack(spacing: 0) {
-            if let snapshot {
-                // Zone 1: Status Header (Fixed Top)
+            if let service = inspectorVM.service {
+                let isRunning = inspectorVM.isRunning
+                let isLocked = service.isDisabled || isRunning
+
+                let isViewingLogs = inspectorVM.isViewingLogs
+
+                // Zone 1: Native macOS Status Header (Icon turns into Back button when viewing logs)
                 InspectorStatusHeader(
-                    snapshot: snapshot,
-                    runtime: runtime,
-                    hasChanges: inspectorVM.hasPendingChanges,
-                    isSaving: inspectorVM.isSaving,
-                    onToggle: { viewModel.toggleService(id: serviceID) },
-                    onToggleStar: { viewModel.toggleStarred(id: serviceID, workspaceID: workspaceID) },
-                    onSave: {
-                        inspectorVM.saveChanges {
-                            viewModel.loadWorkspace(workspaceID: workspaceID)
-                        }
+                    service: service,
+                    provider: inspectorVM.activeProvider,
+                    runtime: ServiceRuntimeState(executionState: inspectorVM.executionState),
+                    isViewingLogs: isViewingLogs,
+                    onToggle: {
+                        inspectorVM.toggleRunning()
                     },
-                    onCancel: { inspectorVM.cancelChanges() }
+                    onToggleStar: {
+                        inspectorVM.toggleStarred()
+                    },
+                    onBack: {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            inspectorVM.isViewingLogs = false
+                        }
+                    }
                 )
 
                 Divider()
                     .padding(.horizontal, KumaSpacing.lg)
 
-                // Single Unified Scrollable Inspector View
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        // 1. General Identification Form
-                        ServiceGeneralSettingsView(
-                            name: $inspectorVM.generalDraft.name,
-                            serviceDescription: $inspectorVM.generalDraft.description,
-                            placeholder: "Postgres DB",
-                            icon: runtime.status.isOperational ? "lock.fill" : "info.circle",
-                            subtitle: "Service name and purpose"
+                Group {
+                    if isViewingLogs {
+                        // Dedicated Full-Height Seamless Live Terminal Viewport
+                        InspectorLiveConsoleView(
+                            serviceID: service.id,
+                            serviceName: service.name,
+                            isRunning: isRunning
                         )
-                        .disabled(runtime.status.isOperational)
-
-                        // 2. Providers Section (Selector + Inline Add/Edit)
-                        ServiceProvidersSectionView(
+                        .padding(.vertical, 4)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .move(edge: .trailing)),
+                            removal: .opacity.combined(with: .move(edge: .trailing))
+                        ))
+                    } else {
+                        InspectorConfigFormStack(
                             serviceID: serviceID,
-                            providers: inspectorVM.providers,
-                            activeProviderID: $inspectorVM.activeProviderID,
-                            isEditing: true,
-                            isRunning: runtime.status.isOperational,
-                            onSelectProvider: { newID in
-                                inspectorVM.switchProvider(to: newID) {
-                                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                                }
-                            },
-                            onSaveProvider: { provider in
-                                inspectorVM.saveProviderDirectly(provider) {
-                                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                                }
-                            },
-                            onDeleteProvider: { provider in
-                                inspectorVM.deleteProvider(provider) {
-                                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                                }
-                            }
-                        )
-
-                        // 3. Active Provider Configuration Form (Directly Inline)
-                        InspectorFormSections(
-                            providerCategory: inspectorVM.activeCategory,
-                            isEditing: true,
-                            kubeConfigVM: inspectorVM.kubeConfigVM,
-                            kubeDraft: $inspectorVM.kubeDraft,
-                            dockerDraft: $inspectorVM.dockerDraft,
-                            podmanDraft: $inspectorVM.podmanDraft,
-                            shellDraft: $inspectorVM.shellDraft,
-                            sshDraft: $inspectorVM.sshDraft,
-                            healthCheckDraft: $inspectorVM.healthCheckDraft,
-                            tunnelDraft: $inspectorVM.tunnelDraft,
-                            monitorDraft: $inspectorVM.monitorDraft,
-                            ports: $inspectorVM.draftPorts
-                        )
-                        .disabled(runtime.status.isOperational)
-
-                        // 4. Options Section (Disable, Delete Service)
-                        InspectorOptionsSection(
-                            isDisabled: Binding(
-                                get: { inspectorVM.generalDraft.isDisabled },
-                                set: { newValue in
-                                    inspectorVM.generalDraft.isDisabled = newValue
-                                    inspectorVM.toggleDisableDirectly(newValue) {
-                                        viewModel.loadWorkspace(workspaceID: workspaceID)
-                                    }
-                                }
-                            ),
-                            isRunning: runtime.status.isOperational,
-                            isEditing: true,
-                            onDelete: {
-                                inspectorVM.showDeleteConfirmation = true
-                            }
+                            isLocked: isLocked,
+                            isRunning: isRunning,
+                            inspectorVM: inspectorVM,
+                            service: service
                         )
                     }
-                    .padding(KumaSpacing.lg)
                 }
-                .animation(.easeInOut(duration: 0.2), value: inspectorVM.activeCategory)
+                .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isViewingLogs)
+                .animation(.easeInOut(duration: 0.18), value: isRunning)
             } else {
                 KumaEmptyStateView(
                     iconName: "sidebar.right",
@@ -139,25 +86,50 @@ public struct ServiceInspectorView: View {
             }
         }
         .task(id: serviceID) {
-            await inspectorVM.loadServiceDetails()
+            inspectorVM.stateStore = serviceStateStore
+            await inspectorVM.loadService(id: serviceID)
         }
-        .onChange(of: inspectorVM.activeProviderID) { _, newActiveID in
-            inspectorVM.populateActiveProviderFields(for: newActiveID)
+        .task(id: serviceID) {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    for await notif in NotificationCenter.default.notifications(named: .kumaServiceStateChanged) {
+                        if let changedID = notif.object as? UUID, changedID == serviceID, let state = notif.userInfo?["state"] as? ServiceState {
+                            await MainActor.run {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    inspectorVM.isRunning = state.isOperational
+                                }
+                            }
+                        }
+                    }
+                }
+                group.addTask {
+                    for await notif in NotificationCenter.default.notifications(named: .kumaServiceUpdated) {
+                        if notif.userInfo?["source"] as? String == "inspector" {
+                            continue
+                        }
+                        if let changedID = notif.object as? UUID, changedID == serviceID {
+                            await inspectorVM.loadService(id: serviceID)
+                        }
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            Task {
+                await inspectorVM.flushPendingAutoSave()
+            }
         }
         .confirmationDialog(
             "Delete Service?",
             isPresented: $inspectorVM.showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete Service", role: .destructive) {
-                inspectorVM.deleteService {
-                    viewModel.loadWorkspace(workspaceID: workspaceID)
-                    viewModel.selectedServiceID = nil
-                }
+            Button("Delete", role: .destructive) {
+                inspectorVM.deleteService()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This action cannot be undone. '\(inspectorVM.generalDraft.name)' and all associated runner configurations will be permanently deleted.")
+            Text("‘\(inspectorVM.service?.name ?? "Service")’ and its configurations will be permanently deleted.")
         }
     }
 }

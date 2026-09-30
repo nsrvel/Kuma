@@ -20,7 +20,7 @@ public struct CreateServiceProviderStepView: View {
             VStack(spacing: 4) {
                 Text("Select Provider")
                     .font(.system(size: 16, weight: .bold))
-                Text("Choose how this service will be configured on your Mac")
+                Text("Choose how this service will run")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -71,8 +71,7 @@ public struct CreateServiceProviderStepView: View {
                         .frame(width: 32, height: 32)
                         .shadow(color: .black.opacity(0.16), radius: 2, y: 1)
 
-                    Image(systemName: category.icon)
-                        .font(.system(size: 14, weight: .medium))
+                    ProviderBrandIcon(category: category, size: 16)
                         .foregroundStyle(.white)
                 }
 

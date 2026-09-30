@@ -12,18 +12,18 @@ public struct KumaCommands: Commands {
     public var body: some Commands {
         // 0. App Settings Menu & Shortcut (⌘,)
         CommandGroup(replacing: .appSettings) {
-            Button("Settings…") {
+            Button(KumaShortcuts.settings.title) {
                 NotificationCenter.default.post(name: .kumaOpenSettings, object: nil)
             }
-            .keyboardShortcut(",", modifiers: [.command])
+            .keyboardShortcut(KumaShortcuts.settings.key, modifiers: KumaShortcuts.settings.modifiers)
         }
 
         // 0.1 Standard Edit / Find Menu & Shortcut (⌘F)
         CommandGroup(after: .textEditing) {
-            Button("Find Services…") {
+            Button(KumaShortcuts.find.title) {
                 NotificationCenter.default.post(name: .kumaFocusSearch, object: nil)
             }
-            .keyboardShortcut("f", modifiers: [.command])
+            .keyboardShortcut(KumaShortcuts.find.key, modifiers: KumaShortcuts.find.modifiers)
         }
 
 
@@ -47,16 +47,16 @@ public struct KumaCommands: Commands {
             Button("New Workspace…") {
                 workspaceStore.showCreateSheet = true
             }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .keyboardShortcut(KumaShortcuts.newWorkspace.key, modifiers: KumaShortcuts.newWorkspace.modifiers)
         }
 
         // 2. Help Menu — re-show the onboarding guide
         CommandGroup(replacing: .help) {
-            Button("Kuma Onboarding Guide") {
+            Button(KumaShortcuts.help.title) {
                 coordinator.resetToOnboarding()
                 NotificationCenter.default.post(name: .kumaOpenOnboarding, object: nil)
             }
-            .keyboardShortcut("?", modifiers: [.command])
+            .keyboardShortcut(KumaShortcuts.help.key, modifiers: KumaShortcuts.help.modifiers)
         }
     }
 }

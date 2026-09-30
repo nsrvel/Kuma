@@ -18,14 +18,14 @@ public struct ProcessMonitorSettingsView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             KumaTextField(
-                label: "Process Name / Binary",
+                label: "Process Name",
                 value: $monitorProcessName,
                 placeholder: "redis-server"
             )
 
             KumaRowPickerField(
                 label: "Polling Interval",
-                description: "Frequency of checking process existence in local OS.",
+                description: "Frequency of background process checks.",
                 options: HealthCheckIntervalOption.allCases,
                 selection: $monitorInterval,
                 titleResolver: { $0.title }

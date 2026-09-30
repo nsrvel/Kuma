@@ -15,7 +15,7 @@ public struct ContainersAndClustersStepView: View {
                     .font(KumaFont.stepTitle)
                     .foregroundStyle(.primary)
 
-                Text("CLI tools detected on your Mac. You only need the ones you plan to use.")
+                Text("CLI tools detected on your system. Only configure what you need.")
                     .font(KumaFont.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -51,9 +51,13 @@ public struct ContainersAndClustersStepView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Re-scan Containers and Clusters")
             .disabled(viewModel.isScanning)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            await viewModel.scanDependenciesIfNeeded()
+        }
     }
 }
 

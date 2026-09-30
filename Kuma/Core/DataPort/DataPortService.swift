@@ -25,6 +25,7 @@ public nonisolated enum DataPortService {
         public let exportedAt: Date
         public let workspaces: [Workspace]
         public let workspaceImages: [String: String]? // [workspaceID: Base64PNG]
+        public let groups: [ServiceGroup]?
         public let services: [ExportService]
         public let providers: [ExportProvider]
         public let portMappings: [ExportPortMapping]
@@ -35,6 +36,7 @@ public nonisolated enum DataPortService {
             exportedAt: Date = Date(),
             workspaces: [Workspace] = [],
             workspaceImages: [String: String]? = nil,
+            groups: [ServiceGroup]? = nil,
             services: [ExportService] = [],
             providers: [ExportProvider] = [],
             portMappings: [ExportPortMapping] = [],
@@ -44,6 +46,7 @@ public nonisolated enum DataPortService {
             self.exportedAt = exportedAt
             self.workspaces = workspaces
             self.workspaceImages = workspaceImages
+            self.groups = groups
             self.services = services
             self.providers = providers
             self.portMappings = portMappings
@@ -54,25 +57,62 @@ public nonisolated enum DataPortService {
     public struct ExportService: Codable, Sendable, Identifiable {
         public let id: UUID
         public let name: String
+        public let icon: String?
+        public let colorHex: String?
         public let description: String?
+        public let activeProviderID: UUID?
         public let workspaceID: UUID?
+        public let groupIDs: [UUID]?
         public let isDisabled: Bool?
         public let isStarred: Bool?
 
         public nonisolated init(
             id: UUID = UUID(),
             name: String,
+            icon: String? = nil,
+            colorHex: String? = nil,
             description: String? = nil,
+            activeProviderID: UUID? = nil,
             workspaceID: UUID? = nil,
+            groupIDs: [UUID]? = nil,
             isDisabled: Bool? = false,
             isStarred: Bool? = false
         ) {
             self.id = id
             self.name = name
+            self.icon = icon
+            self.colorHex = colorHex
             self.description = description
+            self.activeProviderID = activeProviderID
             self.workspaceID = workspaceID
+            self.groupIDs = groupIDs
             self.isDisabled = isDisabled
             self.isStarred = isStarred
+        }
+    }
+
+    /// Single-service complete standalone export structure (for clipboard JSON copying & sharing)
+    public struct SingleServiceExport: Codable, Sendable, Identifiable {
+        public let version: Int
+        public let exportedAt: Date
+        public let service: ExportService
+        public let providers: [ExportProvider]
+        public let portMappings: [ExportPortMapping]
+
+        public var id: UUID { service.id }
+
+        public nonisolated init(
+            version: Int = DataPortService.currentVersion,
+            exportedAt: Date = Date(),
+            service: ExportService,
+            providers: [ExportProvider],
+            portMappings: [ExportPortMapping]
+        ) {
+            self.version = version
+            self.exportedAt = exportedAt
+            self.service = service
+            self.providers = providers
+            self.portMappings = portMappings
         }
     }
 
@@ -282,6 +322,62 @@ public nonisolated enum DataPortService {
         }
     }
 
+    // MARK: - Scopes & Polymorphic Ingestion
+
+    public enum DataPortScope: Sendable, Equatable {
+        case all
+        case workspace(UUID)
+        case service(UUID)
+    }
+
+    public enum DataPortImportStrategy: Sendable {
+        case preserveOrMerge
+        case reassignIDs(targetWorkspaceID: UUID)
+    }
+
+    /// Converts a standalone single-service export payload into standard KumaBackup representation.
+    public static func wrapSingleService(_ singleExport: SingleServiceExport, targetWorkspaceID: UUID? = nil) -> KumaBackup {
+        var service = singleExport.service
+        if let targetWorkspaceID {
+            service = ExportService(
+                id: service.id,
+                name: service.name,
+                icon: service.icon,
+                colorHex: service.colorHex,
+                description: service.description,
+                activeProviderID: service.activeProviderID,
+                workspaceID: targetWorkspaceID,
+                groupIDs: service.groupIDs,
+                isDisabled: service.isDisabled,
+                isStarred: service.isStarred
+            )
+        }
+
+        return KumaBackup(
+            version: singleExport.version,
+            exportedAt: singleExport.exportedAt,
+            workspaces: [],
+            workspaceImages: nil,
+            groups: nil,
+            services: [service],
+            providers: singleExport.providers,
+            portMappings: singleExport.portMappings,
+            kubeConfigs: []
+        )
+    }
+
+    /// Polymorphic parser that handles both full KumaBackup and SingleServiceExport gracefully.
+    public static func parseAnyBackup(from data: Data, targetWorkspaceID: UUID? = nil) throws -> KumaBackup {
+        if let backup = try? decodeBackup(from: data) {
+            return backup
+        }
+        if let singleService = try? decodeSingleService(from: data) {
+            return wrapSingleService(singleService, targetWorkspaceID: targetWorkspaceID)
+        }
+        // If both fail, re-run decodeBackup to throw the descriptive JSON decoding error or version error
+        return try decodeBackup(from: data)
+    }
+
     // MARK: - Export & Import Engine
 
     public static func encodeBackup(_ backup: KumaBackup) throws -> Data {
@@ -303,6 +399,19 @@ public nonisolated enum DataPortService {
         return backup
     }
 
+    public static func encodeSingleService(_ item: SingleServiceExport) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(item)
+    }
+
+    public static func decodeSingleService(from data: Data) throws -> SingleServiceExport {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(SingleServiceExport.self, from: data)
+    }
+
     /// Standardized ISO formatted date suffix for backup filenames (e.g. "2026-08-15")
     public static var backupDateString: String {
         let formatter = DateFormatter()
@@ -312,15 +421,27 @@ public nonisolated enum DataPortService {
 
     // MARK: - Factory Reset & Relaunch
 
-    public static func resetAllAppStorage() async {
+    public static func resetAllAppStorage(defaults: UserDefaults = .standard) async {
+        // 0. Terminate all running service processes / tunnels cleanly
+        await ProcessRegistry.shared.terminateAll()
+
         // 1. Wipe UserDefaults
-        if let bundleID = Bundle.main.bundleIdentifier {
-            UserDefaults.standard.removePersistentDomain(forName: bundleID)
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil || NSClassFromString("XCTestCase") != nil
+        if !isTesting, let bundleID = Bundle.main.bundleIdentifier {
+            defaults.removePersistentDomain(forName: bundleID)
+        } else if isTesting {
+            // In testing, remove known settings keys safely without blowing away the host test runner's standard defaults
+            defaults.removeObject(forKey: KumaSettingsKey.hasCompletedOnboarding)
+            defaults.removeObject(forKey: KumaSettingsKey.customKubectlPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customKubeconfigPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customDockerPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customPodmanPath)
+            defaults.removeObject(forKey: KumaSettingsKey.cloudflaredPath)
+            defaults.removeObject(forKey: KumaSettingsKey.customNgrokPath)
         }
-        UserDefaults.standard.synchronize()
 
         // 2. Wipe SQLite DB
-        try? await AppDatabase.shared.wipeAndResetDatabase()
+        try? AppDatabase.shared.wipeAndResetDatabase()
 
         // 3. Clear Local Workspace Images
         WorkspaceImageStore.shared.clearCache()
@@ -350,7 +471,7 @@ public nonisolated enum DataPortService {
             let url = URL(fileURLWithPath: bundlePath)
             let config = NSWorkspace.OpenConfiguration()
             NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     NSApp.terminate(nil)
                 }
             }

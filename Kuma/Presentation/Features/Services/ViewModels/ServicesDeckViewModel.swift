@@ -7,45 +7,115 @@ import os
 public final class ServicesDeckViewModel {
     private static let logger = Logger(subsystem: "lokastudio.kuma", category: "ServicesDeckViewModel")
 
-    public var searchText: String = ""
-    public var selectedStatuses: Set<ServiceStatusFilterOption> = []
-    public var selectedProviders: Set<ProviderCategory> = []
-    public var sortBy: ServiceSortOption = .name
+    // MARK: - Filter Inputs (each triggers recompute on change)
+
+    public var searchText: String = "" {
+        didSet {
+            if oldValue != searchText {
+                searchDebounceTask?.cancel()
+                searchDebounceTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: 150_000_000)
+                    guard !Task.isCancelled, let self else { return }
+                    self.recomputeFilteredSnapshots()
+                }
+            }
+        }
+    }
+    private var searchDebounceTask: Task<Void, Never>? = nil
+    public var selectedStatuses: Set<ServiceStatusFilterOption> = [] {
+        didSet { if oldValue != selectedStatuses { recomputeFilteredSnapshots() } }
+    }
+    public var selectedProviders: Set<ProviderCategory> = [] {
+        didSet { if oldValue != selectedProviders { recomputeFilteredSnapshots() } }
+    }
+    public var sortBy: ServiceSortOption = .name {
+        didSet { if oldValue != sortBy { recomputeFilteredSnapshots() } }
+    }
+    public var isStarredOnly: Bool = false {
+        didSet { if oldValue != isStarredOnly { recomputeFilteredSnapshots() } }
+    }
+    public var filterGroupID: UUID? = nil {
+        didSet { if oldValue != filterGroupID { recomputeFilteredSnapshots() } }
+    }
+
+    // MARK: - Non-Filter State (changes do NOT trigger recompute)
+
     public var viewMode: DeckViewMode = .card
     public var isInspectorPresented: Bool = false
     public var selectedServiceID: UUID? = nil
-    public var isStarredOnly: Bool = false
     public var hasInitialLoaded: Bool = false
+    public var servicePendingDeletion: ServiceCardSnapshot? = nil
 
-    // Tier 1: Static Snapshots (~64B per item)
-    public var snapshots: [ServiceCardSnapshot] = []
+    // MARK: - Tier 1: Static Snapshots (~64B per item)
 
-    // Tier 2: Live Runtime States (isolated from static list)
+    public var snapshots: [ServiceCardSnapshot] = [] {
+        didSet { recomputeFilteredSnapshots() }
+    }
+
+    // MARK: - Tier 2: Cached Filtered Output (B1 Fix)
+
+    /// Cached filtered + sorted projection. Updated only when filter inputs or snapshots change.
+    public private(set) var filteredSnapshots: [ServiceCardSnapshot] = []
+
+    /// Monotonic version counter for lightweight animation tracking (B2 Fix).
+    /// Views use this instead of diffing the full [ServiceCardSnapshot] array.
+    public private(set) var filterVersion: Int = 0
+
+    // MARK: - Tier 3: Live Runtime States (isolated from static list)
+
     public var runtimeStates: [UUID: ServiceRuntimeState] = [:]
 
+    public var canStartAll: Bool {
+        snapshots.contains { !$0.isDisabled && runtimeStates[$0.id]?.status.isOperational != true }
+    }
+
+    public var canStopAll: Bool {
+        snapshots.contains { runtimeStates[$0.id]?.status.isOperational == true }
+    }
+
+    // MARK: - Groups Data
+    public var groups: [ServiceGroup] = []
+
     private let serviceRepository: any ServiceRepositoryProtocol
+    private let groupRepository: any ServiceGroupRepositoryProtocol
+    public var stateStore: ServiceStateStore?
+    private let userDefaults: UserDefaults
     private var loadTask: Task<Void, Never>? = nil
 
     public init(
         serviceRepository: any ServiceRepositoryProtocol = ServiceRepository(),
-        isStarredOnly: Bool = false
+        groupRepository: any ServiceGroupRepositoryProtocol = ServiceGroupRepository(),
+        stateStore: ServiceStateStore? = nil,
+        userDefaults: UserDefaults = .standard,
+        isStarredOnly: Bool = false,
+        filterGroupID: UUID? = nil
     ) {
         self.serviceRepository = serviceRepository
+        self.groupRepository = groupRepository
+        self.stateStore = stateStore
+        self.userDefaults = userDefaults
         self.isStarredOnly = isStarredOnly
+        self.filterGroupID = filterGroupID
     }
 
-    // MARK: - Filtered & Sorted Projections (Ultra-Fast Zero Allocation)
+    // MARK: - Filtered & Sorted Projection Engine
 
-    public var filteredSnapshots: [ServiceCardSnapshot] {
+    /// Explicitly recomputes the cached filteredSnapshots.
+    /// Called by didSet observers on filter inputs, snapshots, and by runtime-aware methods.
+    private func recomputeFilteredSnapshots() {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let hasSearch = !query.isEmpty
         let hasStatusFilter = !selectedStatuses.isEmpty
         let hasProviderFilter = !selectedProviders.isEmpty
         let starredOnly = isStarredOnly
+        let targetGroupID = filterGroupID
 
         // 1. Single-Pass High-Speed Token Matching
         var result = snapshots.filter { snapshot in
             if starredOnly && !snapshot.isStarred {
+                return false
+            }
+            if let targetGroupID, !snapshot.groupIDs.contains(targetGroupID) {
                 return false
             }
             if hasSearch {
@@ -85,7 +155,7 @@ public final class ServicesDeckViewModel {
             result.sort { a, b in
                 let priorityA: Int = a.isDisabled ? 5 : (runtimeStates[a.id]?.status.sortPriority ?? 4)
                 let priorityB: Int = b.isDisabled ? 5 : (runtimeStates[b.id]?.status.sortPriority ?? 4)
-                
+
                 if priorityA != priorityB {
                     return priorityA < priorityB
                 }
@@ -95,7 +165,8 @@ public final class ServicesDeckViewModel {
             result.sort { $0.createdAt > $1.createdAt }
         }
 
-        return result
+        filteredSnapshots = result
+        filterVersion += 1
     }
 
     // MARK: - Actions
@@ -109,56 +180,251 @@ public final class ServicesDeckViewModel {
 
     public func loadWorkspaceAsync(workspaceID: UUID) async {
         do {
-            let loaded = try await serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
+            async let loadedSnapshots = serviceRepository.fetchSnapshots(forWorkspace: workspaceID)
+            async let loadedGroups = groupRepository.fetchAll(workspaceID: workspaceID)
+
+            let (loaded, groups) = try await (loadedSnapshots, loadedGroups)
             guard !Task.isCancelled else { return }
+
+            // Batch seed or refresh live runtime states from ProcessRegistry in 1 call (PERF-01)
+            let serviceIDs = loaded.map(\.id)
+            if let store = self.stateStore {
+                await store.refreshProcessStates(for: serviceIDs)
+                for id in serviceIDs {
+                    self.runtimeStates[id] = store.runtime(for: id)
+                }
+            } else {
+                let processStates = await ProcessRegistry.shared.runningStates(for: serviceIDs)
+                for (id, state) in processStates {
+                    self.runtimeStates[id] = ServiceRuntimeState(executionState: state)
+                }
+            }
+
+            let isFirstLoad = !self.hasInitialLoaded
+            self.groups = groups
             self.snapshots = loaded
             self.hasInitialLoaded = true
 
-            // Ensure initial runtime state exists for each service
-            for snapshot in loaded {
-                if self.runtimeStates[snapshot.id] == nil {
-                    self.runtimeStates[snapshot.id] = ServiceRuntimeState(status: .stopped, isLoading: false)
-                }
+            // Auto-start services if enabled and there are saved active service IDs from previous session
+            if isFirstLoad && KumaSettingsKey.bool(forKey: KumaSettingsKey.autoResumeServices, defaultValue: false, defaults: self.userDefaults) {
+                resumeServicesIfNeeded(loadedSnapshots: loaded)
             }
         } catch {
             guard !Task.isCancelled else { return }
-            Self.logger.error("Failed to load snapshots for workspace \(workspaceID): \(error.localizedDescription)")
+            Self.logger.error("Failed to load workspace \(workspaceID): \(error.localizedDescription)")
             self.snapshots = []
             self.hasInitialLoaded = true
         }
     }
 
-    public func toggleService(id: UUID) {
-        var current = runtimeStates[id] ?? ServiceRuntimeState()
-        if current.status.isOperational {
-            current.status = .stopped
-        } else {
-            current.status = .running
+    private func resumeServicesIfNeeded(loadedSnapshots: [ServiceCardSnapshot]) {
+        guard let savedStrings = userDefaults.stringArray(forKey: KumaSettingsKey.activeServiceIDsBeforeQuit),
+              !savedStrings.isEmpty else { return }
+
+        let savedUUIDs = Set(savedStrings.compactMap(UUID.init))
+        let candidates = loadedSnapshots.filter { !($0.isDisabled) && savedUUIDs.contains($0.id) }
+        guard !candidates.isEmpty else { return }
+
+        // Remove matched IDs from saved list so they aren't restarted repeatedly
+        let remaining = savedUUIDs.subtracting(candidates.map(\.id))
+        userDefaults.set(remaining.map(\.uuidString), forKey: KumaSettingsKey.activeServiceIDsBeforeQuit)
+
+        Task {
+            // Gentle stagger between auto-started services
+            for snapshot in candidates {
+                guard runtimeStates[snapshot.id]?.status.isOperational != true else { continue }
+                stateStore?.setExecutionState(.starting, for: snapshot.id)
+                runtimeStates[snapshot.id] = ServiceRuntimeState(status: .starting, isLoading: true)
+                NotificationCenter.default.post(
+                    name: .kumaServiceStateChanged,
+                    object: snapshot.id,
+                    userInfo: ["state": ServiceState.starting]
+                )
+                do {
+                    try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
+                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
+                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
+                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
+                    NotificationCenter.default.post(
+                        name: .kumaServiceStateChanged,
+                        object: snapshot.id,
+                        userInfo: ["state": ServiceState.running]
+                    )
+                } catch {
+                    Self.logger.error("Auto-start failed for '\(snapshot.name)': \(error.localizedDescription)")
+                    stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
+                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .crashed, isLoading: false)
+                    NotificationCenter.default.post(
+                        name: .kumaServiceStateChanged,
+                        object: snapshot.id,
+                        userInfo: ["state": ServiceState.crashed]
+                    )
+                }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
         }
-        runtimeStates[id] = current
+    }
+
+    /// Granular single-service snapshot refresh to avoid full workspace reload (SYNC-03 / PERF-04)
+    public func refreshSingleServiceSnapshot(id: UUID) async {
+        do {
+            if let updated = try await serviceRepository.fetchSnapshot(serviceID: id) {
+                if let idx = snapshots.firstIndex(where: { $0.id == id }) {
+                    snapshots[idx] = updated
+                } else {
+                    snapshots.append(updated)
+                }
+            } else {
+                snapshots.removeAll(where: { $0.id == id })
+                runtimeStates.removeValue(forKey: id)
+            }
+            if let store = stateStore {
+                await store.refreshProcessStates(for: [id])
+                runtimeStates[id] = store.runtime(for: id)
+            }
+        } catch {
+            Self.logger.error("Failed to reload single service snapshot \(id): \(error.localizedDescription)")
+        }
+    }
+
+    public func toggleService(id: UUID) {
+        Task {
+            await toggleServiceAsync(id: id)
+        }
+    }
+
+    public func toggleServiceAsync(id: UUID) async {
+        let wasRunning = (runtimeStates[id] ?? .idle).status.isOperational
+
+        if wasRunning {
+            stateStore?.setExecutionState(.stopping, for: id)
+            runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
+            await ServiceExecutionEngine.shared.stop(serviceID: id)
+            stateStore?.setExecutionState(.idle, for: id)
+            runtimeStates[id] = ServiceRuntimeState(status: .stopped, isLoading: false)
+        } else {
+            stateStore?.setExecutionState(.starting, for: id)
+            runtimeStates[id] = ServiceRuntimeState(status: .starting, isLoading: true)
+            do {
+                try await ServiceExecutionEngine.shared.start(serviceID: id)
+                if let proc = await ProcessRegistry.shared.getSnapshot(serviceID: id) {
+                    stateStore?.setExecutionState(.running(pid: proc.pid), for: id)
+                } else {
+                    stateStore?.setExecutionState(.running(pid: 0), for: id)
+                }
+                runtimeStates[id] = ServiceRuntimeState(status: .running, isLoading: false)
+            } catch {
+                Self.logger.error("Failed to start service \(id): \(error.localizedDescription)")
+                stateStore?.setExecutionState(.crashed(exitCode: 1), for: id)
+                runtimeStates[id] = ServiceRuntimeState(status: .crashed, isLoading: false)
+            }
+        }
+
+        // Recompute if status filter is active or sorting depends on status
+        if !selectedStatuses.isEmpty || sortBy == .status {
+            recomputeFilteredSnapshots()
+        }
+    }
+
+    public func startAllServices() {
+        Task {
+            let targetSnapshots = snapshots.filter { snapshot in
+                let isAlreadyRunning = (stateStore?.state(for: snapshot.id).isOperational == true) ||
+                                       (runtimeStates[snapshot.id]?.status.isOperational == true)
+                return !snapshot.isDisabled && !isAlreadyRunning
+            }
+            
+            // Staggered launch: starts services sequentially with a 150ms delay between each
+            // to avoid extreme spikes in CPU, network socket binds, or OS process limits.
+            for snapshot in targetSnapshots {
+                let isAlreadyRunning = (stateStore?.state(for: snapshot.id).isOperational == true) ||
+                                       (runtimeStates[snapshot.id]?.status.isOperational == true)
+                guard !isAlreadyRunning else { continue }
+
+                stateStore?.setExecutionState(.starting, for: snapshot.id)
+                runtimeStates[snapshot.id] = ServiceRuntimeState(status: .starting, isLoading: true)
+                do {
+                    try await ServiceExecutionEngine.shared.start(serviceID: snapshot.id)
+                    let pid = await ProcessRegistry.shared.getSnapshot(serviceID: snapshot.id)?.pid ?? 0
+                    stateStore?.setExecutionState(.running(pid: pid), for: snapshot.id)
+                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .running, isLoading: false)
+                } catch {
+                    Self.logger.error("Failed to start service \(snapshot.name): \(error.localizedDescription)")
+                    stateStore?.setExecutionState(.crashed(exitCode: 1), for: snapshot.id)
+                    runtimeStates[snapshot.id] = ServiceRuntimeState(status: .crashed, isLoading: false)
+                }
+                
+                // 150ms gentle stagger gap
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+            
+            if !selectedStatuses.isEmpty || sortBy == .status {
+                recomputeFilteredSnapshots()
+            }
+        }
+    }
+
+    public func stopAllServices() {
+        Task {
+            let runningIDs = snapshots
+                .map(\.id)
+                .filter { id in
+                    (stateStore?.state(for: id).isOperational == true) ||
+                    (runtimeStates[id]?.status.isOperational == true)
+                }
+            
+            // Mark all as stopping immediately for UI responsiveness
+            for id in runningIDs {
+                stateStore?.setExecutionState(.stopping, for: id)
+                runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
+            }
+            
+            // Stop services cleanly
+            for id in runningIDs {
+                await ServiceExecutionEngine.shared.stop(serviceID: id)
+                stateStore?.setExecutionState(.idle, for: id)
+                runtimeStates[id] = ServiceRuntimeState(status: .stopped, isLoading: false)
+            }
+            
+            if !selectedStatuses.isEmpty || sortBy == .status {
+                recomputeFilteredSnapshots()
+            }
+        }
+    }
+
+    public func restartService(id: UUID) {
+        Task {
+            runtimeStates[id] = ServiceRuntimeState(status: .stopping, isLoading: true)
+            await ServiceExecutionEngine.shared.stop(serviceID: id)
+            try? await Task.sleep(nanoseconds: 300_000_000)
+
+            runtimeStates[id] = ServiceRuntimeState(status: .starting, isLoading: true)
+            do {
+                try await ServiceExecutionEngine.shared.start(serviceID: id)
+                runtimeStates[id] = ServiceRuntimeState(status: .running, isLoading: false)
+            } catch {
+                Self.logger.error("Failed to restart service \(id): \(error.localizedDescription)")
+                runtimeStates[id] = ServiceRuntimeState(status: .crashed, isLoading: false)
+            }
+
+            if !selectedStatuses.isEmpty || sortBy == .status {
+                recomputeFilteredSnapshots()
+            }
+        }
     }
 
     public func toggleStarred(id: UUID, workspaceID: UUID) {
-        // 1. Optimistic zero-latency UI update
+        KumaHapticManager.shared.tap()
+        // 1. Optimistic zero-latency UI update (struct copy, no searchKey recompute)
         if let idx = snapshots.firstIndex(where: { $0.id == id }) {
-            let current = snapshots[idx]
-            let updated = ServiceCardSnapshot(
-                id: current.id,
-                name: current.name,
-                isDisabled: current.isDisabled,
-                isStarred: !current.isStarred,
-                subtitle: current.subtitle,
-                providerCategory: current.providerCategory,
-                portDisplays: current.portDisplays,
-                createdAt: current.createdAt
-            )
-            snapshots[idx] = updated
+            snapshots[idx] = snapshots[idx].toggling(starred: !snapshots[idx].isStarred)
         }
 
         // 2. Asynchronously persist to SQLite
         Task {
             do {
                 _ = try await serviceRepository.toggleStarred(serviceID: id)
+                NotificationCenter.default.post(name: .kumaServiceUpdated, object: id)
             } catch {
                 Self.logger.error("Failed to persist toggleStarred for service \(id): \(error.localizedDescription)")
                 // Rollback on failure
@@ -167,17 +433,221 @@ public final class ServicesDeckViewModel {
         }
     }
 
-    public func selectService(_ id: UUID) {
+    public func toggleDisabled(id: UUID, workspaceID: UUID) {
+        guard let idx = snapshots.firstIndex(where: { $0.id == id }) else { return }
+        let newDisabled = !snapshots[idx].isDisabled
+
+        // 1. Optimistic Update
+        let old = snapshots[idx]
+        snapshots[idx] = ServiceCardSnapshot(
+            id: old.id,
+            name: old.name,
+            groupIDs: old.groupIDs,
+            isDisabled: newDisabled,
+            isStarred: old.isStarred,
+            subtitle: old.subtitle,
+            providerCategory: old.providerCategory,
+            portDisplays: old.portDisplays,
+            providerOptions: old.providerOptions,
+            createdAt: old.createdAt
+        )
+
+        // If disabling, also stop runtime
+        if newDisabled {
+            var rt = runtimeStates[id] ?? .idle
+            rt.status = .stopped
+            runtimeStates[id] = rt
+        }
+
+        // 2. Persist
+        Task {
+            do {
+                if var svc = try await serviceRepository.fetchService(id: id) {
+                    svc.isDisabled = newDisabled
+                    svc.updatedAt = Date()
+                    try await serviceRepository.updateService(svc)
+                    NotificationCenter.default.post(name: .kumaServiceUpdated, object: id)
+                }
+            } catch {
+                Self.logger.error("Failed to toggle disabled for service \(id): \(error)")
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+            }
+        }
+    }
+
+    public func switchProvider(serviceID: UUID, providerID: UUID, workspaceID: UUID) {
+        let isCurrentlyRunning = runtimeStates[serviceID]?.status.isOperational == true
+
+        Task {
+            do {
+                // If service is running, seamlessly stop old runner before switching
+                if isCurrentlyRunning {
+                    runtimeStates[serviceID] = ServiceRuntimeState(status: .stopping, isLoading: true)
+                    await ServiceExecutionEngine.shared.stop(serviceID: serviceID)
+                }
+
+                if var svc = try await serviceRepository.fetchService(id: serviceID) {
+                    svc.activeProviderID = providerID
+                    svc.updatedAt = Date()
+                    try await serviceRepository.updateService(svc)
+                    await loadWorkspaceAsync(workspaceID: workspaceID)
+                    NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+
+                    // If it was running, restart immediately with new provider runner
+                    if isCurrentlyRunning {
+                        runtimeStates[serviceID] = ServiceRuntimeState(status: .starting, isLoading: true)
+                        try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
+                        runtimeStates[serviceID] = ServiceRuntimeState(status: .running, isLoading: false)
+                    }
+                }
+            } catch {
+                Self.logger.error("Failed to switch provider for service \(serviceID): \(error)")
+                runtimeStates[serviceID] = ServiceRuntimeState(status: .crashed, isLoading: false)
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+            }
+        }
+    }
+
+    public func toggleGroup(serviceID: UUID, groupID: UUID, workspaceID: UUID) {
+        guard let idx = snapshots.firstIndex(where: { $0.id == serviceID }) else { return }
+
+        // 1. Optimistic Update
+        let old = snapshots[idx]
+        var updatedGroupIDs = old.groupIDs
+        if updatedGroupIDs.contains(groupID) {
+            updatedGroupIDs.remove(groupID)
+        } else {
+            updatedGroupIDs.insert(groupID)
+        }
+
+        snapshots[idx] = ServiceCardSnapshot(
+            id: old.id,
+            name: old.name,
+            groupIDs: updatedGroupIDs,
+            isDisabled: old.isDisabled,
+            isStarred: old.isStarred,
+            subtitle: old.subtitle,
+            providerCategory: old.providerCategory,
+            portDisplays: old.portDisplays,
+            providerOptions: old.providerOptions,
+            createdAt: old.createdAt
+        )
+
+        if filterGroupID != nil {
+            recomputeFilteredSnapshots()
+        }
+
+        // 2. Persist
+        Task {
+            do {
+                _ = try await serviceRepository.toggleGroupMembership(serviceID: serviceID, groupID: groupID)
+                NotificationCenter.default.post(name: .kumaServiceUpdated, object: serviceID)
+            } catch {
+                Self.logger.error("Failed to toggle group membership for service \(serviceID): \(error)")
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+            }
+        }
+    }
+
+    public func duplicateService(id: UUID, workspaceID: UUID) {
+        guard let original = snapshots.first(where: { $0.id == id }) else { return }
+
+        let newServiceID = UUID()
+        let optimisticSnapshot = ServiceCardSnapshot(
+            id: newServiceID,
+            name: "\(original.name) (Copy)",
+            groupIDs: original.groupIDs,
+            isDisabled: original.isDisabled,
+            isStarred: original.isStarred,
+            subtitle: original.subtitle,
+            providerCategory: original.providerCategory,
+            portDisplays: original.portDisplays,
+            providerOptions: original.providerOptions,
+            createdAt: Date()
+        )
+
+        // Instant optimistic UI insertion (0ms perceived latency)
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+            snapshots.append(optimisticSnapshot)
+            recomputeFilteredSnapshots()
+        }
+
+        Task {
+            do {
+                _ = try await serviceRepository.duplicateService(sourceID: id, newID: newServiceID)
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+                NotificationCenter.default.post(name: .kumaServiceCreated, object: newServiceID)
+            } catch {
+                Self.logger.error("Failed to duplicate service \(id): \(error)")
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+            }
+        }
+    }
+
+    public func copyConfig(id: UUID) {
+        Task { @MainActor in
+            do {
+                let dataPort = DataPortRepository()
+                let jsonString = try await dataPort.exportSingleServiceJSON(serviceID: id)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(jsonString, forType: .string)
+                NSSound(named: "Purr")?.play()
+            } catch {
+                Self.logger.error("Failed to copy config for service \(id): \(error)")
+            }
+        }
+    }
+
+    public func promptDeleteService(id: UUID) {
+        if let snapshot = snapshots.first(where: { $0.id == id }) {
+            self.servicePendingDeletion = snapshot
+        }
+    }
+
+    public func confirmDeletePendingService(workspaceID: UUID) {
+        guard let pending = servicePendingDeletion else { return }
+        let id = pending.id
+        self.servicePendingDeletion = nil
+        deleteService(id: id, workspaceID: workspaceID)
+    }
+
+    public func deleteService(id: UUID, workspaceID: UUID) {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+            snapshots.removeAll(where: { $0.id == id })
+            runtimeStates.removeValue(forKey: id)
+            if selectedServiceID == id {
+                selectedServiceID = nil
+                isInspectorPresented = false
+            }
+        }
+
+        Task {
+            do {
+                try await serviceRepository.deleteService(id: id)
+                NotificationCenter.default.post(name: .kumaServiceDeleted, object: id)
+            } catch {
+                Self.logger.error("Failed to delete service \(id): \(error)")
+                await loadWorkspaceAsync(workspaceID: workspaceID)
+            }
+        }
+    }
+
+    public func selectService(_ id: UUID?) {
         self.selectedServiceID = id
-        self.isInspectorPresented = true
+        self.isInspectorPresented = (id != nil)
     }
 
     /// Batch apply runtime updates from background actor without invalidating static snapshot array
     public func applyRuntimeDiff(_ diff: [UUID: ServiceRuntimeState]) {
+        var changed = false
         for (id, state) in diff {
             if self.runtimeStates[id] != state {
                 self.runtimeStates[id] = state
+                changed = true
             }
+        }
+        if changed && (!selectedStatuses.isEmpty || sortBy == .status) {
+            recomputeFilteredSnapshots()
         }
     }
 }

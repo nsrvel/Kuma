@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Provider: Identifiable, Codable, Sendable, Equatable, Hashable {
+public nonisolated struct Provider: Identifiable, Codable, Sendable, Equatable, Hashable {
     public var id: UUID
     public var serviceID: UUID
     public var type: ProviderCategory

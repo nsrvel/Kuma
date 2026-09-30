@@ -26,7 +26,7 @@ public struct NewWorkspaceBottomButton: View {
                     .frame(width: 18, height: 18)
                     .padding(.trailing, 8)
 
-                Text("New Workspace…")
+                Text("New Workspace")
                     .font(.system(size: 13, weight: .regular))
 
                 Spacer(minLength: 0)

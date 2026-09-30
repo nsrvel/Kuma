@@ -99,6 +99,7 @@ public struct KumaPortMappingRow: View {
 public struct KumaPortMappingEditor: View {
     public let label: String
     @Binding public var items: [KumaPortMappingItem]
+    @Environment(\.isEnabled) private var isEnabled
     @State private var isAddHovered: Bool = false
 
     public init(label: String = "", items: Binding<[KumaPortMappingItem]>) {
@@ -140,18 +141,24 @@ public struct KumaPortMappingEditor: View {
                 } label: {
                     Text("Add port mapping")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isAddHovered ? Color.primary : Color.secondary)
+                        .foregroundStyle(isAddHovered && isEnabled ? Color.primary : Color.secondary)
                 }
                 .buttonStyle(.plain)
+                .opacity(isEnabled ? 1.0 : 0.45)
                 .onHover { hovering in
                     isAddHovered = hovering
                 }
-                .help("Add port mapping")
+                .help(isEnabled ? "Add port mapping" : "Stop service to edit ports")
 
                 Spacer()
             }
             .padding(.top, 4)
             .padding(.horizontal, 2)
+        }
+        .onAppear {
+            if items.isEmpty {
+                items.append(KumaPortMappingItem())
+            }
         }
     }
 

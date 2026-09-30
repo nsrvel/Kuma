@@ -63,7 +63,7 @@ public struct SSHSettingsView: View {
             // Authentication Method Dropdown
             KumaRowPickerField(
                 label: "Authentication",
-                description: "Method used to authenticate with remote server.",
+                description: "Authentication method for remote host.",
                 options: SSHAuthType.allCases,
                 selection: $authType,
                 titleResolver: { $0.rawValue }

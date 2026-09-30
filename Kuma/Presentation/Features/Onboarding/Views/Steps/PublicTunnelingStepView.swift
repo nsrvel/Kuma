@@ -15,7 +15,7 @@ public struct PublicTunnelingStepView: View {
                     .font(KumaFont.stepTitle)
                     .foregroundStyle(.primary)
 
-                Text("Optional utilities to expose your local services to the internet.")
+                Text("Utilities to expose local services to the internet.")
                     .font(KumaFont.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -51,9 +51,13 @@ public struct PublicTunnelingStepView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Re-scan Public Tunneling tools")
             .disabled(viewModel.isScanning)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            await viewModel.scanDependenciesIfNeeded()
+        }
     }
 }
 

@@ -38,7 +38,7 @@ public struct TunnelSettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             KumaRowPickerField(
                 label: "Tunnel Engine",
-                description: "The reverse-proxy daemon used to create public URLs.",
+                description: "Tunnel engine used to expose local services.",
                 options: TunnelEngineOption.allCases,
                 selection: $tunnelType,
                 titleResolver: { $0.title }
@@ -47,14 +47,14 @@ public struct TunnelSettingsView: View {
             Divider().opacity(0.3)
 
             KumaTextField(
-                label: "Target Local URL / Port",
+                label: "Target URL or Port",
                 value: $tunnelTargetUrl,
                 placeholder: "http://localhost:3000"
             )
 
             if tunnelType == .ngrok {
                 KumaSecureField(
-                    label: "Ngrok Auth Token (Optional)",
+                    label: "Ngrok Auth Token",
                     value: $ngrokAuthToken,
                     placeholder: "Leave blank if already configured in ~/.config/ngrok"
                 )

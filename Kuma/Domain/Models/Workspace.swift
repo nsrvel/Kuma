@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Workspace: Identifiable, Codable, Sendable, Equatable, Hashable {
+public nonisolated struct Workspace: Identifiable, Codable, Sendable, Equatable, Hashable {
     public let id: UUID
     public var name: String
     public var imagePath: String?

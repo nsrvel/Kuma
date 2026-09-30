@@ -3,51 +3,52 @@ import SwiftUI
 public struct ServiceProvidersSectionView: View {
     public let serviceID: UUID
     public let providers: [Provider]
-    @Binding public var activeProviderID: UUID?
-    public let isEditing: Bool
-    public let isRunning: Bool
+    public let activeProviderID: UUID?
+    public let isLocked: Bool
     public let onSelectProvider: (UUID) -> Void
-    public let onSaveProvider: (Provider) -> Void
+    public let onAddProvider: (Provider) -> Void
+    public let onUpdateProvider: (Provider) -> Void
     public let onDeleteProvider: (Provider) -> Void
 
-    @State private var isAddHovered: Bool = false
     @State private var showInlineForm: Bool = false
     @State private var editingProviderID: UUID? = nil
-
-    // Inline Form State
-    @State private var formLabel: String = ""
     @State private var formType: ProviderCategory = .docker
+    @State private var formLabel: String = ""
+    @State private var isAddHovered: Bool = false
     @State private var showDeleteConfirmation: Bool = false
     @State private var providerToDelete: Provider? = nil
 
     public init(
         serviceID: UUID,
         providers: [Provider],
-        activeProviderID: Binding<UUID?>,
-        isEditing: Bool = true,
-        isRunning: Bool = false,
-        onSelectProvider: @escaping (UUID) -> Void = { _ in },
-        onSaveProvider: @escaping (Provider) -> Void = { _ in },
-        onDeleteProvider: @escaping (Provider) -> Void = { _ in }
+        activeProviderID: UUID?,
+        isLocked: Bool = false,
+        onSelectProvider: @escaping (UUID) -> Void,
+        onAddProvider: @escaping (Provider) -> Void,
+        onUpdateProvider: @escaping (Provider) -> Void = { _ in },
+        onDeleteProvider: @escaping (Provider) -> Void
     ) {
         self.serviceID = serviceID
         self.providers = providers
-        self._activeProviderID = activeProviderID
-        self.isEditing = isEditing
-        self.isRunning = isRunning
+        self.activeProviderID = activeProviderID
+        self.isLocked = isLocked
         self.onSelectProvider = onSelectProvider
-        self.onSaveProvider = onSaveProvider
+        self.onAddProvider = onAddProvider
+        self.onUpdateProvider = onUpdateProvider
         self.onDeleteProvider = onDeleteProvider
     }
 
     public var body: some View {
         KumaFormSection(
             icon: "square.stack.3d.down.right.fill",
-            title: "Providers",
-            subtitle: "Select runner configuration"
+            title: "Providers"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                if showInlineForm {
+                if providers.isEmpty && !showInlineForm {
+                    emptyStateView
+                } else if !showInlineForm {
+                    providerListView
+                } else {
                     ServiceProvidersInlineFormView(
                         isEditing: editingProviderID != nil,
                         formType: $formType,
@@ -59,136 +60,6 @@ public struct ServiceProvidersSectionView: View {
                             }
                         }
                     )
-                } else if providers.isEmpty {
-                    VStack(alignment: .center, spacing: 8) {
-                        Text("No providers configured yet.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Button {
-                            openAddForm()
-                        } label: {
-                            Label("Add First Provider", systemImage: "plus")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 12)
-                } else {
-                    VStack(spacing: 6) {
-                        ForEach(providers) { provider in
-                            let isSelected = (activeProviderID == provider.id)
-
-                            HStack(spacing: 10) {
-                                // Category Icon
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                        .fill(provider.type.gradient)
-                                        .frame(width: 24, height: 24)
-
-                                    Image(systemName: provider.type.icon)
-                                        .font(.system(size: 11.5, weight: .medium))
-                                        .foregroundStyle(.white)
-                                }
-
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(provider.displayName)
-                                        .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                                        .foregroundStyle(Color.primary)
-                                        .lineLimit(1)
-
-                                    if isSelected {
-                                        Text("Active Provider")
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(Color.secondary)
-                                            .lineLimit(1)
-                                    } else {
-                                        Text(provider.resolvedTarget)
-                                            .font(.system(size: 10))
-                                            .foregroundStyle(Color.secondary)
-                                            .lineLimit(1)
-                                    }
-                                }
-
-                                Spacer()
-
-                                if isSelected {
-                                    Circle()
-                                        .fill(Color.accentColor)
-                                        .frame(width: 6, height: 6)
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(isSelected ? Color.accentColor.opacity(0.06) : Color.clear)
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .strokeBorder(
-                                        isSelected ? Color.accentColor.opacity(0.35) : Color.clear,
-                                        lineWidth: 0.75
-                                    )
-                            }
-                            .contentShape(Rectangle())
-                            .contextMenu {
-                                if !isRunning {
-                                    Button {
-                                        openEditForm(provider)
-                                    } label: {
-                                        Label("Edit", systemImage: "pencil")
-                                    }
-
-                                    if providers.count > 1 {
-                                        Divider()
-
-                                        Button(role: .destructive) {
-                                            providerToDelete = provider
-                                            showDeleteConfirmation = true
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
-                                }
-                            }
-                            .onTapGesture {
-                                if !isRunning {
-                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.75)) {
-                                        activeProviderID = provider.id
-                                    }
-                                    onSelectProvider(provider.id)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .background(Color.primary.opacity(0.01))
-                    .cornerRadius(8)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-                    )
-                    .disabled(isRunning)
-
-                    if !isRunning {
-                        HStack {
-                            Button {
-                                openAddForm()
-                            } label: {
-                                Text("Add new provider")
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(isAddHovered ? Color.primary : Color.secondary)
-                            }
-                            .buttonStyle(.plain)
-                            .onHover { isAddHovered = $0 }
-                            .help("Add new provider")
-
-                            Spacer()
-                        }
-                        .padding(.top, 4)
-                        .padding(.horizontal, 4)
-                    }
                 }
             }
             .confirmationDialog(
@@ -196,34 +67,62 @@ public struct ServiceProvidersSectionView: View {
                 isPresented: $showDeleteConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("Delete Provider", role: .destructive) {
+                Button("Delete", role: .destructive) {
                     if let provider = providerToDelete {
                         onDeleteProvider(provider)
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Are you sure you want to delete '\(providerToDelete?.displayName ?? "this provider")'?")
+                Text("‘\(providerToDelete?.displayName ?? "This provider")’ and its settings will be deleted.")
+            }
+            .onChange(of: isLocked) { _, locked in
+                if locked && showInlineForm {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        showInlineForm = false
+                    }
+                }
             }
         }
+    }
+
+    private var emptyStateView: some View {
+        VStack(alignment: .center, spacing: 8) {
+            Text("No providers configured.").font(.caption).foregroundStyle(.secondary)
+            Button { openAddForm() } label: { Label("Add Provider", systemImage: "plus") }
+                .buttonStyle(.bordered).disabled(isLocked)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 12)
+    }
+
+    private var providerListView: some View {
+        ServiceProvidersListView(
+            providers: providers,
+            activeProviderID: activeProviderID,
+            isLocked: isLocked,
+            onSelectProvider: onSelectProvider,
+            onEdit: { openEditForm($0) },
+            onDelete: {
+                providerToDelete = $0
+                showDeleteConfirmation = true
+            },
+            onOpenAddForm: { openAddForm() }
+        )
     }
 
     private func openAddForm() {
         formLabel = ""
         formType = .docker
         editingProviderID = nil
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showInlineForm = true
-        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = true }
     }
 
     private func openEditForm(_ provider: Provider) {
         formLabel = provider.label ?? ""
         formType = provider.type
         editingProviderID = provider.id
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showInlineForm = true
-        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = true }
     }
 
     private func saveInlineForm() {
@@ -235,19 +134,12 @@ public struct ServiceProvidersSectionView: View {
             updated.label = label
             updated.type = formType
             updated.updatedAt = Date()
-            onSaveProvider(updated)
+            onUpdateProvider(updated)
         } else {
-            let newProv = Provider(
-                id: UUID(),
-                serviceID: serviceID,
-                type: formType,
-                label: label
-            )
-            onSaveProvider(newProv)
+            let newProv = Provider(id: UUID(), serviceID: serviceID, type: formType, label: label)
+            onAddProvider(newProv)
         }
 
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            showInlineForm = false
-        }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showInlineForm = false }
     }
 }

@@ -2,9 +2,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public struct SettingsDataSection: View {
+    @Bindable var viewModel: SettingsViewModel
     @Bindable var workspaceStore: WorkspaceStore
 
     @State private var showResetConfirmation = false
+    @State private var showResetSettingsConfirmation = false
     @State private var showImportPreview = false
     @State private var loadedBackup: DataPortService.KumaBackup? = nil
     @State private var pendingImportFileName: String = ""
@@ -15,88 +17,29 @@ public struct SettingsDataSection: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
-    public init(workspaceStore: WorkspaceStore) {
+    public init(viewModel: SettingsViewModel, workspaceStore: WorkspaceStore) {
+        self.viewModel = viewModel
         self.workspaceStore = workspaceStore
     }
 
     public var body: some View {
         VStack(spacing: KumaSpacing.xl) {
-            KumaFormSection(
-                icon: "internaldrive.fill",
-                title: "Data Backup & Restore"
-            ) {
-                VStack(alignment: .leading, spacing: KumaSpacing.md) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Export Configuration Backup")
-                                .font(KumaFont.body)
-                            Text("Export all workspaces, services, providers, and port mappings to a JSON file.")
-                                .font(KumaFont.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Export…") {
-                            exportData()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isProcessing)
-                    }
+            SettingsBackupRestoreSection(
+                isProcessing: isProcessing,
+                onExport: { exportData() },
+                onImport: { promptImportFile() }
+            )
 
-                    Divider().opacity(0.3)
-
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Import Configuration Backup")
-                                .font(KumaFont.body)
-                            Text("Restore configuration data from a Kuma JSON backup file.")
-                                .font(KumaFont.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Import…") {
-                            promptImportFile()
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(isProcessing)
-                    }
+            SettingsDangerZoneSection(
+                showResetConfirmation: $showResetConfirmation,
+                showResetSettingsConfirmation: $showResetSettingsConfirmation,
+                isProcessing: isProcessing,
+                onReset: { resetData() },
+                onResetSettings: {
+                    viewModel.resetSettingsToDefault()
+                    alertMessage = "All preferences have been reset to defaults."
                 }
-            }
-
-            KumaFormSection(
-                icon: "exclamationmark.triangle.fill",
-                title: "Danger Zone",
-                style: .danger
-            ) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Reset All Data")
-                            .font(KumaFont.body)
-                            .foregroundStyle(.red)
-                        Text("Permanently delete all workspaces, services, providers, and port mappings.")
-                            .font(KumaFont.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Reset Data…") {
-                        showResetConfirmation = true
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.red)
-                    .disabled(isProcessing)
-                }
-            }
-        }
-        .confirmationDialog(
-            "Reset All Data?",
-            isPresented: $showResetConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Reset Everything", role: .destructive) {
-                resetData()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This action cannot be undone. All your configured workspaces and services will be permanently deleted.")
+            )
         }
         .sheet(item: $loadedBackup) { backup in
             ImportPreviewSheet(
@@ -113,7 +56,7 @@ public struct SettingsDataSection: View {
                 }
             )
         }
-        .alert("Database Operation", isPresented: Binding(
+        .alert("Backup & Restore", isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
@@ -124,24 +67,11 @@ public struct SettingsDataSection: View {
     }
 
     private func exportData() {
-        let panel = NSSavePanel()
-        panel.title = "Export Kuma Backup"
-        panel.nameFieldStringValue = "kuma-backup-\(DataPortService.backupDateString).json"
-        panel.allowedContentTypes = [.json]
-
-        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
-            panel.begin { response in
-                if response == .OK, let url = panel.url {
-                    self.performExport(to: url)
-                }
-            }
-            return
-        }
-
-        panel.beginSheetModal(for: window) { response in
-            if response == .OK, let url = panel.url {
-                self.performExport(to: url)
-            }
+        SettingsDataPanelPresenter.presentSavePanel(
+            title: "Export Kuma Backup",
+            defaultFileName: "kuma-backup-\(DataPortService.backupDateString).json"
+        ) { url in
+            self.performExport(to: url)
         }
     }
 
@@ -152,9 +82,9 @@ public struct SettingsDataSection: View {
                 let dataPort = DataPortRepository()
                 let backup = try await dataPort.exportAll()
                 let data = try DataPortService.encodeBackup(backup)
-                try data.write(to: url)
+                try data.write(to: url, options: .atomic)
                 isProcessing = false
-                alertMessage = "Backup successfully exported to \(url.lastPathComponent)."
+                alertMessage = "Backup exported to \(url.lastPathComponent)."
             } catch {
                 isProcessing = false
                 alertMessage = "Failed to export data: \(error.localizedDescription)"
@@ -163,26 +93,10 @@ public struct SettingsDataSection: View {
     }
 
     private func promptImportFile() {
-        let panel = NSOpenPanel()
-        panel.title = "Import Kuma Backup"
-        panel.allowsMultipleSelection = false
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowedContentTypes = [.json]
-
-        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first else {
-            panel.begin { response in
-                if response == .OK, let url = panel.url {
-                    self.processImportUrl(url)
-                }
-            }
-            return
-        }
-
-        panel.beginSheetModal(for: window) { response in
-            if response == .OK, let url = panel.url {
-                self.processImportUrl(url)
-            }
+        SettingsDataPanelPresenter.presentOpenPanel(
+            title: "Import Kuma Backup"
+        ) { url in
+            self.processImportUrl(url)
         }
     }
 
@@ -216,7 +130,7 @@ public struct SettingsDataSection: View {
 
                 workspaceStore.loadFromDatabase()
                 isProcessing = false
-                alertMessage = "Backup successfully imported (\(selectedWorkspaces.count) workspaces, \(selectedServices.count) services restored)!"
+                alertMessage = "Backup imported (\(selectedWorkspaces.count) workspaces, \(selectedServices.count) services restored)."
             } catch {
                 isProcessing = false
                 alertMessage = "Failed to import backup: \(error.localizedDescription)"

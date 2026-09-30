@@ -12,7 +12,7 @@ public struct ServiceGeneralSettingsView: View {
         serviceDescription: Binding<String>,
         placeholder: String = "Postgres DB",
         icon: String = "info.circle",
-        subtitle: String? = "Service name and purpose"
+        subtitle: String? = nil
     ) {
         self._name = name
         self._serviceDescription = serviceDescription
@@ -35,9 +35,9 @@ public struct ServiceGeneralSettingsView: View {
                 )
 
                 KumaTextArea(
-                    label: "Description (Optional)",
+                    label: "Description",
                     value: $serviceDescription,
-                    placeholder: "Service purpose or notes...",
+                    placeholder: "Purpose or notes",
                     minHeight: 52
                 )
             }

@@ -4,7 +4,7 @@ import os
 
 // MARK: - CryptoVaultError
 
-public enum CryptoVaultError: Error, LocalizedError, Sendable {
+public enum CryptoVaultError: Error, LocalizedError, Sendable, Equatable {
     case invalidUTF8
     case invalidPayloadFormat
     case payloadCorrupted
@@ -26,22 +26,23 @@ public enum CryptoVaultError: Error, LocalizedError, Sendable {
 
 // MARK: - CryptoVault (AES-256-GCM MasterKey Utility)
 
-/// Thread-safe actor providing AES-256-GCM authenticated encryption for sensitive credentials.
+/// Thread-safe class providing AES-256-GCM authenticated encryption for sensitive credentials.
+/// Synchronized via OSAllocatedUnfairLock for both sync (DB record encode/decode) and async contexts.
 /// Uses a private 256-bit Master Key stored in Application Support with strict POSIX 0600 permissions.
-public actor CryptoVault {
-    public static let shared = CryptoVault()
+public final nonisolated class CryptoVault: Sendable {
+    public nonisolated static let shared = CryptoVault()
 
     private let logger = Logger(subsystem: "lokastudio.kuma", category: "CryptoVault")
-    private var cachedKey: SymmetricKey?
+    private let keyLock = OSAllocatedUnfairLock<SymmetricKey?>(initialState: nil)
 
-    public init() {}
+    public nonisolated init() {}
 
     // MARK: - Master Key Management
 
     /// Returns or generates the 256-bit symmetric master key from disk.
-    public func getOrCreateMasterKey() throws -> SymmetricKey {
-        if let key = cachedKey {
-            return key
+    public nonisolated func getOrCreateMasterKey() throws -> SymmetricKey {
+        if let existing = keyLock.withLock({ $0 }) {
+            return existing
         }
 
         let fileManager = FileManager.default
@@ -52,20 +53,22 @@ public actor CryptoVault {
             create: true
         )
         let folderURL = appSupportURL.appendingPathComponent("Kuma", isDirectory: true)
-        if !fileManager.fileExists(atPath: folderURL.path) {
+        let folderPath = folderURL.path(percentEncoded: false)
+        if !fileManager.fileExists(atPath: folderPath) {
             try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true, attributes: [
                 .posixPermissions: 0o700
             ])
         }
 
         let keyURL = folderURL.appendingPathComponent("master.key", isDirectory: false)
+        let keyPath = keyURL.path(percentEncoded: false)
 
         // 1. Read existing key if present
-        if fileManager.fileExists(atPath: keyURL.path) {
+        if fileManager.fileExists(atPath: keyPath) {
             let keyData = try Data(contentsOf: keyURL)
             if keyData.count == 32 {
                 let key = SymmetricKey(data: keyData)
-                self.cachedKey = key
+                keyLock.withLock { $0 = key }
                 return key
             } else {
                 logger.warning("Existing master key file corrupted (length != 32 bytes). Generating a replacement.")
@@ -78,17 +81,17 @@ public actor CryptoVault {
 
         // Write with 0600 permissions (User read/write only)
         try rawData.write(to: keyURL, options: .atomic)
-        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyURL.path)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: keyPath)
 
-        self.cachedKey = newKey
-        logger.info("Successfully generated and secured new 256-bit Master Key at \(keyURL.path, privacy: .private)")
+        keyLock.withLock { $0 = newKey }
+        logger.info("Successfully generated and secured new 256-bit Master Key at \(keyPath, privacy: .private)")
         return newKey
     }
 
     // MARK: - Encryption & Decryption API
 
     /// Encrypts plain text with AES-256-GCM. Returns a compact string `nonceBase64:tagBase64:ciphertextBase64`.
-    public func encrypt(plainText: String) throws -> String {
+    public nonisolated func encrypt(plainText: String) throws -> String {
         guard let data = plainText.data(using: .utf8) else {
             throw CryptoVaultError.invalidUTF8
         }
@@ -104,14 +107,14 @@ public actor CryptoVault {
     }
 
     /// Decrypts a compact string payload `nonceBase64:tagBase64:ciphertextBase64` back to plain text.
-    public func decrypt(cipherText: String) throws -> String {
+    public nonisolated func decrypt(cipherText: String) throws -> String {
         let trimmed = cipherText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let components = trimmed.split(separator: ":").map(String.init)
+        let components = trimmed.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
 
         guard components.count == 3,
               let nonceData = Data(base64Encoded: components[0]),
               let tagData = Data(base64Encoded: components[1]),
-              let cipherData = Data(base64Encoded: components[2]) else {
+              let cipherData = components[2].isEmpty ? Data() : Data(base64Encoded: components[2]) else {
             throw CryptoVaultError.invalidPayloadFormat
         }
 

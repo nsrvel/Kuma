@@ -4,19 +4,22 @@ import UniformTypeIdentifiers
 public struct ServicesDeckView: View {
     public let workspaceID: UUID
     public let isStarredOnly: Bool
+    public let filterGroupID: UUID?
 
     @State var viewModel: ServicesDeckViewModel
     @State var pendingImportBackup: DataPortService.KumaBackup? = nil
     @State var pendingImportFileName: String = ""
     @State var alertMessage: String? = nil
-    @State private var isSearching: Bool = false
+    @State var isSearching: Bool = false
 
     @Environment(WorkspaceStore.self) var workspaceStore
+    @Environment(ServiceStateStore.self) var serviceStateStore
 
-    public init(workspaceID: UUID, isStarredOnly: Bool = false) {
+    public init(workspaceID: UUID, isStarredOnly: Bool = false, filterGroupID: UUID? = nil) {
         self.workspaceID = workspaceID
         self.isStarredOnly = isStarredOnly
-        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly))
+        self.filterGroupID = filterGroupID
+        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly, filterGroupID: filterGroupID))
     }
 
     public var body: some View {
@@ -29,28 +32,20 @@ public struct ServicesDeckView: View {
         .toolbar {
             toolbarContent()
         }
-        .onAppear {
-            viewModel.loadWorkspace(workspaceID: workspaceID)
-        }
-        .onChange(of: workspaceID) { _, newID in
-            viewModel.loadWorkspace(workspaceID: newID)
+        .task(id: workspaceID) {
+            viewModel.stateStore = serviceStateStore
+            await viewModel.loadWorkspaceAsync(workspaceID: workspaceID)
+            await handleNotificationStream(workspaceID: workspaceID)
         }
         .onChange(of: isStarredOnly) { _, newStarred in
             withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
                 viewModel.isStarredOnly = newStarred
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaServiceCreated)) { _ in
-            viewModel.loadWorkspace(workspaceID: workspaceID)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaFocusSearch)) { _ in
-            isSearching = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaExportWorkspace)) { _ in
-            exportCurrentWorkspace()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .kumaImportWorkspace)) { _ in
-            promptImportFile()
+        .onChange(of: filterGroupID) { _, newGroupID in
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
+                viewModel.filterGroupID = newGroupID
+            }
         }
         .sheet(item: $pendingImportBackup) { backup in
             let wsName = workspaceStore.workspaces.first(where: { $0.id == workspaceID })?.name ?? "Workspace"
@@ -74,14 +69,29 @@ public struct ServicesDeckView: View {
         } message: {
             Text(alertMessage ?? "")
         }
+        .confirmationDialog(
+            "Delete Service?",
+            isPresented: Binding(
+                get: { viewModel.servicePendingDeletion != nil },
+                set: { if !$0 { viewModel.servicePendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                viewModel.confirmDeletePendingService(workspaceID: workspaceID)
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.servicePendingDeletion = nil
+            }
+        } message: {
+            Text("‘\(viewModel.servicePendingDeletion?.name ?? "Service")’ and its configurations will be permanently deleted.")
+        }
         .inspector(isPresented: $viewModel.isInspectorPresented) {
             if let selectedID = viewModel.selectedServiceID {
                 ServiceInspectorView(
                     serviceID: selectedID,
-                    workspaceID: workspaceID,
-                    viewModel: viewModel
+                    workspaceID: workspaceID
                 )
-                .id(selectedID)
                 .inspectorColumnWidth(
                     min: KumaTheme.Inspector.widthMin,
                     ideal: KumaTheme.Inspector.widthIdeal,
@@ -100,83 +110,39 @@ public struct ServicesDeckView: View {
                 )
             }
         }
-    }
-
-    // MARK: - Content Body (Empty State / Cards / Table)
-
-    @ViewBuilder
-    private var contentBody: some View {
-        if !viewModel.hasInitialLoaded {
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.filteredSnapshots.isEmpty {
-            if isStarredOnly {
-                KumaEmptyStateView(
-                    iconName: "star.slash",
-                    title: "No Starred Services",
-                    description: "Star your most frequently used services from the context menu to access them quickly from here."
-                )
-            } else if viewModel.snapshots.isEmpty {
-                KumaEmptyStateView(
-                    iconName: "square.stack.3d.up.slash",
-                    title: "No Services Yet",
-                    description: "Create a service to start port-forwarding, container, or shell runs.",
-                    actionButtonTitle: "Create Service",
-                    action: {
-                        NotificationCenter.default.post(name: .kumaCreateServiceRequested, object: nil)
+        .background {
+            Group {
+                Button("") {
+                    if let id = viewModel.selectedServiceID {
+                        viewModel.toggleService(id: id)
                     }
-                )
-            } else {
-                KumaEmptyStateView(
-                    iconName: "magnifyingglass",
-                    title: "No Services Found",
-                    description: "Try refining your search text or active filter options."
-                )
-            }
-        } else if viewModel.viewMode == .card {
-            cardsGrid
-        } else {
-            tableList
-        }
-    }
-
-    // MARK: - Grid View Mode
-
-    @ViewBuilder
-    private var cardsGrid: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 300, maximum: 380), spacing: 18)],
-                spacing: 18
-            ) {
-                ForEach(viewModel.filteredSnapshots) { snapshot in
-                    ServiceCardView(
-                        snapshot: snapshot,
-                        runtime: viewModel.runtimeStates[snapshot.id] ?? ServiceRuntimeState(),
-                        isSelected: viewModel.selectedServiceID == snapshot.id,
-                        onToggle: { viewModel.toggleService(id: snapshot.id) },
-                        onToggleStar: { viewModel.toggleStarred(id: snapshot.id, workspaceID: workspaceID) },
-                        onSelect: { viewModel.selectService(snapshot.id) }
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
+                .keyboardShortcut(KumaShortcuts.toggleService.key, modifiers: KumaShortcuts.toggleService.modifiers)
+
+                Button("") {
+                    if let id = viewModel.selectedServiceID {
+                        viewModel.restartService(id: id)
+                    }
+                }
+                .keyboardShortcut(KumaShortcuts.restartService.key, modifiers: KumaShortcuts.restartService.modifiers)
+
+                Button("") {
+                    if viewModel.selectedServiceID != nil {
+                        viewModel.selectService(nil)
+                    }
+                }
+                .keyboardShortcut(KumaShortcuts.dismiss.key, modifiers: KumaShortcuts.dismiss.modifiers)
             }
-            .animation(.spring(response: 0.24, dampingFraction: 0.88), value: viewModel.filteredSnapshots)
-            .padding(20)
+            .opacity(0)
+            .allowsHitTesting(false)
         }
     }
 
-    // MARK: - Table View Mode
-
-    @ViewBuilder
-    private var tableList: some View {
-        ServiceTableView(
-            snapshots: viewModel.filteredSnapshots,
-            runtimeStates: viewModel.runtimeStates,
-            selectedID: viewModel.selectedServiceID,
-            onToggle: { viewModel.toggleService(id: $0) },
-            onToggleStar: { viewModel.toggleStarred(id: $0, workspaceID: workspaceID) },
-            onSelect: { viewModel.selectService($0) }
+    private var contentBody: some View {
+        ServicesDeckContentBodyView(
+            viewModel: viewModel,
+            workspaceID: workspaceID,
+            isStarredOnly: isStarredOnly
         )
     }
 }

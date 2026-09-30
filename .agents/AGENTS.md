@@ -73,6 +73,13 @@ Kuma/
 - **Accessibility & HIG**:
   - Icon-only buttons must provide an `.accessibilityLabel(...)`.
   - Animated transitions must respect spring physics (`response: 0.2-0.35`, `dampingFraction: 0.7-0.88`).
+  - **Button Wording & Ellipsis (`…`) Standard**:
+    - **No Trailing Ellipsis on In-App Push Buttons**: Push buttons, form buttons, cards, and modal actions MUST NOT use trailing ellipsis (`…` or `...`). Use clean, confident verbs/nouns (e.g., `New Workspace`, `Delete Workspace`, `Export`, `Import`, `Browse`, `Reset Settings`).
+    - **Permitted Ellipsis Exceptions**:
+      1. Global macOS Menu Bar items (`KumaCommands.swift`, e.g. `Settings… ⌘,`).
+      2. In-flight / asynchronous progress states (e.g. `Scanning…`, `Connecting…`, `Starting Process…`).
+      3. Search field prompt placeholders (e.g. `Search services…`).
+  - **Avatar & Media Pickers**: Keep avatar canvases clean and unencumbered. Avoid visual redundancy (never display two camera icons simultaneously). Use a single hover affordance, a top-trailing `xmark` remove badge only when custom media is set, and native context menus. Avoid adding nested drop destinations that could collide with window-level handlers.
 
 ---
 
@@ -95,9 +102,10 @@ Kuma/
 
 ## 6. Workflow & Development Protocol
 
-1. **Step-by-Step Approval**: No large refactoring or multi-file creation without user review of the audit and implementation plan.
-2. **Standard Verifications**: Always run `xcodebuild -scheme Kuma -destination 'platform=macOS' test` to verify 100% test suite pass after any architectural change.
-3. **Reference Targets**:
+1. **Mandatory Implementation Plan**: An `implementation_plan.md` artifact MUST ALWAYS be created and reviewed before writing any production code, tests, or executing refactorings. The plan must clearly outline architectural decisions, file changes, and verification strategies.
+2. **Step-by-Step Approval**: No code modification or multi-file creation without explicit user review and approval of the spec, test matrix, and implementation plan.
+3. **Standard Verifications**: Always run `xcodebuild -scheme Kuma -destination 'platform=macOS' test` to verify 100% test suite pass after any architectural change.
+4. **Reference Targets**:
    - UI/UX aesthetics & visual fidelity → Match **KumaV3** references.
    - Core architecture, safety & concurrency → Match **KumaV4** patterns.
 

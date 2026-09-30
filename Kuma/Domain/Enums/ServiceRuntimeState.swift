@@ -6,11 +6,20 @@ public struct ServiceRuntimeState: Sendable, Equatable {
     public var status: ServiceState
     public var isLoading: Bool
 
+    /// Shared zero-allocation default for dictionary miss lookups
+    public static let idle = ServiceRuntimeState()
+
     public init(
         status: ServiceState = .stopped,
         isLoading: Bool = false
     ) {
         self.status = status
         self.isLoading = isLoading
+    }
+
+    /// Convenience initializer bridging from discrete ServiceExecutionState
+    public init(executionState: ServiceExecutionState) {
+        self.status = executionState.legacyState
+        self.isLoading = executionState.isLoading
     }
 }

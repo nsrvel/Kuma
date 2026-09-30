@@ -3,8 +3,8 @@ import GRDB
 
 // MARK: - Workspace GRDB Record Conformance
 
-extension Workspace: FetchableRecord, PersistableRecord {
-    public static let databaseTableName = "workspace"
+nonisolated extension Workspace: FetchableRecord, PersistableRecord {
+    public nonisolated static let databaseTableName = "workspace"
 
     public nonisolated init(row: Row) throws {
         let idStr: String = row["id"]

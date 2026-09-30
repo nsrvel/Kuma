@@ -38,11 +38,16 @@ struct ContentView: View {
             }
             do {
                 let data = try Data(contentsOf: fileURL)
-                let backup = try DataPortService.decodeBackup(from: data)
+                let targetWS = workspaceStore.activeWorkspace?.id
+                let backup = try DataPortService.parseAnyBackup(from: data, targetWorkspaceID: targetWS)
                 self.droppedBackup = backup
                 self.droppedFileName = fileURL.lastPathComponent
                 return true
             } catch {
+                AlertService.shared.showError(
+                    title: "Invalid Backup File",
+                    message: "Failed to read '\(fileURL.lastPathComponent)': \(error.localizedDescription)"
+                )
                 return false
             }
         } isTargeted: { targeted in
@@ -55,9 +60,16 @@ struct ContentView: View {
                 existingWorkspaceIDs: Set(workspaceStore.workspaces.map(\.id)),
                 onConfirmImport: { selectedWorkspaces, selectedServices in
                     Task {
-                        let dataPort = DataPortRepository()
-                        try? await dataPort.importSelective(from: backup, selectedWorkspaceIDs: selectedWorkspaces, selectedServiceIDs: selectedServices)
-                        workspaceStore.loadFromDatabase()
+                        do {
+                            let dataPort = DataPortRepository()
+                            try await dataPort.importSelective(from: backup, selectedWorkspaceIDs: selectedWorkspaces, selectedServiceIDs: selectedServices)
+                            workspaceStore.loadFromDatabase()
+                        } catch {
+                            AlertService.shared.showError(
+                                title: "Import Failed",
+                                message: error.localizedDescription
+                            )
+                        }
                     }
                 }
             )
@@ -108,16 +120,19 @@ struct ContentView: View {
     private func detailView(for selectedID: UUID?) -> some View {
         if selectedID == .stable("settings") {
             SettingsView(viewModel: settingsViewModel, workspaceStore: workspaceStore)
-        } else if selectedID == .stable("port-registry") {
-            PortRegistryView()
         } else if selectedID == .stable("live-logs") {
             LiveLogsView()
         } else if let activeWorkspace = workspaceStore.activeWorkspace {
 
-            // Main Dashboard Workspace Stage with Deck View (All Services or Starred Filter)
+            // Main Dashboard Workspace Stage with Deck View (All Services, Starred, or Group Filter)
             let isStarred = (selectedID == .stable("starred-services"))
-            ServicesDeckView(workspaceID: activeWorkspace.id, isStarredOnly: isStarred)
-                .id(activeWorkspace.id)
+            let filterGroupID = sidebarViewModel.groupIDForSelectedRow(selectedID)
+            ServicesDeckView(
+                workspaceID: activeWorkspace.id,
+                isStarredOnly: isStarred,
+                filterGroupID: filterGroupID
+            )
+            .id(activeWorkspace.id)
         } else {
             KumaEmptyStateView(
                 iconName: "square.stack.3d.up.slash",
