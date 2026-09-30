@@ -1,10 +1,18 @@
 import Foundation
 @testable import Kuma
 
-/// Resets global process/supervisor state between serialized integration tests.
-enum ProcessTestSupport {
-    static func resetProcessWorld() async {
+/// Serializes global process/supervisor resets across parallel test bundles.
+actor ProcessTestIsolation {
+    static let shared = ProcessTestIsolation()
+
+    func resetProcessWorld() async {
         await ExecutionSupervisor.shared.stopAll()
         await ProcessRegistry.shared.terminateAllAsync()
+    }
+}
+
+enum ProcessTestSupport {
+    static func resetProcessWorld() async {
+        await ProcessTestIsolation.shared.resetProcessWorld()
     }
 }

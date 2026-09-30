@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     name: Build & Test (macOS)
-    timeout-minutes: 20
+    timeout-minutes: 15
     # objectVersion 77 requires Xcode 16+ (macos-14 images ship Xcode 15.4).
     runs-on: macos-15
     steps:

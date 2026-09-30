@@ -130,7 +130,6 @@ public actor ProcessRegistry {
         }
 
         try process.run()
-        try? stdoutHandle.close()
 
         let pid = process.processIdentifier
         let signalTarget: SignalTarget
