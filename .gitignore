@@ -1,0 +1,26 @@
+# Xcode build outputs & caches
+build/
+DerivedData/
+.swiftpm/
+
+# Build logs & artifacts
+*.log
+build_*.log
+build_output*.log
+
+# Xcode user-specific state & breakpoints
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Temporary files & local caches
+*.swp
+*.bak
+*~
