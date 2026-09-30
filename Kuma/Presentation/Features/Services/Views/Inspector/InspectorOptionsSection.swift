@@ -1,21 +1,32 @@
 import SwiftUI
 
 public struct InspectorOptionsSection: View {
+    public var activeProvider: Binding<Provider>?
+    public let isLocked: Bool
+    public var onProviderFieldChanged: (() -> Void)?
     @Binding public var isDisabled: Bool
     public let isRunning: Bool
-    public let isEditing: Bool
     public let onDelete: () -> Void
 
     public init(
+        activeProvider: Binding<Provider>? = nil,
+        isLocked: Bool = false,
+        onProviderFieldChanged: (() -> Void)? = nil,
         isDisabled: Binding<Bool>,
         isRunning: Bool = false,
-        isEditing: Bool = true,
         onDelete: @escaping () -> Void
     ) {
+        self.activeProvider = activeProvider
+        self.isLocked = isLocked
+        self.onProviderFieldChanged = onProviderFieldChanged
         self._isDisabled = isDisabled
         self.isRunning = isRunning
-        self.isEditing = isEditing
         self.onDelete = onDelete
+    }
+
+    private var showsAutoReconnect: Bool {
+        guard let activeProvider else { return false }
+        return activeProvider.wrappedValue.type.supportsAutoReconnect
     }
 
     public var body: some View {
@@ -24,7 +35,35 @@ public struct InspectorOptionsSection: View {
             title: "Options"
         ) {
             VStack(alignment: .leading, spacing: 14) {
-                // Disable Service
+                if showsAutoReconnect, let activeProvider {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Auto Reconnect")
+                                .font(KumaFont.body)
+                            Text("Up to 3 retries after disconnect.")
+                                .font(KumaFont.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Toggle("", isOn: Binding(
+                            get: { activeProvider.wrappedValue.autoReconnect ?? false },
+                            set: {
+                                activeProvider.wrappedValue.autoReconnect = $0
+                                onProviderFieldChanged?()
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                        .accessibilityLabel("Auto reconnect")
+                        .disabled(isLocked)
+                    }
+
+                    Divider().opacity(0.4)
+                }
+
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Disable Service")
@@ -46,7 +85,6 @@ public struct InspectorOptionsSection: View {
 
                 Divider().opacity(0.4)
 
-                // Delete Service
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Delete Service")
@@ -71,8 +109,3 @@ public struct InspectorOptionsSection: View {
         }
     }
 }
-
-
-
-
-

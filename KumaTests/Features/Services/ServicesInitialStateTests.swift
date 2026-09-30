@@ -102,6 +102,12 @@ struct ServicesInitialStateTests {
         #expect(stopping.isLoading)
         #expect(stopping.legacyState == .stopping)
 
+        let reconnecting = ServiceExecutionState.reconnecting(attempt: 2, maxAttempts: 3)
+        #expect(reconnecting.isOperational)
+        #expect(reconnecting.isLoading)
+        #expect(reconnecting.title == "Reconnecting (2/3)")
+        #expect(reconnecting.legacyState == .reconnecting)
+
         let crashed = ServiceExecutionState.crashed(exitCode: 137)
         #expect(!crashed.isOperational)
         #expect(!crashed.isLoading)

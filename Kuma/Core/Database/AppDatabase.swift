@@ -286,6 +286,12 @@ public nonisolated final class AppDatabase: Sendable {
             }
         }
 
+        migrator.registerMigration("v8_provider_auto_reconnect") { db in
+            try db.alter(table: "provider") { t in
+                t.add(column: "autoReconnect", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return migrator
     }
 }

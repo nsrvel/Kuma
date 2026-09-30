@@ -60,6 +60,7 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
 
         let monitorProcessName: String? = row["monitorProcessName"]
         let monitorInterval: Int? = row["monitorInterval"]
+        let autoReconnect: Bool? = row["autoReconnect"]
 
         let createdAt: Date = row["createdAt"]
         let updatedAt: Date = row["updatedAt"]
@@ -94,6 +95,7 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
             ngrokAuthToken: ngrokAuthToken,
             monitorProcessName: monitorProcessName,
             monitorInterval: monitorInterval,
+            autoReconnect: autoReconnect,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -142,6 +144,7 @@ nonisolated extension Provider: FetchableRecord, PersistableRecord {
 
         container["monitorProcessName"] = monitorProcessName
         container["monitorInterval"] = monitorInterval
+        container["autoReconnect"] = autoReconnect
         container["createdAt"] = createdAt
         container["updatedAt"] = updatedAt
     }

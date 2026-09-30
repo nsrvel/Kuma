@@ -84,23 +84,7 @@ public struct InspectorConfigFormStack: View {
                 // 3. Active Provider Configuration Form
                 if let activeProviderID = inspectorVM.activeProviderID {
                     InspectorFormSections(
-                        provider: Binding(
-                            get: {
-                                if let idx = inspectorVM.providers.firstIndex(where: { $0.id == activeProviderID }) {
-                                    return inspectorVM.providers[idx]
-                                }
-                                // ponytail: providers can swap mid-frame during loadService; avoid stale index crash
-                                return Provider(
-                                    id: activeProviderID,
-                                    serviceID: serviceID,
-                                    type: inspectorVM.activeCategory
-                                )
-                            },
-                            set: { newValue in
-                                guard let idx = inspectorVM.providers.firstIndex(where: { $0.id == activeProviderID }) else { return }
-                                inspectorVM.providers[idx] = newValue
-                            }
-                        ),
+                        provider: activeProviderBinding(activeProviderID: activeProviderID),
                         ports: Binding(
                             get: { inspectorVM.draftPorts },
                             set: { inspectorVM.draftPorts = $0 }
@@ -122,8 +106,13 @@ public struct InspectorConfigFormStack: View {
                     )
                 }
 
-                // 4. Options Section (Disable, Delete Service)
+                // 4. Options Section (Auto reconnect, disable, delete)
                 InspectorOptionsSection(
+                    activeProvider: inspectorVM.activeProviderID.map { activeProviderBinding(activeProviderID: $0) },
+                    isLocked: isLocked,
+                    onProviderFieldChanged: {
+                        inspectorVM.scheduleAutoSave()
+                    },
                     isDisabled: Binding(
                         get: { inspectorVM.service?.isDisabled ?? false },
                         set: { newValue in
@@ -131,7 +120,6 @@ public struct InspectorConfigFormStack: View {
                         }
                     ),
                     isRunning: isRunning,
-                    isEditing: true,
                     onDelete: {
                         inspectorVM.showDeleteConfirmation = true
                     }
@@ -139,5 +127,25 @@ public struct InspectorConfigFormStack: View {
             }
             .padding(KumaSpacing.lg)
         }
+    }
+
+    private func activeProviderBinding(activeProviderID: UUID) -> Binding<Provider> {
+        Binding(
+            get: {
+                if let idx = inspectorVM.providers.firstIndex(where: { $0.id == activeProviderID }) {
+                    return inspectorVM.providers[idx]
+                }
+                // ponytail: providers can swap mid-frame during loadService; avoid stale index crash
+                return Provider(
+                    id: activeProviderID,
+                    serviceID: serviceID,
+                    type: inspectorVM.activeCategory
+                )
+            },
+            set: { newValue in
+                guard let idx = inspectorVM.providers.firstIndex(where: { $0.id == activeProviderID }) else { return }
+                inspectorVM.providers[idx] = newValue
+            }
+        )
     }
 }

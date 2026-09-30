@@ -17,6 +17,14 @@ public actor ExecutionSupervisor {
 
     private let stopGate = ServiceStopGate()
 
+    private struct ReconnectSession {
+        var reconnectAttemptsCompleted: Int = 0
+        var task: Task<Void, Never>?
+    }
+
+    private static let reconnectLogger = Logger(subsystem: "lokastudio.kuma", category: "AutoReconnect")
+    private var reconnectSessions: [UUID: ReconnectSession] = [:]
+
     private init() {}
 
     // MARK: - Public stream
@@ -53,7 +61,10 @@ public actor ExecutionSupervisor {
     }
 
     public func isOperational(serviceID: UUID) async -> Bool {
-        if let state = records[serviceID]?.serviceState, state == .running || state == .starting { return true }
+        if let state = records[serviceID]?.serviceState,
+           state == .running || state == .starting || state == .reconnecting {
+            return true
+        }
         return await ProcessRegistry.shared.isRunning(serviceID: serviceID)
     }
 
@@ -61,7 +72,7 @@ public actor ExecutionSupervisor {
         var running: Set<UUID> = []
         for id in candidates {
             let state = records[id]?.serviceState
-            if state == .running || state == .starting {
+            if state == .running || state == .starting || state == .reconnecting {
                 running.insert(id)
             }
         }
@@ -144,30 +155,104 @@ public actor ExecutionSupervisor {
         exitCode: Int32,
         intentionalStop: Bool
     ) async {
-        let failure = exitCode != 0 && !intentionalStop ? RunSpool.tail(for: serviceID) : nil
-        let legacyState: ServiceState = (exitCode == 0 || intentionalStop) ? .stopped : .crashed
+        RunSpool.remove(for: serviceID)
+        KubeLiveTargetDisplay.clear(serviceID: serviceID)
+
+        if intentionalStop {
+            cancelReconnect(serviceID: serviceID)
+            records[serviceID] = ExecutionRecord(
+                serviceID: serviceID,
+                serviceName: serviceName,
+                mode: .managedProcess,
+                serviceState: .stopped,
+                exitCode: nil,
+                startedAt: records[serviceID]?.startedAt,
+                lastFailure: nil
+            )
+            schedulePublish()
+            return
+        }
+
+        let tookReconnect = await handleAutoReconnectIfNeeded(
+            serviceID: serviceID,
+            serviceName: serviceName,
+            exitCode: exitCode
+        )
+        if tookReconnect { return }
+
+        if exitCode == 0 {
+            records[serviceID] = ExecutionRecord(
+                serviceID: serviceID,
+                serviceName: serviceName,
+                mode: .managedProcess,
+                serviceState: .stopped,
+                exitCode: nil,
+                startedAt: records[serviceID]?.startedAt,
+                lastFailure: nil
+            )
+            schedulePublish()
+            return
+        }
+
+        let failure = RunSpool.tail(for: serviceID)
+        await finalizeManagedProcessCrash(
+            serviceID: serviceID,
+            serviceName: serviceName,
+            exitCode: exitCode,
+            failure: failure,
+            notify: true
+        )
+    }
+
+    public func setManagedProcessReconnecting(
+        serviceID: UUID,
+        serviceName: String,
+        attempt: Int,
+        maxAttempts: Int
+    ) {
         records[serviceID] = ExecutionRecord(
             serviceID: serviceID,
             serviceName: serviceName,
             mode: .managedProcess,
-            serviceState: legacyState,
-            exitCode: exitCode == 0 ? nil : exitCode,
+            serviceState: .reconnecting,
+            startedAt: records[serviceID]?.startedAt,
+            reconnectAttempt: attempt,
+            reconnectMax: maxAttempts
+        )
+        schedulePublish()
+    }
+
+    public func finalizeManagedProcessCrash(
+        serviceID: UUID,
+        serviceName: String,
+        exitCode: Int32,
+        failure: String?,
+        notify: Bool
+    ) async {
+        records[serviceID] = ExecutionRecord(
+            serviceID: serviceID,
+            serviceName: serviceName,
+            mode: .managedProcess,
+            serviceState: .crashed,
+            exitCode: exitCode == 0 ? 1 : exitCode,
             startedAt: records[serviceID]?.startedAt,
             lastFailure: failure
         )
-        RunSpool.remove(for: serviceID)
-        KubeLiveTargetDisplay.clear(serviceID: serviceID)
         schedulePublish()
 
-        if exitCode != 0 && !intentionalStop && KumaSettingsKey.bool(
-            forKey: KumaSettingsKey.notifyOnServiceFailure,
-            defaultValue: true,
-            fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
-        ) {
-            await SystemNotificationCenter.shared.send(
-                .serviceCrash(serviceName: serviceName, reason: failure ?? "Exited with code \(exitCode)")
+        guard notify,
+              KumaSettingsKey.bool(
+                  forKey: KumaSettingsKey.notifyOnServiceFailure,
+                  defaultValue: true,
+                  fallbackKey: KumaSettingsKey.legacyNotifyOnCrash
+              ) else { return }
+
+        await SystemNotificationCenter.shared.send(
+            .serviceCrash(
+                serviceName: serviceName,
+                reason: failure ?? "Exited with code \(exitCode)"
             )
-        }
+        )
     }
 
     public func stop(serviceID: UUID) async {
@@ -190,6 +275,7 @@ public actor ExecutionSupervisor {
     }
 
     private func performStop(serviceID: UUID) async {
+        cancelReconnect(serviceID: serviceID)
         if await ProcessRegistry.shared.isRunning(serviceID: serviceID) {
             await ProcessRegistry.shared.stop(serviceID: serviceID)
         }
@@ -354,6 +440,95 @@ public actor ExecutionSupervisor {
         await MainActor.run {
             LiveLogSession.shared.emitPollerLine(serviceID: serviceID, message: "[MONITOR] \(name) -> \(pid.map { "PID \($0)" } ?? "not running")")
         }
+    }
+
+    // MARK: - Auto reconnect
+
+    func beginReconnectSession(serviceID: UUID) {
+        reconnectSessions[serviceID]?.task?.cancel()
+        reconnectSessions[serviceID] = ReconnectSession(reconnectAttemptsCompleted: 0, task: nil)
+    }
+
+    func cancelReconnect(serviceID: UUID) {
+        reconnectSessions[serviceID]?.task?.cancel()
+        reconnectSessions.removeValue(forKey: serviceID)
+    }
+
+    func resetReconnectForTests() {
+        for id in Array(reconnectSessions.keys) {
+            cancelReconnect(serviceID: id)
+        }
+    }
+
+    /// Returns true when reconnect handling took over (no immediate terminal crash UI).
+    func handleAutoReconnectIfNeeded(
+        serviceID: UUID,
+        serviceName: String,
+        exitCode: Int32
+    ) async -> Bool {
+        guard let provider = await ServiceExecutionEngine.shared.activeProvider(for: serviceID) else { return false }
+        guard provider.isAutoReconnectEnabled else { return false }
+
+        var session = reconnectSessions[serviceID] ?? ReconnectSession()
+        if session.reconnectAttemptsCompleted >= AutoReconnectPolicy.maxAttempts {
+            await finishReconnectExhausted(
+                serviceID: serviceID,
+                serviceName: serviceName,
+                exitCode: exitCode,
+                session: &session
+            )
+            return true
+        }
+
+        session.reconnectAttemptsCompleted += 1
+        let attempt = session.reconnectAttemptsCompleted
+        reconnectSessions[serviceID] = session
+
+        setManagedProcessReconnecting(
+            serviceID: serviceID,
+            serviceName: serviceName,
+            attempt: attempt,
+            maxAttempts: AutoReconnectPolicy.maxAttempts
+        )
+
+        session.task?.cancel()
+        session.task = Task {
+            let delay = AutoReconnectPolicy.backoffNanoseconds(attempt: attempt)
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            do {
+                try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
+            } catch {
+                Self.reconnectLogger.warning(
+                    "Auto reconnect attempt \(attempt, privacy: .public) failed for \(serviceName, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                )
+                _ = await ExecutionSupervisor.shared.handleAutoReconnectIfNeeded(
+                    serviceID: serviceID,
+                    serviceName: serviceName,
+                    exitCode: exitCode
+                )
+            }
+        }
+        reconnectSessions[serviceID] = session
+        return true
+    }
+
+    private func finishReconnectExhausted(
+        serviceID: UUID,
+        serviceName: String,
+        exitCode: Int32,
+        session: inout ReconnectSession
+    ) async {
+        session.task?.cancel()
+        reconnectSessions.removeValue(forKey: serviceID)
+        let message = "Auto reconnect failed after \(AutoReconnectPolicy.maxAttempts) attempts"
+        await finalizeManagedProcessCrash(
+            serviceID: serviceID,
+            serviceName: serviceName,
+            exitCode: exitCode,
+            failure: message,
+            notify: true
+        )
     }
 }
 

@@ -16,7 +16,7 @@ extension ServiceStateStore {
     private func applySupervisorSnapshot(_ snapshot: [UUID: ExecutionRecord]) {
         for (serviceID, record) in snapshot {
             let existing = executionStates[serviceID] ?? .idle
-            if existing == .starting || existing == .stopping { continue }
+            if existing == .starting || existing == .stopping || existing.isReconnecting { continue }
             let next = record.executionState
             guard existing != next else { continue }
             if let failure = record.lastFailure {
@@ -28,7 +28,7 @@ extension ServiceStateStore {
         }
         for serviceID in executionStates.keys where snapshot[serviceID] == nil {
             let existing = executionStates[serviceID] ?? .idle
-            if existing == .starting || existing == .stopping { continue }
+            if existing == .starting || existing == .stopping || existing.isReconnecting { continue }
             if existing != .idle {
                 setExecutionState(.idle, for: serviceID)
             }

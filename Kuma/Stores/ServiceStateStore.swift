@@ -40,7 +40,7 @@ public final class ServiceStateStore {
 
     /// True when any service is starting/stopping (deck still needs runtime notifications).
     public var hasTransientExecutionStates: Bool {
-        executionStates.values.contains { $0 == .starting || $0 == .stopping }
+        executionStates.values.contains { $0 == .starting || $0 == .stopping || $0.isReconnecting }
     }
 
     /// IDs of services currently in an operational state (running or starting)
@@ -85,6 +85,9 @@ public final class ServiceStateStore {
             let existing = executionStates[id] ?? .idle
             // Don't overwrite an in-flight .starting or .stopping transition with background snapshot
             if existing == .starting && state == .idle {
+                continue
+            }
+            if existing.isReconnecting && (state == .idle || state == .starting) {
                 continue
             }
             if existing == .stopping {

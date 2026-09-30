@@ -121,7 +121,7 @@ public struct ServiceActionContextMenu: View {
                 Label("Start", systemImage: "play.fill")
             }
             .disabled(true)
-        } else if runtime.status == .running || runtime.status == .starting {
+        } else if runtime.status == .running || runtime.status == .starting || runtime.status == .reconnecting {
             Button {
                 onToggle()
             } label: {

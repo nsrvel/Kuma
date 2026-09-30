@@ -33,6 +33,16 @@ public enum ProviderCategory: String, CaseIterable, Codable, Sendable, Hashable 
 
     // MARK: - Tooltip for [+] Action
 
+    /// Managed processes that can use per-provider auto reconnect after unexpected exit.
+    public nonisolated var supportsAutoReconnect: Bool {
+        switch self {
+        case .kubernetes, .ssh, .shell:
+            return true
+        case .docker, .podman, .httpCheck, .tunnel, .processMonitor:
+            return false
+        }
+    }
+
     public var addTooltip: String {
         switch self {
         case .docker:         return "New Docker Service"

@@ -36,7 +36,7 @@ public struct InspectorRunningBanner: View {
     }
 
     private var isTransitional: Bool {
-        runtime.isLoading || runtime.status == .starting || runtime.status == .stopping
+        runtime.isLoading || runtime.status == .starting || runtime.status == .stopping || runtime.status == .reconnecting
     }
 
     public var body: some View {
@@ -61,6 +61,13 @@ public struct InspectorRunningBanner: View {
                     title: "Starting…",
                     subtitle: "Bringing the runner online.",
                     status: .starting,
+                    onViewLogs: onViewLogs
+                )
+            case .reconnecting:
+                statusBanner(
+                    title: runtime.statusTitle,
+                    subtitle: "Connection dropped — trying again.",
+                    status: .reconnecting,
                     onViewLogs: onViewLogs
                 )
             case .stopping:

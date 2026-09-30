@@ -8,13 +8,14 @@ public enum ServiceExecutionState: Sendable, Equatable {
     case starting
     case running(pid: Int32)
     case stopping
+    case reconnecting(attempt: Int, maxAttempts: Int)
     case crashed(exitCode: Int32)
     case failed(reason: String)
 
     /// Whether the service is actively running or in the process of starting up.
     public var isOperational: Bool {
         switch self {
-        case .running, .starting:
+        case .running, .starting, .reconnecting:
             return true
         case .idle, .stopping, .crashed, .failed:
             return false
@@ -24,7 +25,7 @@ public enum ServiceExecutionState: Sendable, Equatable {
     /// Whether the service is currently transitioning between operational states.
     public var isLoading: Bool {
         switch self {
-        case .starting, .stopping:
+        case .starting, .stopping, .reconnecting:
             return true
         case .idle, .running, .crashed, .failed:
             return false
@@ -50,6 +51,8 @@ public enum ServiceExecutionState: Sendable, Equatable {
             return "Running"
         case .stopping:
             return "Stopping"
+        case .reconnecting(let attempt, let maxAttempts):
+            return "Reconnecting (\(attempt)/\(maxAttempts))"
         case .crashed:
             return "Crashed"
         case .failed:
@@ -68,20 +71,28 @@ public enum ServiceExecutionState: Sendable, Equatable {
             return .running
         case .stopping:
             return .stopping
+        case .reconnecting:
+            return .reconnecting
         case .crashed, .failed:
             return .crashed
         }
     }
 
     /// Natural status sorting priority (Running > Starting > Stopping > Crashed > Failed > Idle)
+    public var isReconnecting: Bool {
+        if case .reconnecting = self { return true }
+        return false
+    }
+
     public var sortPriority: Int {
         switch self {
         case .running:  return 0
         case .starting: return 1
-        case .stopping: return 2
-        case .crashed:  return 3
-        case .failed:   return 4
-        case .idle:     return 5
+        case .reconnecting: return 2
+        case .stopping: return 3
+        case .crashed:  return 4
+        case .failed:   return 5
+        case .idle:     return 6
         }
     }
 }
