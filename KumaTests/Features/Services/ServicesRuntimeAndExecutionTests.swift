@@ -152,9 +152,13 @@ struct ServicesRuntimeAndExecutionTests {
             arguments: ["hello-kuma-runtime"]
         )
 
-        try await Task.sleep(nanoseconds: 300_000_000)
-
-        let tail = RunSpool.tail(for: serviceID) ?? ""
+        var tail = ""
+        for _ in 0..<20 {
+            tail = RunSpool.tail(for: serviceID) ?? ""
+            if tail.contains("hello-kuma-runtime") { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        await registry.stop(serviceID: serviceID)
         #expect(tail.contains("hello-kuma-runtime"))
         RunSpool.remove(for: serviceID)
     }

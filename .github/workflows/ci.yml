@@ -13,6 +13,7 @@ concurrency:
 jobs:
   test:
     name: Build & Test (macOS)
+    timeout-minutes: 25
     # objectVersion 77 requires Xcode 16+ (macos-14 images ship Xcode 15.4).
     runs-on: macos-15
     steps:
@@ -53,4 +54,5 @@ jobs:
             -clonedSourcePackagesDirPath .spm \
             -derivedDataPath build/DerivedData \
             -parallel-testing-enabled NO \
+            -maximum-test-execution-time-allowance 180 \
             test-without-building
