@@ -7,7 +7,7 @@ import Testing
 @MainActor
 struct SidebarEdgeCasesAndErrorTests {
 
-    @Test("TC-E01: Deleting Active Selected Group Falls Back To All Services")
+    @Test("Sidebar.E01: Deleting Active Selected Group Falls Back To All Services")
     func testDeleteActiveSelectedGroupFallsBackToAllServices() {
         let harness = SidebarTestHarness()
         let vm = SidebarViewModel(groupRepository: harness.repository)

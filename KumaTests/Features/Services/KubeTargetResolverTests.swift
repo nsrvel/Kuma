@@ -5,38 +5,6 @@ import Testing
 @Suite("Kube target resolver matrix", .serialized)
 struct KubeTargetResolverTests {
 
-    private struct KubectlFixture {
-        let kubectlPath: String
-        let kubeconfig: URL
-        let cleanup: () -> Void
-    }
-
-    private func installFakeKubectl(script: String) throws -> KubectlFixture {
-        let kubectlKey = KumaSettingsKey.customKubectlPath
-        let prior = UserDefaults.standard.string(forKey: kubectlKey)
-
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kuma-kube-resolver-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        let fakeKubectl = tempDir.appendingPathComponent("kubectl")
-        try script.write(to: fakeKubectl, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeKubectl.path)
-        UserDefaults.standard.set(fakeKubectl.path, forKey: kubectlKey)
-
-        let kubeconfigURL = tempDir.appendingPathComponent("config")
-        try "apiVersion: v1\nkind: Config\n".write(to: kubeconfigURL, atomically: true, encoding: .utf8)
-
-        return KubectlFixture(
-            kubectlPath: fakeKubectl.path,
-            kubeconfig: kubeconfigURL,
-            cleanup: {
-                try? FileManager.default.removeItem(at: tempDir)
-                if let prior { UserDefaults.standard.set(prior, forKey: kubectlKey) }
-                else { UserDefaults.standard.removeObject(forKey: kubectlKey) }
-            }
-        )
-    }
-
     private func makeProvider(
         targetName: String,
         targetType: KubeTargetType,
@@ -54,7 +22,7 @@ struct KubeTargetResolverTests {
 
     @Test("K1: pod exact port-forward reference")
     func testK1PodExact() async throws {
-        let fixture = try installFakeKubectl(script: "#!/bin/sh\nexit 0\n")
+        let fixture = try KubectlTestFixture.install(script: KubectlTestScripts.noop)
         defer { fixture.cleanup() }
         let podName = "web-6cf68f49b4-abcde"
         let provider = makeProvider(targetName: podName, targetType: .pod, usePattern: false)
@@ -65,7 +33,7 @@ struct KubeTargetResolverTests {
 
     @Test("K2: service exact")
     func testK2ServiceExact() async throws {
-        let fixture = try installFakeKubectl(script: "#!/bin/sh\nexit 0\n")
+        let fixture = try KubectlTestFixture.install(script: KubectlTestScripts.noop)
         defer { fixture.cleanup() }
         let provider = makeProvider(targetName: "api-svc", targetType: .service, usePattern: false)
         let exec = KubeExecCredentials(kubeconfigPath: fixture.kubeconfig.path, context: nil)
@@ -75,7 +43,7 @@ struct KubeTargetResolverTests {
 
     @Test("K3: deployment exact")
     func testK3DeploymentExact() async throws {
-        let fixture = try installFakeKubectl(script: "#!/bin/sh\nexit 0\n")
+        let fixture = try KubectlTestFixture.install(script: KubectlTestScripts.noop)
         defer { fixture.cleanup() }
         let provider = makeProvider(
             targetName: "forwarder-elasticsearch-stage",
@@ -97,7 +65,7 @@ struct KubeTargetResolverTests {
         fi
         exit 0
         """
-        let fixture = try installFakeKubectl(script: listScript)
+        let fixture = try KubectlTestFixture.install(script: listScript)
         defer { fixture.cleanup() }
         let provider = makeProvider(targetName: "api-svc-*", targetType: .service, usePattern: true)
         let exec = KubeExecCredentials(kubeconfigPath: fixture.kubeconfig.path, context: nil)
@@ -115,7 +83,7 @@ struct KubeTargetResolverTests {
         fi
         exit 0
         """
-        let fixture = try installFakeKubectl(script: listScript)
+        let fixture = try KubectlTestFixture.install(script: listScript)
         defer { fixture.cleanup() }
         let provider = makeProvider(
             targetName: "forwarder-elasticsearch-stage",
@@ -137,7 +105,7 @@ struct KubeTargetResolverTests {
         fi
         exit 0
         """
-        let fixture = try installFakeKubectl(script: listScript)
+        let fixture = try KubectlTestFixture.install(script: listScript)
         defer { fixture.cleanup() }
         let provider = makeProvider(targetName: "app-pod-abc", targetType: .pod, usePattern: true)
         let exec = KubeExecCredentials(kubeconfigPath: fixture.kubeconfig.path, context: nil)

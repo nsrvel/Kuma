@@ -5,6 +5,10 @@ import Testing
 @Suite("Execution supervisor", .serialized)
 struct ExecutionSupervisorTests {
 
+    init() async {
+        await ProcessTestSupport.resetProcessWorld()
+    }
+
     @Test("Managed process crash sets lastFailure from spool tail")
     func testManagedExitLastFailure() async throws {
         let serviceID = UUID()

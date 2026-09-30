@@ -7,7 +7,7 @@ import Testing
 struct DataPortVisualAndAccessibilityTests {
 
     // MARK: - [TC-F01] Import Preview Sheet File Lines Limit Strict
-    @Test("TC-F01: File ImportPreviewSheet dan WorkspaceImportPreviewSheet mematuhi batasan < 150 baris")
+    @Test("DataPort.F01: Import preview sheets stay under 150 lines")
     func testImportPreviewSheetFileLinesLimitStrict() {
         let previewPath = "Kuma/Presentation/Features/DataPort/Views/ImportPreviewSheet.swift"
         let wsPreviewPath = "Kuma/Presentation/Features/DataPort/Views/WorkspaceImportPreviewSheet.swift"
@@ -24,7 +24,7 @@ struct DataPortVisualAndAccessibilityTests {
     }
 
     // MARK: - [TC-F02] Import Detail Inspector Pane File Lines Limit Strict
-    @Test("TC-F02: File ImportDetailInspectorPane mematuhi batasan < 150 baris")
+    @Test("DataPort.F02: ImportDetailInspectorPane stays under 150 lines")
     func testImportDetailInspectorPaneFileLinesLimitStrict() {
         let inspectorPath = "Kuma/Presentation/Features/DataPort/Views/Components/ImportDetailInspectorPane.swift"
 
@@ -35,7 +35,7 @@ struct DataPortVisualAndAccessibilityTests {
     }
 
     // MARK: - [TC-F03] Import Preview Header View Rendering
-    @Test("TC-F03: Headless render ImportPreviewHeaderView berhasil dengan title dan search field")
+    @Test("DataPort.F03: ImportPreviewHeaderView exposes title and search binding")
     func testImportPreviewHeaderViewRendering() {
         var query = ""
         let binding = Binding<String>(
@@ -54,7 +54,7 @@ struct DataPortVisualAndAccessibilityTests {
     }
 
     // MARK: - [TC-F04] Import Preview Footer View Rendering
-    @Test("TC-F04: Headless render ImportPreviewFooterView dengan counter selection yang akurat")
+    @Test("DataPort.F04: ImportPreviewFooterView reports selection counts and actions")
     func testImportPreviewFooterViewRendering() {
         var didToggle = false
         var didCancel = false
@@ -83,7 +83,7 @@ struct DataPortVisualAndAccessibilityTests {
     }
 
     // MARK: - [TC-F05] Import Detail Inspector Pane Accessibility Labels
-    @Test("TC-F05: Render inspector pane dengan provider Docker dan port mapping")
+    @Test("DataPort.F05: ImportDetailInspectorPane renders Docker provider and ports")
     func testImportDetailInspectorPaneAccessibilityLabels() {
         let prov = DataPortService.ExportProvider(
             serviceID: UUID(),

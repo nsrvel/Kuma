@@ -362,7 +362,7 @@ struct ServicesValidationAndSecurityTests {
     }
 
     // MARK: - [TC-E01] Auto-Save Flushed On Disappear
-    @Test("TC-E01: Inspector auto-save flush immediately persists changes")
+    @Test("Services.E01: Inspector auto-save flush immediately persists changes")
     func testInspectorAutoSaveFlushImmediatelyPersists() async throws {
         let harness = ServicesTestHarness()
         let (service, provider) = try await harness.seedServiceWithProvider(

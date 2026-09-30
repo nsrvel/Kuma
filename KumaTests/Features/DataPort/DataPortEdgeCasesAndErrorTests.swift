@@ -7,7 +7,7 @@ import Testing
 struct DataPortEdgeCasesAndErrorTests {
 
     // MARK: - [TC-E01] Export Non-Existent Single Service Throws 404
-    @Test("TC-E01: exportData(scope: .service(fakeID)) melempar error 404 jika service tidak ditemukan")
+    @Test("DataPort.E01: exportData(scope: .service) throws when service is missing")
     func testExportNonExistentSingleServiceThrows404() async {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -19,7 +19,7 @@ struct DataPortEdgeCasesAndErrorTests {
     }
 
     // MARK: - [TC-E02] Import Backup With Null Optional Fields
-    @Test("TC-E02: decodeBackup dan importAll berhasil meskipun field groups dan images bernilai nil")
+    @Test("DataPort.E02: import succeeds when groups and workspaceImages are nil")
     func testImportBackupWithNullOptionalFields() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -37,7 +37,7 @@ struct DataPortEdgeCasesAndErrorTests {
     }
 
     // MARK: - [TC-E03] Import Service Without Providers Or Ports
-    @Test("TC-E03: Import service tanpa provider atau port mapping tersimpan aman di SQLite")
+    @Test("DataPort.E03: service without providers or ports imports safely")
     func testImportServiceWithoutProvidersOrPorts() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -62,7 +62,7 @@ struct DataPortEdgeCasesAndErrorTests {
     }
 
     // MARK: - [TC-E04] Port Mapping ProviderID Resolution Fallback
-    @Test("TC-E04: Port mapping berhasil memetakan ID relasi yang tepat saat import")
+    @Test("DataPort.E04: port mapping preserves provider relationship on import")
     func testPortMappingProviderIDResolutionFallback() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }
@@ -86,7 +86,7 @@ struct DataPortEdgeCasesAndErrorTests {
     }
 
     // MARK: - [TC-E05] Compose Image Extraction From Yaml Config
-    @Test("TC-E05: resolvedTarget mengekstrak nama image Docker dari baris image: di YAML")
+    @Test("DataPort.E05: resolvedTarget extracts Docker image from image: line in YAML")
     func testComposeImageExtractionFromYamlConfig() {
         let yaml = """
         version: '3.8'
@@ -107,7 +107,7 @@ struct DataPortEdgeCasesAndErrorTests {
     }
 
     // MARK: - [TC-E06] Clipboard JSON Paste Verification
-    @Test("TC-E06: Payload string dari Copy Config berhasil di-parse via parseAnyBackup dan siap di-import")
+    @Test("DataPort.E06: Copy Config payload parses via parseAnyBackup for import")
     func testClipboardJSONPasteVerification() throws {
         let svc = DataPortService.ExportService(name: "Clipboard Service")
         let prov = DataPortService.ExportProvider(serviceID: svc.id, type: "shell", runCommand: "ls -la")

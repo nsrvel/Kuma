@@ -5,8 +5,12 @@ import Testing
 @Suite("Feature 00 - Category C: Lifecycle, Subprocess Kill & Buffer Teardown", .serialized)
 struct LifecycleTeardownTests {
 
+    init() async {
+        await ProcessTestSupport.resetProcessWorld()
+    }
+
     // MARK: - [TC-C01] Terminate All Spawns
-    @Test("TC-C01: ProcessRegistry terminateAll terminates tracked processes and removes them")
+    @Test("Lifecycle.C01: ProcessRegistry terminateAll terminates tracked processes and removes them")
     func testProcessRegistryTerminateAllSpawns() async throws {
         let registry = ProcessRegistry.shared
         let serviceID = UUID()
@@ -88,12 +92,15 @@ struct LifecycleTeardownTests {
     }
 
     // MARK: - [TC-C05] Terminate All Idempotency
-    @Test("TC-C05: Calling terminateAll repeatedly is safe and idempotent")
-    func testProcessRegistryTerminateAllIdempotency() async {
+    @Test("Lifecycle.C05: Calling terminateAll repeatedly is safe and idempotent")
+    func testProcessRegistryTerminateAllIdempotency() async throws {
         let registry = ProcessRegistry.shared
+        let serviceID = UUID()
+        _ = try await registry.launch(serviceID: serviceID, executable: "/bin/echo", arguments: ["ok"])
+        try? await Task.sleep(nanoseconds: 100_000_000)
         await registry.terminateAll()
         await registry.terminateAll()
-        await registry.terminateAll()
-        #expect(true)
+        #expect(await registry.isRunning(serviceID: serviceID) == false)
+        #expect(await registry.getSnapshot(serviceID: serviceID) == nil)
     }
 }
