@@ -23,9 +23,7 @@ public struct SidebarFooterView: View {
                 }
 
                 SidebarFooterButton(icon: "questionmark.circle", tooltip: "Help") {
-                    if let url = URL(string: "https://github.com") {
-                        NSWorkspace.shared.open(url)
-                    }
+                    NSWorkspace.shared.open(KumaLinks.repository)
                 }
 
                 Spacer()

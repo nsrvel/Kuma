@@ -5,8 +5,7 @@ public struct PodmanBrandVector: View {
     public init() {}
 
     public var body: some View {
-        GeometryReader { geo in
-            Canvas { ctx, size in
+        Canvas { ctx, size in
                 let baseScale = min(size.width, size.height) / 24.0
                 let offsetX = (size.width - 24.0 * baseScale) / 2.0
                 let offsetY = (size.height - 24.0 * baseScale) / 2.0
@@ -100,8 +99,6 @@ public struct PodmanBrandVector: View {
                     with: .color(.black.opacity(0.45)),
                     style: StrokeStyle(lineWidth: max(0.9, size.width * 0.05), lineCap: .round)
                 )
-            }
-            .drawingGroup()
         }
     }
 }

@@ -15,7 +15,6 @@ public struct SettingsView: View {
                 // User & App Preferences
                 SettingsGeneralSection(viewModel: viewModel)
                 SettingsAppearanceSection(viewModel: viewModel)
-                SettingsNotificationsSection(viewModel: viewModel)
 
                 // Developer & Engine Tools
                 SettingsCLIToolsSection(viewModel: viewModel)
@@ -23,7 +22,7 @@ public struct SettingsView: View {
                 SettingsPortsConnectionsSection(viewModel: viewModel)
                 SettingsLogsSection(viewModel: viewModel)
 
-                // Data & Storage Management
+                // Data
                 SettingsDataSection(viewModel: viewModel, workspaceStore: workspaceStore)
 
                 // App Version & Metadata Footer

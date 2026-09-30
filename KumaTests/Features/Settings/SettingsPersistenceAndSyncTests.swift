@@ -122,16 +122,16 @@ struct SettingsPersistenceAndSyncTests {
                 viewModel.notifyOnCrash = false
             }
             group.addTask { @MainActor in
-                viewModel.notifySound = false
+                viewModel.clearLogsOnSwitch = true
             }
             group.addTask { @MainActor in
-                viewModel.warnOnPortCollision = false
+                viewModel.portConflictPolicy = .killExisting
             }
         }
 
         #expect(viewModel.notifyOnCrash == false)
-        #expect(viewModel.notifySound == false)
-        #expect(viewModel.warnOnPortCollision == false)
+        #expect(viewModel.clearLogsOnSwitch == true)
+        #expect(viewModel.portConflictPolicy == .killExisting)
     }
 
     // MARK: - [TC-C07] Port Conflict Policy Persistence

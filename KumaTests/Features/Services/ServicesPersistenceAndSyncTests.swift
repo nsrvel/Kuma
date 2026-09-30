@@ -68,18 +68,15 @@ struct ServicesPersistenceAndSyncTests {
         await deckVM.loadWorkspaceAsync(workspaceID: harness.defaultWorkspaceID)
         await inspectorVM.loadService(id: service.id)
 
-        #expect(!deckVM.runtimeStates[service.id]!.status.isOperational)
+        #expect(!deckVM.runtime(for: service.id).status.isOperational)
         #expect(!inspectorVM.isRunning)
 
-        // Mutate in store directly or via action
         store.setExecutionState(.running(pid: 9999), for: service.id)
 
         #expect(store.state(for: service.id) == .running(pid: 9999))
         #expect(inspectorVM.isRunning)
         #expect(inspectorVM.executionState == .running(pid: 9999))
-
-        deckVM.runtimeStates[service.id] = store.runtime(for: service.id)
-        #expect(deckVM.runtimeStates[service.id]?.status == .running)
+        #expect(deckVM.runtime(for: service.id).status == .running)
     }
 
     // MARK: - [TC-C07] Duplicate Service Atomic Integrity

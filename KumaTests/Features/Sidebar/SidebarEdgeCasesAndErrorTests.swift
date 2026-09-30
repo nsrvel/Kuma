@@ -103,4 +103,25 @@ struct SidebarEdgeCasesAndErrorTests {
         vm.moveGroupDown(id: groupID)
         #expect(vm.groups.first?.id == groupID)
     }
+
+    @Test("TC-E08: Workspace Switch Clears Stale Group Selection")
+    func testWorkspaceSwitchClearsStaleGroupSelection() async throws {
+        let harness = SidebarTestHarness()
+        let vm = SidebarViewModel(groupRepository: harness.repository)
+        let workspaceB = UUID()
+        try harness.seedWorkspace(id: workspaceB, name: "Workspace B")
+
+        await vm.loadGroups(workspaceID: harness.workspaceID)
+        vm.addGroup(name: "Group A", workspaceID: harness.workspaceID)
+        let groupID = vm.groups.first!.id
+        #expect(vm.selectedID == groupID)
+
+        await vm.loadGroups(workspaceID: workspaceB)
+        #expect(vm.selectedID == UUID.stable("all-services"))
+        #expect(vm.groupIDForSelectedRow(vm.selectedID) == nil)
+
+        vm.selectedID = UUID.stable("starred-services")
+        await vm.loadGroups(workspaceID: workspaceB)
+        #expect(vm.selectedID == UUID.stable("starred-services"))
+    }
 }

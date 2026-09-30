@@ -75,6 +75,10 @@ public final class ServiceExecutionEngine: Sendable {
 
         Self.logger.info("Starting service '\(service.name)' with provider '\(provider.type.rawValue)'")
 
+        if KumaSettingsKey.bool(forKey: KumaSettingsKey.clearLogsOnSwitch, defaultValue: false) {
+            await MainActor.run { LogAggregator.shared.clear(serviceID: serviceID) }
+        }
+
         let pipeline = ServiceLogPipeline(serviceID: service.id, serviceName: service.name)
         setPipeline(pipeline, for: serviceID)
 
@@ -115,6 +119,31 @@ public final class ServiceExecutionEngine: Sendable {
         if await tunnelRunner.isRunning(serviceID: serviceID) { return true }
         if await processMonitorRunner.isRunning(serviceID: serviceID) { return true }
         return false
+    }
+
+    /// Services among `candidates` that are active on non-process runners (health/monitor) or other runners.
+    public func runningServiceIDs(among candidates: Set<UUID>) async -> Set<UUID> {
+        guard !candidates.isEmpty else { return [] }
+        var running = healthCheckRunner.activeServiceIDs().intersection(candidates)
+        running.formUnion(processMonitorRunner.activeServiceIDs().intersection(candidates))
+        var remaining = candidates.subtracting(running)
+
+        let processActive = Set(await ProcessRegistry.shared.activeRunningServiceIDs()).intersection(remaining)
+        running.formUnion(processActive)
+        remaining.subtract(processActive)
+        guard !remaining.isEmpty else { return running }
+
+        await withTaskGroup(of: UUID?.self) { group in
+            for id in remaining {
+                group.addTask {
+                    await self.isServiceRunning(serviceID: id) ? id : nil
+                }
+            }
+            for await id in group {
+                if let id { running.insert(id) }
+            }
+        }
+        return running
     }
 
     private func setPipeline(_ pipeline: ServiceLogPipeline, for serviceID: UUID) {

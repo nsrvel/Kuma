@@ -6,6 +6,25 @@ import Testing
 @MainActor
 struct ServicesRuntimeAndExecutionTests {
 
+    // MARK: - ServiceStateNotification parsing
+    @Test("TC-D07: ServiceStateNotification preserves PID when notification omits pid")
+    func testServiceStateNotificationPreservesPID() {
+        let existing = ServiceExecutionState.running(pid: 4242)
+        let userInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.running]
+        let parsed = ServiceStateNotification.executionState(from: userInfo, existing: existing)
+        #expect(parsed == .running(pid: 4242))
+    }
+
+    @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
+    func testServiceStateNotificationExitCode() {
+        let userInfo: [String: Any] = [
+            ServiceStateNotification.stateKey: ServiceState.crashed,
+            ServiceStateNotification.exitCodeKey: Int32(42)
+        ]
+        let parsed = ServiceStateNotification.executionState(from: userInfo, existing: .idle)
+        #expect(parsed == .crashed(exitCode: 42))
+    }
+
     // MARK: - [TC-D04] Batch Process Status Lookup
     @Test("TC-D04: ProcessRegistry.runningStates returns execution states in single call")
     func testBatchProcessStatusLookup() async {
@@ -91,25 +110,25 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     // MARK: - [TC-D07] Apply Runtime Diff Performance & Version Stability
-    @Test("TC-D07: applyRuntimeDiff updates state without bumping filterVersion when status filters are inactive")
-    func testApplyRuntimeDiffPerformance() async {
-        let deckVM = ServicesDeckViewModel()
+    @Test("TC-D07: execution state updates without bumping filterVersion when status filters are inactive")
+    func testExecutionStateFilterVersionStability() async {
+        let store = ServiceStateStore()
+        let deckVM = ServicesDeckViewModel(stateStore: store)
         let sID = UUID()
 
         let initialVersion = deckVM.filterVersion
-        deckVM.applyRuntimeDiff([sID: ServiceRuntimeState(status: .running, isLoading: false)])
+        store.setExecutionState(.running(pid: 0), for: sID)
+        deckVM.notifyExecutionStatesChanged()
 
-        #expect(deckVM.runtimeStates[sID]?.status == .running)
-        // With no status filter or sort-by-status active, filterVersion should remain unchanged
+        #expect(deckVM.runtime(for: sID).status == .running)
         #expect(deckVM.filterVersion == initialVersion)
 
-        // Now activate a status filter
         deckVM.selectedStatuses = [.running]
         let versionWithFilter = deckVM.filterVersion
         #expect(versionWithFilter > initialVersion)
 
-        // Diffing status now SHOULD bump version and recompute
-        deckVM.applyRuntimeDiff([sID: ServiceRuntimeState(status: .stopped, isLoading: false)])
+        store.setExecutionState(.idle, for: sID)
+        deckVM.notifyExecutionStatesChanged()
         #expect(deckVM.filterVersion > versionWithFilter)
     }
 }

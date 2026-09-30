@@ -48,42 +48,17 @@ struct SettingsVisualTests {
         #expect(missingBadge.isInstalled == false)
     }
 
-    // MARK: - [TC-F04] Danger Zone Section Rendering
-    @Test("TC-F04: SettingsDangerZoneSection renders with destructive styling and binding")
-    func testDangerZoneSectionRendering() {
-        var showDialog = false
-        var showResetSettingsDialog = false
-        let binding = Binding(get: { showDialog }, set: { showDialog = $0 })
-        let resetSettingsBinding = Binding(get: { showResetSettingsDialog }, set: { showResetSettingsDialog = $0 })
+    // MARK: - [TC-F04] Data Section Rendering
+    @Test("TC-F04: SettingsDataSection renders backup and reset rows")
+    func testDataSectionRendering() {
+        let harness = SettingsTestHarness()
+        defer { harness.cleanup() }
 
-        let section = SettingsDangerZoneSection(
-            showResetConfirmation: binding,
-            showResetSettingsConfirmation: resetSettingsBinding,
-            isProcessing: false,
-            onReset: {},
-            onResetSettings: {}
-        )
+        let viewModel = SettingsViewModel(userDefaults: harness.userDefaults)
+        let store = WorkspaceStore()
+        let section = SettingsDataSection(viewModel: viewModel, workspaceStore: store)
 
         #expect(section != nil)
-        #expect(showDialog == false)
-        #expect(showResetSettingsDialog == false)
-    }
-
-    // MARK: - [TC-F05] Backup Restore Section Rendering
-    @Test("TC-F05: SettingsBackupRestoreSection renders buttons and descriptions")
-    func testBackupRestoreSectionRendering() {
-        var exportClicked = false
-        var importClicked = false
-
-        let section = SettingsBackupRestoreSection(
-            isProcessing: false,
-            onExport: { exportClicked = true },
-            onImport: { importClicked = true }
-        )
-
-        #expect(section != nil)
-        #expect(!exportClicked)
-        #expect(!importClicked)
     }
 
     // MARK: - [TC-F06] Ports & Connections Section Rendering

@@ -89,6 +89,8 @@ public actor ProcessRegistry {
     }
 
     private var activeProcesses: [UUID: ManagedProcess] = [:]
+    /// Services we are stopping via `stop()` — termination should not be treated as a user-visible crash.
+    private var intentionallyStopping: Set<UUID> = []
 
     private init() {}
 
@@ -175,25 +177,25 @@ public actor ProcessRegistry {
     }
 
     private func handleProcessTerminated(serviceID: UUID, exitCode: Int32) async {
+        let wasIntentionalStop = intentionallyStopping.remove(serviceID) != nil
         guard let managed = activeProcesses.removeValue(forKey: serviceID) else { return }
         Self.syncActiveIDs(Array(activeProcesses.keys))
         managed.cleanupPipes(drainRemaining: true)
 
-        let state: ServiceState = (exitCode == 0) ? .stopped : .crashed
+        let state: ServiceState = (exitCode == 0 || wasIntentionalStop) ? .stopped : .crashed
+        let pid = managed.process.processIdentifier
         Task { @MainActor in
-            NotificationCenter.default.post(
-                name: .kumaServiceStateChanged,
-                object: serviceID,
-                userInfo: ["state": state]
-            )
+            if state == .crashed {
+                ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: exitCode)
+            } else {
+                ServiceStateNotification.post(serviceID: serviceID, state: state, pid: pid)
+            }
         }
 
         // Send macOS system notification if crashed and notifyOnCrash is enabled
-        if exitCode != 0 && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
-            let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
+        if exitCode != 0 && !wasIntentionalStop && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
             await SystemNotificationCenter.shared.send(
-                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)"),
-                playSound: playSound
+                .serviceCrash(serviceName: managed.serviceName, reason: "Exited with code \(exitCode)")
             )
         }
     }
@@ -203,6 +205,7 @@ public actor ProcessRegistry {
     /// Pipes are kept open during shutdown to capture any final exit logs before being closed.
     public func stop(serviceID: UUID) async {
         guard let managed = activeProcesses[serviceID] else { return }
+        intentionallyStopping.insert(serviceID)
         let pgid = managed.pgid
         let process = managed.process
 
@@ -241,6 +244,7 @@ public actor ProcessRegistry {
             Self.syncActiveIDs(Array(activeProcesses.keys))
             removed.cleanupPipes(drainRemaining: true)
         }
+        intentionallyStopping.remove(serviceID)
     }
 
     /// Checks if a service process is currently active and running.
@@ -258,6 +262,20 @@ public actor ProcessRegistry {
             pgid: managed.pgid,
             startTime: managed.startTime
         )
+    }
+
+    public func serviceName(forPID pid: pid_t) -> String? {
+        for managed in activeProcesses.values where managed.process.isRunning && managed.process.processIdentifier == pid {
+            return managed.serviceName
+        }
+        return nil
+    }
+
+    public func serviceID(forPID pid: pid_t) -> UUID? {
+        for managed in activeProcesses.values where managed.process.isRunning && managed.process.processIdentifier == pid {
+            return managed.serviceID
+        }
+        return nil
     }
 
     /// Batch queries execution states for a list of service IDs in a single actor crossing.

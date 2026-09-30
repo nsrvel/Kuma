@@ -7,7 +7,6 @@ public struct SettingsDataSection: View {
 
     @State private var showResetConfirmation = false
     @State private var showResetSettingsConfirmation = false
-    @State private var showImportPreview = false
     @State private var loadedBackup: DataPortService.KumaBackup? = nil
     @State private var pendingImportFileName: String = ""
     @State private var alertMessage: String? = nil
@@ -23,23 +22,84 @@ public struct SettingsDataSection: View {
     }
 
     public var body: some View {
-        VStack(spacing: KumaSpacing.xl) {
-            SettingsBackupRestoreSection(
-                isProcessing: isProcessing,
-                onExport: { exportData() },
-                onImport: { promptImportFile() }
-            )
-
-            SettingsDangerZoneSection(
-                showResetConfirmation: $showResetConfirmation,
-                showResetSettingsConfirmation: $showResetSettingsConfirmation,
-                isProcessing: isProcessing,
-                onReset: { resetData() },
-                onResetSettings: {
-                    viewModel.resetSettingsToDefault()
-                    alertMessage = "All preferences have been reset to defaults."
+        KumaFormSection(
+            icon: "internaldrive.fill",
+            title: "Data"
+        ) {
+            VStack(alignment: .leading, spacing: KumaSpacing.lg) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Export Backup")
+                            .font(KumaFont.body)
+                        Text("Export workspaces, services, and configuration to JSON.")
+                            .font(KumaFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Export") {
+                        exportData()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isProcessing)
                 }
-            )
+
+                Divider().opacity(0.3)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Import Backup")
+                            .font(KumaFont.body)
+                        Text("Restore workspaces and configuration from a JSON backup.")
+                            .font(KumaFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Import") {
+                        promptImportFile()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isProcessing)
+                }
+
+                Divider().opacity(0.3)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reset Settings to Default")
+                            .font(KumaFont.body)
+                            .foregroundStyle(.primary)
+                        Text("Restore preferences without affecting workspaces.")
+                            .font(KumaFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Reset") {
+                        showResetSettingsConfirmation = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isProcessing)
+                }
+
+                Divider().opacity(0.3)
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reset All Data")
+                            .font(KumaFont.body)
+                            .foregroundStyle(.red)
+                        Text("Permanently delete all workspaces and services.")
+                            .font(KumaFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Reset All") {
+                        showResetConfirmation = true
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .disabled(isProcessing)
+                }
+            }
         }
         .sheet(item: $loadedBackup) { backup in
             ImportPreviewSheet(
@@ -63,6 +123,31 @@ public struct SettingsDataSection: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(alertMessage ?? "")
+        }
+        .confirmationDialog(
+            "Reset Settings?",
+            isPresented: $showResetSettingsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset Settings", role: .destructive) {
+                viewModel.resetSettingsToDefault()
+                alertMessage = "All preferences have been reset to defaults."
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All preferences and tool paths will be reset to defaults. Workspaces and services will not be affected.")
+        }
+        .confirmationDialog(
+            "Reset All Data?",
+            isPresented: $showResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset All Data", role: .destructive) {
+                resetData()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This action cannot be undone. All workspaces, services, and data will be permanently deleted.")
         }
     }
 
@@ -106,12 +191,10 @@ public struct SettingsDataSection: View {
             let backup = try DataPortService.decodeBackup(from: data)
             self.loadedBackup = backup
             self.pendingImportFileName = url.lastPathComponent
-            self.showImportPreview = true
         } catch {
             alertMessage = "Failed to read backup file: \(error.localizedDescription)"
         }
     }
-
 
     private func executeSelectiveImport(
         backup: DataPortService.KumaBackup,

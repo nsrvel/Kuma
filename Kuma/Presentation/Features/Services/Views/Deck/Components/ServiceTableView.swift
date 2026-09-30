@@ -5,7 +5,7 @@ import SwiftUI
 /// interactive port chips, live status pills, and context menu actions via an ellipsis button.
 public struct ServiceTableView: View {
     public let snapshots: [ServiceCardSnapshot]
-    public let runtimeStates: [UUID: ServiceRuntimeState]
+    public let runtimeFor: (UUID) -> ServiceRuntimeState
     public let selectedID: UUID?
     public var groups: [ServiceGroup] = []
 
@@ -14,13 +14,13 @@ public struct ServiceTableView: View {
 
     public init(
         snapshots: [ServiceCardSnapshot],
-        runtimeStates: [UUID: ServiceRuntimeState],
+        runtimeFor: @escaping (UUID) -> ServiceRuntimeState,
         selectedID: UUID?,
         groups: [ServiceGroup] = [],
         handlers: ServiceTableActionHandlers
     ) {
         self.snapshots = snapshots
-        self.runtimeStates = runtimeStates
+        self.runtimeFor = runtimeFor
         self.selectedID = selectedID
         self.groups = groups
         self.handlers = handlers
@@ -28,7 +28,7 @@ public struct ServiceTableView: View {
 
     public init(
         snapshots: [ServiceCardSnapshot],
-        runtimeStates: [UUID: ServiceRuntimeState],
+        runtimeFor: @escaping (UUID) -> ServiceRuntimeState,
         selectedID: UUID?,
         groups: [ServiceGroup] = [],
         onToggle: @escaping (UUID) -> Void,
@@ -44,7 +44,7 @@ public struct ServiceTableView: View {
     ) {
         self.init(
             snapshots: snapshots,
-            runtimeStates: runtimeStates,
+            runtimeFor: runtimeFor,
             selectedID: selectedID,
             groups: groups,
             handlers: ServiceTableActionHandlers(
@@ -85,7 +85,7 @@ public struct ServiceTableView: View {
 
             // MARK: 4. Status (Polished Capsule Pill)
             TableColumn("Status") { snapshot in
-                let runtime = runtimeStates[snapshot.id] ?? .idle
+                let runtime = runtimeFor(snapshot.id)
                 ServiceStatusObserver(state: runtime, isDisabled: snapshot.isDisabled)
                     .contentShape(Rectangle())
                     .onTapGesture { handlers.onSelect(snapshot.id) }
@@ -94,7 +94,7 @@ public struct ServiceTableView: View {
 
             // MARK: 5. Actions (Ellipsis Menu Button)
             TableColumn("") { snapshot in
-                let runtime = runtimeStates[snapshot.id] ?? .idle
+                let runtime = runtimeFor(snapshot.id)
                 ServiceTableActionsCell(
                     snapshot: snapshot,
                     runtime: runtime,
@@ -107,7 +107,7 @@ public struct ServiceTableView: View {
         .tableStyle(.inset(alternatesRowBackgrounds: true))
         .serviceTableContextMenu(
             snapshots: snapshots,
-            runtimeStates: runtimeStates,
+            runtimeFor: runtimeFor,
             groups: groups,
             handlers: handlers
         )

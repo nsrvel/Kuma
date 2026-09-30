@@ -38,20 +38,12 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
                     if let pid = currentPID {
                         await pipeline.emit(level: "INFO", message: "[MONITOR] Process '\(processName)' is RUNNING (PID: \(pid))")
                         await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .kumaServiceStateChanged,
-                                object: serviceID,
-                                userInfo: ["state": ServiceState.running]
-                            )
+                            ServiceStateNotification.post(serviceID: serviceID, state: .running, pid: pid)
                         }
                     } else {
                         await pipeline.emit(level: "WARN", message: "[MONITOR] Process '\(processName)' is NOT running")
                         await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .kumaServiceStateChanged,
-                                object: serviceID,
-                                userInfo: ["state": ServiceState.stopped]
-                            )
+                            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
                         }
                     }
                 }
@@ -67,16 +59,18 @@ public final class ProcessMonitorRunner: ServiceRunnerProtocol, @unchecked Senda
         let task = unregisterTask(for: serviceID)
         task?.cancel()
         await MainActor.run {
-            NotificationCenter.default.post(
-                name: .kumaServiceStateChanged,
-                object: serviceID,
-                userInfo: ["state": ServiceState.stopped]
-            )
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
         checkIsRunning(serviceID: serviceID)
+    }
+
+    public func activeServiceIDs() -> Set<UUID> {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return Set(activeWatchTasks.compactMap { id, task in task.isCancelled ? nil : id })
     }
 
     private func checkIsRunning(serviceID: UUID) -> Bool {

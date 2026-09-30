@@ -9,6 +9,7 @@ public actor ServiceLogPipeline {
     private let chunker = LogStreamChunker()
     private var pendingBatch: [LiveLogEntry] = []
     private var flushTask: Task<Void, Never>? = nil
+    private var pendingRawChunks: [(chunk: String, level: String)] = []
 
     private let flushIntervalNanoseconds: UInt64 = 33_000_000 // ~30Hz (33ms) cadenced UI dispatch
     private let maxBatchSize = 30
@@ -20,6 +21,10 @@ public actor ServiceLogPipeline {
 
     /// Primary entry point for stdout/stderr raw chunks from subprocesses.
     public func ingestRawChunk(_ chunk: String, level: String = "INFO") {
+        ingestRawChunkImpl(chunk, level: level)
+    }
+
+    private func ingestRawChunkImpl(_ chunk: String, level: String = "INFO") {
         let completeLines = chunker.ingest(chunk)
         guard !completeLines.isEmpty else { return }
 
@@ -86,9 +91,12 @@ public actor ServiceLogPipeline {
         let batch = pendingBatch
         pendingBatch.removeAll(keepingCapacity: true)
 
-        // 1. Hot path: Single batch append to LogAggregator on MainActor (1 view invalidation per frame)
+        // 1. Hot path: UI batch only when a live-log surface is subscribed
         Task { @MainActor in
-            LogAggregator.shared.appendBatch(batch)
+            let aggregator = LogAggregator.shared
+            if aggregator.deliversToUI {
+                aggregator.appendBatch(batch)
+            }
         }
 
         // 2. Cold path: Single batch append to disk LogFileWriter
@@ -102,6 +110,7 @@ public actor ServiceLogPipeline {
     public func finish() {
         flushTask?.cancel()
         flushTask = nil
+        drainPendingRawChunks()
 
         if let trailing = chunker.flushRemaining() {
             let sanitized = ANSISanitizer.sanitize(trailing)
@@ -120,11 +129,23 @@ public actor ServiceLogPipeline {
         flushBatch()
     }
 
+    private func enqueueRawChunk(_ chunk: String, level: String = "INFO") {
+        pendingRawChunks.append((chunk, level))
+        drainPendingRawChunks()
+    }
+
+    private func drainPendingRawChunks() {
+        while !pendingRawChunks.isEmpty {
+            let item = pendingRawChunks.removeFirst()
+            ingestRawChunkImpl(item.chunk, level: item.level)
+        }
+    }
+
     /// Creates a thread-safe `@Sendable` closure wrapping chunk ingestion.
     public nonisolated func makeOutputHandler() -> @Sendable (String) -> Void {
         return { [weak self] text in
             Task { [weak self] in
-                await self?.ingestRawChunk(text)
+                await self?.enqueueRawChunk(text)
             }
         }
     }

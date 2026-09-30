@@ -21,11 +21,20 @@ struct SidebarVisualAndAccessibilityTests {
 
     @Test("TC-F02: Strict File Lines Limit Under 150 Lines")
     func testSidebarViewFileLinesLimitStrict() {
-        let baseDir = "/Users/putra/Development/Personal/Projects/Kuma/Repositories/Kuma/Kuma/Presentation/Features/Sidebar/Views"
+        let repoRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Sidebar
+            .deletingLastPathComponent() // Features
+            .deletingLastPathComponent() // KumaTests
+            .deletingLastPathComponent() // repo root
+        let baseDir = repoRoot
+            .appendingPathComponent("Kuma/Presentation/Features/Sidebar/Views", isDirectory: true)
+            .path
         let fileManager = FileManager.default
 
-        guard let enumerator = fileManager.enumerator(atPath: baseDir) else {
-            Issue.record("Failed to enumerate Sidebar Views directory")
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: baseDir, isDirectory: &isDirectory), isDirectory.boolValue,
+              let enumerator = fileManager.enumerator(atPath: baseDir) else {
+            Issue.record("Sidebar Views directory not found at \(baseDir)")
             return
         }
 

@@ -6,7 +6,7 @@ public struct ServicesDeckView: View {
     public let isStarredOnly: Bool
     public let filterGroupID: UUID?
 
-    @State var viewModel: ServicesDeckViewModel
+    @Bindable var viewModel: ServicesDeckViewModel
     @State var pendingImportBackup: DataPortService.KumaBackup? = nil
     @State var pendingImportFileName: String = ""
     @State var alertMessage: String? = nil
@@ -15,11 +15,16 @@ public struct ServicesDeckView: View {
     @Environment(WorkspaceStore.self) var workspaceStore
     @Environment(ServiceStateStore.self) var serviceStateStore
 
-    public init(workspaceID: UUID, isStarredOnly: Bool = false, filterGroupID: UUID? = nil) {
+    public init(
+        workspaceID: UUID,
+        viewModel: ServicesDeckViewModel,
+        isStarredOnly: Bool = false,
+        filterGroupID: UUID? = nil
+    ) {
         self.workspaceID = workspaceID
+        self.viewModel = viewModel
         self.isStarredOnly = isStarredOnly
         self.filterGroupID = filterGroupID
-        _viewModel = State(initialValue: ServicesDeckViewModel(isStarredOnly: isStarredOnly, filterGroupID: filterGroupID))
     }
 
     public var body: some View {
@@ -36,20 +41,6 @@ public struct ServicesDeckView: View {
         .searchable(text: $viewModel.searchText, isPresented: $isSearching, placement: .toolbar, prompt: "Search services")
         .toolbar {
             toolbarContent()
-        }
-        .task(id: workspaceID) {
-            viewModel.stateStore = serviceStateStore
-            await viewModel.loadWorkspaceAsync(workspaceID: workspaceID)
-        }
-        .onChange(of: isStarredOnly) { _, newStarred in
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
-                viewModel.isStarredOnly = newStarred
-            }
-        }
-        .onChange(of: filterGroupID) { _, newGroupID in
-            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
-                viewModel.filterGroupID = newGroupID
-            }
         }
         .sheet(item: $pendingImportBackup) { backup in
             let wsName = workspaceStore.workspaces.first(where: { $0.id == workspaceID })?.name ?? "Workspace"
@@ -152,6 +143,10 @@ public struct ServicesDeckView: View {
 }
 
 #Preview {
-    ServicesDeckView(workspaceID: UUID())
-        .frame(width: 900, height: 650)
+    WorkspaceServicesDeckHost(
+        workspaceID: UUID(),
+        selectedSidebarID: .stable("all-services"),
+        sidebarViewModel: SidebarViewModel.makeDefault()
+    )
+    .frame(width: 900, height: 650)
 }

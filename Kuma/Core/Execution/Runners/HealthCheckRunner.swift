@@ -41,6 +41,19 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
             let session = URLSession(configuration: sessionConfig)
 
             var wasHealthy: Bool? = nil
+            var lastPostedState: ServiceState? = nil
+
+            func postStateIfChanged(_ state: ServiceState) async {
+                guard lastPostedState != state else { return }
+                lastPostedState = state
+                await MainActor.run {
+                    if state == .crashed {
+                        ServiceStateNotification.post(serviceID: serviceID, state: state, exitCode: 1)
+                    } else {
+                        ServiceStateNotification.post(serviceID: serviceID, state: state)
+                    }
+                }
+            }
 
             while !Task.isCancelled {
                 let start = CFAbsoluteTimeGetCurrent()
@@ -64,19 +77,11 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
                         )
 
                         let nextState: ServiceState = isHealthy ? .running : .crashed
-                        await MainActor.run {
-                            NotificationCenter.default.post(
-                                name: .kumaServiceStateChanged,
-                                object: serviceID,
-                                userInfo: ["state": nextState]
-                            )
-                        }
+                        await postStateIfChanged(nextState)
 
                         if wasHealthy == true && !isHealthy && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
-                            let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
                             await SystemNotificationCenter.shared.send(
-                                .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString),
-                                playSound: playSound
+                                .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
                             )
                         }
                         wasHealthy = isHealthy
@@ -89,19 +94,11 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
                         message: "[HEALTH] GET \(normalizedUrlString) -> Failed: \(error.localizedDescription) (\(latencyMs)ms)"
                     )
 
-                    await MainActor.run {
-                        NotificationCenter.default.post(
-                            name: .kumaServiceStateChanged,
-                            object: serviceID,
-                            userInfo: ["state": ServiceState.crashed]
-                        )
-                    }
+                    await postStateIfChanged(.crashed)
 
                     if wasHealthy != false && KumaSettingsKey.bool(forKey: KumaSettingsKey.notifyOnCrash, defaultValue: true) {
-                        let playSound = KumaSettingsKey.bool(forKey: KumaSettingsKey.notifySound, defaultValue: true)
                         await SystemNotificationCenter.shared.send(
-                            .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString),
-                            playSound: playSound
+                            .healthCheckFailed(serviceName: service.name, targetUrl: normalizedUrlString)
                         )
                     }
                     wasHealthy = false
@@ -119,16 +116,18 @@ public final class HealthCheckRunner: ServiceRunnerProtocol, @unchecked Sendable
         let task = unregisterTask(for: serviceID)
         task?.cancel()
         await MainActor.run {
-            NotificationCenter.default.post(
-                name: .kumaServiceStateChanged,
-                object: serviceID,
-                userInfo: ["state": ServiceState.stopped]
-            )
+            ServiceStateNotification.post(serviceID: serviceID, state: .stopped)
         }
     }
 
     public func isRunning(serviceID: UUID) async -> Bool {
         checkIsRunning(serviceID: serviceID)
+    }
+
+    public func activeServiceIDs() -> Set<UUID> {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return Set(activePollTasks.compactMap { id, task in task.isCancelled ? nil : id })
     }
 
     private func checkIsRunning(serviceID: UUID) -> Bool {

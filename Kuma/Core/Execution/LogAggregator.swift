@@ -34,14 +34,35 @@ public final class LogAggregator {
     public static let shared = LogAggregator()
 
     public private(set) var entries: [LiveLogEntry] = []
-    public private(set) var entriesByService: [UUID: [LiveLogEntry]] = [:]
-    private let maxEntriesPerService = 500
-    private let maxTotalEntries = 2000
+    public private(set) var availableServiceNames: [String] = []
 
-    private init() {}
+    private var maxEntriesPerService = 500
+    private var maxTotalEntries = 2_000
+    private var uiSubscriberCount = 0
+    private var serviceNameByID: [UUID: String] = [:]
+
+    public var deliversToUI: Bool { uiSubscriberCount > 0 }
+
+    private init() {
+        applyRetentionSettings()
+    }
+
+    /// Retain while a live-log UI surface is visible (Live Logs, inspector console).
+    public func retainUISubscriber() {
+        uiSubscriberCount += 1
+    }
+
+    public func releaseUISubscriber() {
+        uiSubscriberCount = max(0, uiSubscriberCount - 1)
+    }
+
+    public func refreshRetentionFromSettings() {
+        applyRetentionSettings()
+        trimEntriesIfNeeded()
+    }
 
     public func logs(for serviceID: UUID) -> [LiveLogEntry] {
-        entriesByService[serviceID] ?? []
+        Array(entries.lazy.filter { $0.serviceID == serviceID }.suffix(maxEntriesPerService))
     }
 
     public func append(serviceID: UUID, serviceName: String, level: String = "INFO", message: String) {
@@ -49,22 +70,13 @@ public final class LogAggregator {
         guard !lines.isEmpty else { return }
         let now = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
 
-        var serviceList = entriesByService[serviceID] ?? []
-
         for line in lines {
             let entry = LiveLogEntry(serviceID: serviceID, serviceName: serviceName, timestamp: now, level: level, message: line)
             entries.append(entry)
-            serviceList.append(entry)
         }
 
-        if serviceList.count > maxEntriesPerService {
-            serviceList.removeFirst(serviceList.count - maxEntriesPerService)
-        }
-        entriesByService[serviceID] = serviceList
-
-        if entries.count > maxTotalEntries {
-            entries.removeFirst(entries.count - maxTotalEntries)
-        }
+        registerServiceName(serviceID: serviceID, serviceName: serviceName)
+        trimEntriesIfNeeded()
     }
 
     /// Appends multiple log entries in a single transaction to prevent UI thrashing.
@@ -72,32 +84,65 @@ public final class LogAggregator {
         guard !newEntries.isEmpty else { return }
         entries.append(contentsOf: newEntries)
         for entry in newEntries {
-            entriesByService[entry.serviceID, default: []].append(entry)
+            registerServiceName(serviceID: entry.serviceID, serviceName: entry.serviceName)
         }
-        for (serviceID, list) in entriesByService {
-            if list.count > maxEntriesPerService {
-                entriesByService[serviceID] = Array(list.suffix(maxEntriesPerService))
-            }
-        }
-        if entries.count > maxTotalEntries {
-            entries.removeFirst(entries.count - maxTotalEntries)
-        }
-    }
-
-    /// Convenience static method safely bridging background threads to MainActor.
-    public nonisolated static func appendLog(serviceID: UUID, serviceName: String, level: String = "INFO", message: String) {
-        Task { @MainActor in
-            shared.append(serviceID: serviceID, serviceName: serviceName, level: level, message: message)
-        }
+        trimEntriesIfNeeded()
     }
 
     public func clear(serviceID: UUID? = nil) {
         if let serviceID {
-            entriesByService.removeValue(forKey: serviceID)
             entries.removeAll(where: { $0.serviceID == serviceID })
+            serviceNameByID.removeValue(forKey: serviceID)
         } else {
-            entriesByService.removeAll()
             entries.removeAll()
+            serviceNameByID.removeAll()
         }
+        rebuildAvailableServiceNames()
+    }
+
+    private func applyRetentionSettings() {
+        let limit = LogRetentionLimit.current()
+        maxEntriesPerService = limit.maxLinesPerService
+        maxTotalEntries = limit.maxTotalLines
+    }
+
+    private func registerServiceName(serviceID: UUID, serviceName: String) {
+        guard !serviceName.isEmpty else { return }
+        if serviceNameByID[serviceID] != serviceName {
+            serviceNameByID[serviceID] = serviceName
+            rebuildAvailableServiceNames()
+        }
+    }
+
+    private func rebuildAvailableServiceNames() {
+        let namesInEntries = Set(entries.map(\.serviceName).filter { !$0.isEmpty })
+        availableServiceNames = Array(namesInEntries).sorted()
+    }
+
+    private func trimEntriesIfNeeded() {
+        applyRetentionSettings()
+
+        if maxTotalEntries < Int.max, entries.count > maxTotalEntries {
+            entries.removeFirst(entries.count - maxTotalEntries)
+        }
+
+        if maxEntriesPerService < Int.max {
+            trimPerServiceKeepingNewest()
+        }
+
+        rebuildAvailableServiceNames()
+    }
+
+    private func trimPerServiceKeepingNewest() {
+        var kept: [LiveLogEntry] = []
+        var counts: [UUID: Int] = [:]
+        for entry in entries.reversed() {
+            let count = counts[entry.serviceID, default: 0]
+            if count < maxEntriesPerService {
+                kept.append(entry)
+                counts[entry.serviceID] = count + 1
+            }
+        }
+        entries = kept.reversed()
     }
 }

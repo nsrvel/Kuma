@@ -6,6 +6,8 @@ public struct ServicesDeckContentBodyView: View {
     public let workspaceID: UUID
     public let isStarredOnly: Bool
 
+    @Environment(ServiceStateStore.self) private var serviceStateStore
+
     public init(viewModel: ServicesDeckViewModel, workspaceID: UUID, isStarredOnly: Bool) {
         self.viewModel = viewModel
         self.workspaceID = workspaceID
@@ -62,13 +64,12 @@ public struct ServicesDeckContentBodyView: View {
                 ForEach(viewModel.filteredSnapshots) { snapshot in
                     ServiceCardView(
                         snapshot: snapshot,
-                        runtime: viewModel.runtimeStates[snapshot.id] ?? .idle,
+                        runtime: serviceStateStore.runtime(for: snapshot.id),
                         isSelected: viewModel.selectedServiceID == snapshot.id,
                         viewModel: viewModel,
                         workspaceID: workspaceID
                     )
                     .equatable()
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
             }
             .animation(.spring(response: 0.24, dampingFraction: 0.88), value: viewModel.filterVersion)
@@ -80,7 +81,7 @@ public struct ServicesDeckContentBodyView: View {
     private var tableList: some View {
         ServiceTableView(
             snapshots: viewModel.filteredSnapshots,
-            runtimeStates: viewModel.runtimeStates,
+            runtimeFor: { serviceStateStore.runtime(for: $0) },
             selectedID: viewModel.selectedServiceID,
             groups: viewModel.groups,
             onToggle: { viewModel.toggleService(id: $0) },

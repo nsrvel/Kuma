@@ -1,7 +1,9 @@
 import SwiftUI
+import AppKit
 
 public struct SettingsGeneralSection: View {
     @Bindable var viewModel: SettingsViewModel
+    @State private var showPermissionAlert = false
 
     public init(viewModel: SettingsViewModel) {
         self.viewModel = viewModel
@@ -30,6 +32,17 @@ public struct SettingsGeneralSection: View {
                 Divider().opacity(0.3)
 
                 KumaToggleField(
+                    label: "Notify on Service Failure",
+                    value: $viewModel.notifyOnCrash,
+                    description: "Notify when a service fails or exits unexpectedly."
+                )
+                .onChange(of: viewModel.notifyOnCrash) { _, newValue in
+                    handleNotifyOnCrashToggle(newValue: newValue)
+                }
+
+                Divider().opacity(0.3)
+
+                KumaToggleField(
                     label: "Confirm Before Quitting",
                     value: $viewModel.confirmBeforeQuit,
                     description: "Prompt before quitting when services are active."
@@ -51,6 +64,27 @@ public struct SettingsGeneralSection: View {
                         .controlSize(.small)
                     }
                 }
+            }
+        }
+        .alert("Notification Permission Required", isPresented: $showPermissionAlert) {
+            Button("Open System Settings") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Kuma needs permission to send notifications. Please allow it in macOS System Settings.")
+        }
+    }
+
+    private func handleNotifyOnCrashToggle(newValue: Bool) {
+        guard newValue else { return }
+
+        Task {
+            let shouldPrompt = await viewModel.requestNotificationAuthorization()
+            if shouldPrompt {
+                showPermissionAlert = true
             }
         }
     }
