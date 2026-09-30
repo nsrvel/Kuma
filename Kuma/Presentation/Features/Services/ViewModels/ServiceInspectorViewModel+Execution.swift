@@ -18,7 +18,10 @@ extension ServiceInspectorViewModel {
             }
             return
         }
+        guard canStartService else { return }
         Task {
+            guard await validateConfigurationForStart() else { return }
+            configurationIssues = []
             stateStore?.setExecutionState(.starting, for: serviceID)
             do {
                 try await ServiceExecutionEngine.shared.start(serviceID: serviceID)
@@ -28,6 +31,8 @@ extension ServiceInspectorViewModel {
                 )
             } catch {
                 Self.logger.error("Failed to start service \(self.serviceID): \(error.localizedDescription)")
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                stateStore?.setLastFailureMessage(message, for: serviceID)
                 stateStore?.setExecutionState(.crashed(exitCode: 1), for: serviceID)
             }
             postUpdatedNotification()

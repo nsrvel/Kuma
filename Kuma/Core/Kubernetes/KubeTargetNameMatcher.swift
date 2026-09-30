@@ -27,7 +27,23 @@ enum KubeTargetNameMatcher {
 
         guard allowPodReplicaPrefix else { return nil }
 
-        let prefix = trimmedPattern + "-"
-        return sorted.first { $0.hasPrefix(prefix) }
+        let workloadPattern = trimmedPattern.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        guard !workloadPattern.isEmpty else { return nil }
+
+        let hyphenatedPrefix = workloadPattern + "-"
+        if let direct = sorted.first(where: { $0.hasPrefix(hyphenatedPrefix) }) {
+            return direct
+        }
+
+        // Partial deployment name (e.g. `padiumkm-ms-master` → pod `padiumkm-ms-masterdata-<rs>-<id>`).
+        let stemMatches = sorted.filter { podName in
+            guard let stem = KubeTargetNamingHints.replicaPodWorkloadStem(podName: podName) else { return false }
+            if stem == workloadPattern { return true }
+            return stem.hasPrefix(workloadPattern) && stem.count > workloadPattern.count
+        }
+        guard !stemMatches.isEmpty else { return nil }
+        let stems = Set(stemMatches.compactMap { KubeTargetNamingHints.replicaPodWorkloadStem(podName: $0) })
+        guard stems.count == 1 else { return nil }
+        return stemMatches[0]
     }
 }

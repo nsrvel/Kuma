@@ -37,7 +37,6 @@ public struct KumaSourceField: View {
     public var showsHiddenFiles: Bool
     public var isLocked: Bool
 
-    @State private var hoveredMode: KumaDualSourceMode?
     @State private var editorFocused: Bool = false
     @State private var allowsPasteEditorFocus: Bool = false
 
@@ -118,40 +117,21 @@ public struct KumaSourceField: View {
         .animation(.easeInOut(duration: 0.2), value: mode)
     }
 
-    @ViewBuilder
     private func modeTab(_ option: KumaDualSourceMode, icon: String, title: String) -> some View {
-        let isSelected = mode == option
-        let isHovered = hoveredMode == option
-
-        Button {
-            guard !isLocked, mode != option else { return }
-            prepareFocusForModeChange()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                mode = option
+        KumaInspectorSegmentButton(
+            systemImage: icon,
+            title: title,
+            isSelected: mode == option,
+            isDisabled: isLocked,
+            accessibilityLabel: title,
+            action: {
+                guard mode != option else { return }
+                prepareFocusForModeChange()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    mode = option
+                }
             }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text(title)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background {
-                KumaInspectorListRowSelectionChrome(isSelected: isSelected, isHovered: isHovered)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(isLocked)
-        .onHover { hovering in
-            hoveredMode = hovering ? option : (hoveredMode == option ? nil : hoveredMode)
-        }
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        )
     }
 
     @ViewBuilder
@@ -205,8 +185,9 @@ private extension View {
     func kumaAcceptFileDrop(isEnabled: Bool, onPick: @MainActor @escaping (URL) -> Void) -> some View {
         if #available(macOS 26.0, *) {
             dropDestination(for: URL.self) { urls, _ in
-                guard isEnabled, let url = urls.first else { return }
+                guard isEnabled, let url = urls.first else { return false }
                 onPick(url)
+                return true
             }
         } else {
             onDrop(of: [.fileURL], isTargeted: nil) { providers in

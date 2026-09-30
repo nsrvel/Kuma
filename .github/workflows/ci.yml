@@ -13,6 +13,7 @@ concurrency:
 jobs:
   test:
     name: Build & Test (macOS)
+    timeout-minutes: 20
     # objectVersion 77 requires Xcode 16+ (macos-14 images ship Xcode 15.4).
     runs-on: macos-15
     steps:
@@ -31,11 +32,20 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-
 
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: build/DerivedData
+          key: derived-${{ runner.os }}-${{ hashFiles('Kuma.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'Kuma/**/*.swift', 'KumaTests/**/*.swift') }}
+          restore-keys: |
+            derived-${{ runner.os }}-
+
       - name: Resolve Swift packages
         run: xcodebuild -scheme Kuma -resolvePackageDependencies -clonedSourcePackagesDirPath .spm
 
       - name: Build for testing
         run: |
+          set -o pipefail
           xcodebuild \
             -scheme Kuma \
             -destination 'platform=macOS' \
@@ -47,10 +57,20 @@ jobs:
         env:
           NSUnbufferedIO: YES
         run: |
+          set -o pipefail
           xcodebuild \
             -scheme Kuma \
             -destination 'platform=macOS' \
             -clonedSourcePackagesDirPath .spm \
             -derivedDataPath build/DerivedData \
-            -parallel-testing-enabled NO \
+            -resultBundlePath TestResults.xcresult \
+            -maximum-test-execution-time-allowance 120 \
             test-without-building
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcode-test-results
+          path: TestResults.xcresult
+          if-no-files-found: ignore

@@ -46,4 +46,8 @@ public final class RecordingProcessLaunching: ProcessLaunching, @unchecked Senda
     public nonisolated func isRunning(serviceID: UUID) async -> Bool {
         state.withLock { $0.runningIDs.contains(serviceID) }
     }
+
+    public nonisolated func adoptExternalProcess(serviceID: UUID, serviceName: String, pid: pid_t) async {
+        state.withLock { $0.runningIDs.insert(serviceID) }
+    }
 }

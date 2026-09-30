@@ -62,6 +62,10 @@ public final class ServiceStateStore {
         lastFailureMessages[serviceID]
     }
 
+    public func setLastFailureMessage(_ message: String?, for serviceID: UUID) {
+        applyLastFailure(message, for: serviceID)
+    }
+
     func applyLastFailure(_ message: String?, for serviceID: UUID) {
         if let message {
             lastFailureMessages[serviceID] = message

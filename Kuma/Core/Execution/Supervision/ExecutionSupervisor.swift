@@ -245,19 +245,11 @@ public actor ExecutionSupervisor {
     }
 
     private func composeHasRunningContainers(context: ComposeStackContext) async -> Bool {
-        let args = context.psQuietArguments
-        let result = try? await EphemeralCLI.run(
-            executablePath: context.binaryPath,
-            arguments: args,
-            workingDirectory: context.workingDirectory,
-            timeout: 15,
-            stdio: .captureSeparated
+        let ids = await ComposeStackRuntime.runningContainerIDs(
+            context: context,
+            projectBinding: context.projectBinding
         )
-        let lines = result?.stdout
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty } ?? []
-        return !lines.isEmpty
+        return !ids.isEmpty
     }
 
     // MARK: - Poller loop
@@ -366,28 +358,24 @@ public actor ExecutionSupervisor {
 
 enum PollerSupervisorHelpers {
     static func batchProcessLookup() async -> [String: pid_t] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-axo", "pid=,command="]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        do {
-            try process.run()
-            await SubprocessWait.waitForExit(of: process)
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            guard let text = String(data: data, encoding: .utf8) else { return [:] }
-            var map: [String: pid_t] = [:]
-            for line in text.split(separator: "\n") {
-                let trimmed = String(line).trimmingCharacters(in: .whitespaces)
-                guard let space = trimmed.firstIndex(of: " ") else { continue }
-                let pidStr = trimmed[..<space].trimmingCharacters(in: .whitespaces)
-                let cmd = trimmed[space...].trimmingCharacters(in: .whitespaces)
-                guard let pid = pid_t(pidStr) else { continue }
-                map[cmd] = pid
-            }
-            return map
-        } catch {
+        guard let result = try? await EphemeralCLI.run(
+            executablePath: "/bin/ps",
+            arguments: ["-axo", "pid=,command="],
+            workingDirectory: nil,
+            timeout: KumaExecutionTimeouts.kubectlSubcommand,
+            stdio: .captureSeparated
+        ) else {
             return [:]
         }
+        var map: [String: pid_t] = [:]
+        for line in result.stdout.split(separator: "\n") {
+            let trimmed = String(line).trimmingCharacters(in: .whitespaces)
+            guard let space = trimmed.firstIndex(of: " ") else { continue }
+            let pidStr = trimmed[..<space].trimmingCharacters(in: .whitespaces)
+            let cmd = trimmed[space...].trimmingCharacters(in: .whitespaces)
+            guard let pid = pid_t(pidStr) else { continue }
+            map[cmd] = pid
+        }
+        return map
     }
 }

@@ -7,7 +7,7 @@ import Testing
 struct DataPortInitialStateTests {
 
     // MARK: - [TC-A01] KumaBackup Default Properties
-    @Test("TC-A01: Inisialisasi KumaBackup tanpa parameter menghasilkan default yang valid")
+    @Test("DataPort.A01: default KumaBackup initializer produces valid defaults")
     func testKumaBackupDefaultProperties() {
         let backup = DataPortService.KumaBackup()
 
@@ -23,7 +23,7 @@ struct DataPortInitialStateTests {
     }
 
     // MARK: - [TC-A02] KumaBackup Deterministic ID
-    @Test("TC-A02: Generate id dari KumaBackup stabil dan memuat versi, timestamp, dan count")
+    @Test("DataPort.A02: KumaBackup id is stable and encodes version, timestamp, and count")
     func testKumaBackupDeterministicID() {
         let date = Date(timeIntervalSince1970: 1700000000)
         let backup = DataPortService.KumaBackup(
@@ -36,21 +36,20 @@ struct DataPortInitialStateTests {
     }
 
     // MARK: - [TC-A03] Backup Date String Formatting
-    @Test("TC-A03: backupDateString menghasilkan format yyyy-MM-dd yang valid")
+    @Test("DataPort.A03: backupDateString uses yyyy-MM-dd format")
     func testBackupDateStringFormatting() {
         let dateStr = DataPortService.backupDateString
         #expect(dateStr.count == 10)
 
-        // Verifikasi pattern YYYY-MM-DD
         let parts = dateStr.components(separatedBy: "-")
         #expect(parts.count == 3)
-        #expect(parts[0].count == 4) // Year
-        #expect(parts[1].count == 2) // Month
-        #expect(parts[2].count == 2) // Day
+        #expect(parts[0].count == 4)
+        #expect(parts[1].count == 2)
+        #expect(parts[2].count == 2)
     }
 
     // MARK: - [TC-A04] SingleServiceExport Wrap to Backup
-    @Test("TC-A04: wrapSingleService mengkonversi SingleServiceExport menjadi KumaBackup valid")
+    @Test("DataPort.A04: wrapSingleService converts SingleServiceExport into valid KumaBackup")
     func testSingleServiceExportWrapToBackup() {
         let service = DataPortService.ExportService(
             name: "Redis Cache",
@@ -85,7 +84,7 @@ struct DataPortInitialStateTests {
     }
 
     // MARK: - [TC-A05] DataPortScope Definition
-    @Test("TC-A05: DataPortScope enum mematuhi Equatable dan Sendable")
+    @Test("DataPort.A05: DataPortScope satisfies Equatable and Sendable")
     func testDataPortScopeDefinition() {
         let uuid = UUID()
         let scopeAll = DataPortService.DataPortScope.all
@@ -99,7 +98,7 @@ struct DataPortInitialStateTests {
     }
 
     // MARK: - [TC-A06] ExportProvider Category Mapping
-    @Test("TC-A06: Mapping seluruh enum raw string ke ProviderCategory terdefinisi dengan tepat")
+    @Test("DataPort.A06: provider type raw strings map to ProviderCategory")
     func testExportProviderCategoryMapping() {
         let testCases: [(String, ProviderCategory)] = [
             ("docker", .docker),
@@ -113,7 +112,7 @@ struct DataPortInitialStateTests {
             ("tunnel", .tunnel),
             ("process_monitor", .processMonitor),
             ("processMonitor", .processMonitor),
-            ("unknown_category", .docker) // Fallback default
+            ("unknown_category", .docker)
         ]
 
         for (rawType, expectedCategory) in testCases {

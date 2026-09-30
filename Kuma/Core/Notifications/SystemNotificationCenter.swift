@@ -39,6 +39,10 @@ public final class SystemNotificationCenter {
         _ type: SystemNotificationType,
         playSound: Bool = true
     ) async {
+        if SingleInstanceGuard.isTestingEnvironment {
+            return
+        }
+
         let status = await checkAuthorizationStatus()
         if status == .notDetermined {
             let granted = await requestAuthorization()

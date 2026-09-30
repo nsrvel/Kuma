@@ -6,8 +6,12 @@ import Testing
 @MainActor
 struct DataPortRuntimeAndResetTests {
 
+    init() async {
+        await ProcessTestSupport.resetProcessWorld()
+    }
+
     // MARK: - [TC-D01] Storage Reset Terminates Active Processes
-    @Test("TC-D01: resetAllAppStorage memanggil ProcessRegistry.shared.terminateAll")
+    @Test("DataPort.D01: resetAllAppStorage invokes ProcessRegistry.shared.terminateAll")
     func testStorageResetTerminatesActiveProcesses() async {
         let fakeID = UUID()
         let isRunningBefore = await ProcessRegistry.shared.isRunning(serviceID: fakeID)
@@ -19,7 +23,7 @@ struct DataPortRuntimeAndResetTests {
     }
 
     // MARK: - [TC-D02] Storage Reset Wipes SQLite Database Records
-    @Test("TC-D02: resetAllAppStorage membersihkan seluruh records dan me-reseed starter default workspace")
+    @Test("DataPort.D02: resetAllAppStorage clears records and re-seeds default workspace")
     func testStorageResetWipesSQLiteDatabaseRecords() async throws {
         let wsRepo = WorkspaceRepository()
         let testWS = Workspace(name: "Temporary Space \(UUID().uuidString)")
@@ -32,11 +36,11 @@ struct DataPortRuntimeAndResetTests {
 
         let afterResetList = try await wsRepo.fetchAll()
         #expect(!afterResetList.contains(where: { $0.id == testWS.id }))
-        #expect(afterResetList.count == 1) // default re-seeded workspace
+        #expect(afterResetList.count == 1)
     }
 
     // MARK: - [TC-D03] Storage Reset Wipes UserDefaults Preferences
-    @Test("TC-D03: resetAllAppStorage membersihkan preferences custom di UserDefaults")
+    @Test("DataPort.D03: resetAllAppStorage clears custom UserDefaults preferences")
     func testStorageResetWipesUserDefaultsPreferences() async {
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: KumaSettingsKey.hasCompletedOnboarding)
@@ -49,7 +53,7 @@ struct DataPortRuntimeAndResetTests {
     }
 
     // MARK: - [TC-D04] Storage Reset Clears Workspace Image Cache And Folder
-    @Test("TC-D04: resetAllAppStorage mengosongkan memory cache dan direktori avatar WorkspaceImageStore")
+    @Test("DataPort.D04: resetAllAppStorage clears WorkspaceImageStore cache and avatar directory")
     func testStorageResetClearsWorkspaceImageCacheAndFolder() async throws {
         let imgStore = WorkspaceImageStore.shared
         let base64Sample = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -64,7 +68,7 @@ struct DataPortRuntimeAndResetTests {
     }
 
     // MARK: - [TC-D05] Concurrent Export Requests
-    @Test("TC-D05: Menjalankan pemanggilan exportData secara paralel terbukti aman dan thread-safe")
+    @Test("DataPort.D05: parallel exportData calls are thread-safe")
     func testConcurrentExportRequests() async throws {
         let harness = DataPortTestHarness()
         defer { harness.cleanup() }

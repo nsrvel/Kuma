@@ -72,7 +72,10 @@ public struct ServiceActionContextMenu: View {
             Button {
                 onToggleStar()
             } label: {
-                Label("Star", systemImage: snapshot.isStarred ? "star.fill" : "star")
+                Label(
+                    snapshot.isStarred ? "Unstar" : "Star",
+                    systemImage: snapshot.isStarred ? "star.fill" : "star"
+                )
             }
 
             Button {

@@ -9,6 +9,8 @@ public struct ComposeSettingsView: View {
     @Binding public var composeFilePath: String
     public var isLocked: Bool
     public var onSave: () -> Void
+    /// When this changes (e.g. another provider), tab mode is re-inferred from path/YAML.
+    public var bindingIdentity: UUID?
 
     @State private var sourceMode: KumaDualSourceMode = .chooseFile
 
@@ -18,6 +20,7 @@ public struct ComposeSettingsView: View {
         yamlConfig: Binding<String>,
         composeFilePath: Binding<String>,
         isLocked: Bool = false,
+        bindingIdentity: UUID? = nil,
         onSave: @escaping () -> Void = {}
     ) {
         self.filePrompt = filePrompt
@@ -25,6 +28,7 @@ public struct ComposeSettingsView: View {
         self._yamlConfig = yamlConfig
         self._composeFilePath = composeFilePath
         self.isLocked = isLocked
+        self.bindingIdentity = bindingIdentity
         self.onSave = onSave
     }
 
@@ -40,6 +44,9 @@ public struct ComposeSettingsView: View {
             isLocked: isLocked
         )
         .onAppear { syncModeFromBindings() }
+        .onChange(of: bindingIdentity) { _, _ in syncModeFromBindings() }
+        .onChange(of: composeFilePath) { _, _ in syncModeFromBindings() }
+        .onChange(of: yamlConfig) { _, _ in syncModeFromBindings() }
     }
 
     private var pathBinding: Binding<String> {

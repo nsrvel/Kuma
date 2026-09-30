@@ -43,6 +43,8 @@ public struct KubeConfigConnectionView: View {
                     }
                 }
                 Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(deleteConfirmationMessage)
             }
             .onChange(of: isLocked) { _, locked in
                 if locked && viewModel.showInlineNewConfigForm {
@@ -124,6 +126,16 @@ public struct KubeConfigConnectionView: View {
             .padding(.horizontal, 4)
         }
         .padding(.bottom, 24)
+    }
+
+    private var deleteConfirmationMessage: String {
+        let name = viewModel.availableKubeConfigs
+            .first(where: { $0.id == viewModel.selectedKubeConfigID })?
+            .name
+        if let name, !name.isEmpty {
+            return "‘\(name)’ will be removed from Kuma. The kubeconfig file on disk is not deleted."
+        }
+        return "This kubeconfig will be removed from Kuma. The file on disk is not deleted."
     }
 
     private func openNewKubeConfigForm() {

@@ -6,8 +6,12 @@ import Testing
 @MainActor
 struct ServicesRuntimeAndExecutionTests {
 
+    init() async {
+        await ProcessTestSupport.resetProcessWorld()
+    }
+
     // MARK: - ServiceStateNotification parsing
-    @Test("TC-D07: ServiceStateNotification preserves PID when notification omits pid")
+    @Test("Runtime.D07: ServiceStateNotification preserves PID when notification omits pid")
     func testServiceStateNotificationPreservesPID() {
         let existing = ServiceExecutionState.running(pid: 4242)
         let userInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.running]
@@ -15,7 +19,7 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(parsed == .running(pid: 4242))
     }
 
-    @Test("TC-D09: ServiceStateNotification maps starting and stopping without flattening to idle")
+    @Test("Runtime.D09: ServiceStateNotification maps starting and stopping without flattening to idle")
     func testServiceStateNotificationTransientStates() {
         let startingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.starting]
         #expect(ServiceStateNotification.executionState(from: startingInfo, existing: .idle) == .starting)
@@ -24,27 +28,27 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .running(pid: 9)) == .stopping)
     }
 
-    @Test("TC-D09b: stray stopped notification ignored while execution is starting")
+    @Test("Runtime.D09b: stray stopped notification ignored while execution is starting")
     func testServiceStateNotificationIgnoresStoppedDuringStarting() {
         let stoppedInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopped]
         #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .starting) == nil)
         #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .idle) == .idle)
     }
 
-    @Test("TC-D09c: stopped notification clears stopping to idle after process exit")
+    @Test("Runtime.D09c: stopped notification clears stopping to idle after process exit")
     func testServiceStateNotificationStoppedClearsStopping() {
         let stoppedInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopped]
         #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .stopping) == .idle)
         #expect(ServiceStateNotification.executionState(from: stoppedInfo, existing: .running(pid: 1)) == .idle)
     }
 
-    @Test("TC-D09e: stale stopping notification ignored after idle")
+    @Test("Runtime.D09e: stale stopping notification ignored after idle")
     func testStaleStoppingNotificationIgnoredAfterIdle() {
         let stoppingInfo: [String: Any] = [ServiceStateNotification.stateKey: ServiceState.stopping]
         #expect(ServiceStateNotification.executionState(from: stoppingInfo, existing: .idle) == nil)
     }
 
-    @Test("TC-D09d: late running notification ignored while execution is stopping")
+    @Test("Runtime.D09d: late running notification ignored while execution is stopping")
     func testServiceStateNotificationIgnoresRunningDuringStopping() {
         let runningInfo: [String: Any] = [
             ServiceStateNotification.stateKey: ServiceState.running,
@@ -54,7 +58,7 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(ServiceStateNotification.executionState(from: runningInfo, existing: .idle) == .running(pid: 99))
     }
 
-    @Test("TC-D10: ServiceStateStore updates execution state without duplicate writes")
+    @Test("Runtime.D10: ServiceStateStore updates execution state without duplicate writes")
     @MainActor
     func testStoreUpdatesExecutionState() {
         let store = ServiceStateStore()
@@ -70,7 +74,7 @@ struct ServicesRuntimeAndExecutionTests {
         #expect(store.state(for: serviceID) == .running(pid: 42))
     }
 
-    @Test("TC-D08: ServiceStateNotification uses exitCode from userInfo")
+    @Test("Runtime.D08: ServiceStateNotification uses exitCode from userInfo")
     func testServiceStateNotificationExitCode() {
         let userInfo: [String: Any] = [
             ServiceStateNotification.stateKey: ServiceState.crashed,
@@ -81,7 +85,7 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     // MARK: - [TC-D04] Batch Process Status Lookup
-    @Test("TC-D04: ProcessRegistry.runningStates returns execution states in single call")
+    @Test("Runtime.D04: ProcessRegistry.runningStates returns execution states in single call")
     func testBatchProcessStatusLookup() async {
         let registry = ProcessRegistry.shared
         let id1 = UUID()
@@ -96,7 +100,7 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     // MARK: - [TC-D03] ServiceStateStore Batch Refresh
-    @Test("TC-D03: ServiceStateStore batch refresh integrates with runningStates")
+    @Test("Runtime.D03: ServiceStateStore batch refresh integrates with runningStates")
     func testServiceStateStoreBatchRefresh() async {
         let store = ServiceStateStore()
         let id1 = UUID()
@@ -113,7 +117,7 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     // MARK: - [TC-D05] ProcessRegistry Launch and Graceful Stop
-    @Test("TC-D05: ProcessRegistry launches process and stops gracefully")
+    @Test("Runtime.D05: ProcessRegistry launches process and stops gracefully")
     func testProcessRegistryLaunchAndGracefulStop() async throws {
         let registry = ProcessRegistry.shared
         let serviceID = UUID()
@@ -141,26 +145,30 @@ struct ServicesRuntimeAndExecutionTests {
     }
 
     // MARK: - [TC-D06] ProcessRegistry Output Capture
-    @Test("TC-D06: ProcessRegistry captures stdout correctly")
+    @Test("Runtime.D06: ProcessRegistry captures stdout correctly")
     func testProcessRegistryCapturesStdout() async throws {
         let registry = ProcessRegistry.shared
         let serviceID = UUID()
 
         _ = try await registry.launch(
             serviceID: serviceID,
-            executable: "/bin/echo",
-            arguments: ["hello-kuma-runtime"]
+            executable: "/bin/sh",
+            arguments: ["-c", "echo hello-kuma-runtime; sleep 1"]
         )
 
-        try await Task.sleep(nanoseconds: 300_000_000)
-
-        let tail = RunSpool.tail(for: serviceID) ?? ""
+        var tail = ""
+        for _ in 0..<100 {
+            tail = RunSpool.tail(for: serviceID) ?? ""
+            if tail.contains("hello-kuma-runtime") { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
         #expect(tail.contains("hello-kuma-runtime"))
+        await registry.stop(serviceID: serviceID)
         RunSpool.remove(for: serviceID)
     }
 
     // MARK: - [TC-D07] Apply Runtime Diff Performance & Version Stability
-    @Test("TC-D07: execution state updates without bumping filterVersion when status filters are inactive")
+    @Test("Runtime.D07b: execution state updates without bumping filterVersion when status filters are inactive")
     func testExecutionStateFilterVersionStability() async {
         let store = ServiceStateStore()
         let deckVM = ServicesDeckViewModel(stateStore: store)

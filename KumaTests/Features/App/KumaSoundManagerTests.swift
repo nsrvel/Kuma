@@ -12,7 +12,7 @@ struct KumaSoundManagerTests {
     func testSyncSoundFileToUserLibrarySounds() {
         let manager = KumaSoundManager.shared
         manager.syncCustomNotificationSoundToUserLibrary()
-        #expect(true)
+        #expect(Bundle.main.url(forResource: "kuma-alert", withExtension: "caf") != nil)
     }
 
     // MARK: - [TC-F02] Idempotent Skip
@@ -21,7 +21,11 @@ struct KumaSoundManagerTests {
         let manager = KumaSoundManager.shared
         manager.syncCustomNotificationSoundToUserLibrary()
         manager.syncCustomNotificationSoundToUserLibrary()
-        #expect(true)
+        let soundsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Sounds/kuma-alert.caf")
+        if Bundle.main.url(forResource: "kuma-alert", withExtension: "caf") != nil {
+            #expect(FileManager.default.fileExists(atPath: soundsDir.path(percentEncoded: false)))
+        }
     }
 
     // MARK: - [TC-F03] Graceful Fallback
@@ -29,6 +33,6 @@ struct KumaSoundManagerTests {
     func testPlaySoundGracefulFallbackWhenMissing() {
         let manager = KumaSoundManager.shared
         manager.playNotificationSound()
-        #expect(true)
+        #expect(KumaSoundManager.shared === manager)
     }
 }

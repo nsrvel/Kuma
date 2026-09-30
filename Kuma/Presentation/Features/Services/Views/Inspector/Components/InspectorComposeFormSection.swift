@@ -14,6 +14,7 @@ public struct InspectorComposeFormSection: View {
                         yamlConfig: optionalStringBinding(\.yamlConfig),
                         composeFilePath: optionalStringBinding(\.composeFilePath),
                         isLocked: isLocked,
+                        bindingIdentity: provider.id,
                         onSave: onFieldChanged
                     )
                 } else {
@@ -21,6 +22,7 @@ public struct InspectorComposeFormSection: View {
                         yamlConfig: optionalStringBinding(\.yamlConfig),
                         composeFilePath: optionalStringBinding(\.composeFilePath),
                         isLocked: isLocked,
+                        bindingIdentity: provider.id,
                         onSave: onFieldChanged
                     )
                 }

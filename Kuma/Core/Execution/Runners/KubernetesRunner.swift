@@ -39,26 +39,26 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             kubectlPath: kubectl,
             exec: execConfig
         )
+        try await persistResolvedTargetIfNeeded(service: service, provider: provider, resolved: resolved)
 
-        var args = ["port-forward", resolved.kubectlReference]
+        let plan = KubePortForwardPlan.build(
+            resolved: resolved,
+            exec: execConfig,
+            portMappings: portMappings,
+            namespace: namespace,
+            context: context
+        )
 
-        if let kubeconfigPath = execConfig.kubeconfigPath, !kubeconfigPath.isEmpty {
-            args.append("--kubeconfig")
-            args.append(kubeconfigPath)
-        }
-
-        for mapping in portMappings {
-            args.append("\(mapping.localPort):\(mapping.remotePort)")
-        }
-
-        if let namespace, !namespace.isEmpty {
-            args.append("-n")
-            args.append(namespace)
-        }
-
-        if let context, !context.isEmpty {
-            args.append("--context")
-            args.append(context)
+        if let adoptedPID = await KubePortForwardAdoption.findAdoptablePID(plan: plan) {
+            Self.logger.info(
+                "Using existing kubectl port-forward (PID \(adoptedPID, privacy: .public)) for service \(service.id.uuidString, privacy: .public)"
+            )
+            await processLauncher.adoptExternalProcess(
+                serviceID: service.id,
+                serviceName: service.name,
+                pid: adoptedPID
+            )
+            return
         }
 
         for mapping in portMappings {
@@ -73,7 +73,7 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
             serviceID: service.id,
             serviceName: service.name,
             executable: kubectl,
-            arguments: args,
+            arguments: plan.arguments,
             workingDirectory: nil,
             environment: nil,
             onOutput: nil
@@ -86,5 +86,27 @@ public final class KubernetesRunner: ServiceRunnerProtocol, @unchecked Sendable 
 
     public func isRunning(serviceID: UUID) async -> Bool {
         await processLauncher.isRunning(serviceID: serviceID)
+    }
+
+    private func persistResolvedTargetIfNeeded(
+        service: Service,
+        provider: Provider,
+        resolved: KubeResolvedTarget
+    ) async throws {
+        guard let updated = KubeResolvedTargetPersistence.providerApplyingResolvedName(
+            provider: provider,
+            resolved: resolved
+        ) else { return }
+
+        try await serviceRepository.updateProvider(updated)
+        Self.logger.info(
+            "Persisted resolved Kubernetes target \(resolved.kubectlReference, privacy: .public) for service \(service.name, privacy: .public)"
+        )
+        await MainActor.run {
+            KumaServiceNotification.postServiceUpdated(
+                serviceID: service.id,
+                source: KumaServiceNotification.sourceExecution
+            )
+        }
     }
 }

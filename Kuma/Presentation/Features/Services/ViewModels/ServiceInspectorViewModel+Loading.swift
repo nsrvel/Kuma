@@ -6,6 +6,7 @@ extension ServiceInspectorViewModel {
         cancelAutoSave()
         self.serviceID = id
         isLoadingServiceDetail = true
+        clearConfigurationValidationState()
         defer { isLoadingServiceDetail = false }
         do {
             guard let detail = try await serviceRepository.fetchServiceDetail(id: id) else { return }
@@ -34,6 +35,8 @@ extension ServiceInspectorViewModel {
             await syncKubeConfigSelectionFromActiveProvider()
             if let active = activeProvider, active.type == .ssh {
                 sshAuthType = ProviderSSHAuth.inferredAuthType(for: active)
+            } else if let active = activeProvider, active.type == .kubernetes, let kubeConfigVM {
+                kubeConfigVM.testConnection(storedProviderContext: active.kubeContext)
             }
             pendingSaveRevision = 0
             lastCommittedRevision = 0

@@ -7,7 +7,7 @@ import Testing
 struct SettingsPersistenceAndSyncTests {
 
     // MARK: - [TC-C01] Property Mutation Persists To UserDefaults
-    @Test("TC-C01: Mutating property updates underlying UserDefaults immediately")
+    @Test("Settings.C01: Mutating property updates underlying UserDefaults immediately")
     func testPropertyMutationPersistsToUserDefaults() {
         let harness = SettingsTestHarness()
         defer { harness.cleanup() }

@@ -9,6 +9,8 @@ struct KumaStatusChip: View {
     var showsLeadingIndicator: Bool = true
     /// Same footprint as the status dot — used for “Active” provider selection.
     var showsCheckmarkLeading: Bool = false
+    /// Capsule fill + stroke; set `false` for bare icon + label in list rows.
+    var showsContainer: Bool = true
 
     var body: some View {
         HStack(spacing: 5) {
@@ -25,12 +27,18 @@ struct KumaStatusChip: View {
                 .lineLimit(1)
                 .contentTransition(.interpolate)
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(Capsule(style: .continuous).fill(tone.opacity(0.08)))
+        .padding(.horizontal, showsContainer ? 7 : 0)
+        .padding(.vertical, showsContainer ? 3 : 0)
+        .background {
+            if showsContainer {
+                Capsule(style: .continuous).fill(tone.opacity(0.08))
+            }
+        }
         .overlay {
-            Capsule(style: .continuous)
-                .strokeBorder(tone.opacity(0.22), lineWidth: 0.5)
+            if showsContainer {
+                Capsule(style: .continuous)
+                    .strokeBorder(tone.opacity(0.22), lineWidth: 0.5)
+            }
         }
         .fixedSize()
         .animation(.smooth(duration: 0.25), value: title)
@@ -58,6 +66,17 @@ struct KumaStatusChip: View {
         KumaStatusChip(title: "Connecting…", tone: KumaStatus.transitionalIndicator, showsOrbit: true)
         KumaStatusChip(title: "Connected", tone: KumaStatus.runningIndicator, showsGlow: true)
         KumaStatusChip(title: "Unreachable", tone: KumaStatus.failedIndicator)
+
+        Divider()
+
+        KumaStatusChip(
+            title: "Active",
+            tone: KumaStatus.runningIndicator,
+            showsLeadingIndicator: false,
+            showsCheckmarkLeading: true,
+            showsContainer: false
+        )
+        KumaStatusChip(title: "Connected", tone: KumaStatus.runningIndicator, showsGlow: true, showsContainer: false)
     }
     .padding()
 }

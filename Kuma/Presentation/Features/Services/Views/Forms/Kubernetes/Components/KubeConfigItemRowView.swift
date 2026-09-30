@@ -125,11 +125,11 @@ public struct KubeConfigItemRowView: View {
     @ViewBuilder
     private var connectionStatusChip: some View {
         if isLoadingNamespaces {
-            KumaStatusChip(title: "Connecting…", tone: connectionTone, showsOrbit: true)
+            KumaStatusChip(title: "Connecting…", tone: connectionTone, showsOrbit: true, showsContainer: false)
         } else if hasConnectionError {
-            KumaStatusChip(title: "Unreachable", tone: connectionTone)
+            KumaStatusChip(title: "Unreachable", tone: connectionTone, showsContainer: false)
         } else {
-            KumaStatusChip(title: "Connected", tone: connectionTone, showsGlow: true)
+            KumaStatusChip(title: "Connected", tone: connectionTone, showsGlow: true, showsContainer: false)
         }
     }
 }

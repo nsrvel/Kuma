@@ -35,6 +35,19 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
         let context = try ComposeStackResolver.makeContext(service: service, provider: provider, binaryPath: binaryPath)
 
+        if composeCLI is LiveComposeCLI,
+           await ComposeStackRuntime.shouldAdoptImplicitDefaultStack(context: context) {
+            let adopted = context.adoptingImplicitDefaultProject()
+            Self.logger.info(
+                "Adopting running compose stack on implicit project for service \(service.id.uuidString, privacy: .public)"
+            )
+            registerStack(adopted)
+            await ExecutionSupervisor.shared.register(
+                .composeStack(serviceID: service.id, serviceName: service.name, context: adopted)
+            )
+            return
+        }
+
         try await runInitialScript(provider: provider, workingDir: context.workingDirectory)
 
         let up = try await composeUpResult(context: context)
@@ -99,7 +112,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
     private func teardownStack(_ context: ComposeStackContext) async {
         await runComposeTeardown(context: context, arguments: context.downArguments, timeout: KumaExecutionTimeouts.composeDown)
 
-        if composeCLI is LiveComposeCLI {
+        if composeCLI is LiveComposeCLI, context.projectBinding == .kumaProject {
             await teardownDefaultComposeProjectIfNeeded(context)
         }
 
@@ -131,7 +144,7 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
 
     /// Scripts/Terminal often run `compose up` without Kuma's `-p kuma-…` — tear that down too.
     private func teardownDefaultComposeProjectIfNeeded(_ context: ComposeStackContext) async {
-        let listArgs = ["compose", "-f", context.composeFilePath, "ps", "-q", "--status", "running"]
+        let listArgs = context.psQuietArgumentsImplicitDefault
         let ps = try? await EphemeralCLI.run(
             executablePath: context.binaryPath,
             arguments: listArgs,
@@ -262,20 +275,11 @@ public final class ContainerRunner: ServiceRunnerProtocol, @unchecked Sendable {
             if attempt > 0 {
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
-            let ps = try? await EphemeralCLI.run(
-                executablePath: context.binaryPath,
-                arguments: context.psQuietArguments,
-                workingDirectory: context.workingDirectory,
-                timeout: 20,
-                stdio: .captureSeparated
+            let ids = await ComposeStackRuntime.runningContainerIDs(
+                context: context,
+                projectBinding: context.projectBinding
             )
-            if ps?.terminationStatus == 0 {
-                let ids = ps?.stdout
-                    .components(separatedBy: .newlines)
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty } ?? []
-                if !ids.isEmpty { return true }
-            }
+            if !ids.isEmpty { return true }
         }
         return false
     }
